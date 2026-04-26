@@ -2,6 +2,8 @@ plugins {
     id 'eclipse'
     id 'idea'
     id 'maven-publish'
+    id 'java'
+    id 'antlr'
     id 'net.minecraftforge.gradle' version '[6.0,6.2)'
     id 'org.parchmentmc.librarian.forgegradle' version '1.+'
 }
@@ -145,6 +147,10 @@ dependencies {
     // For more info:
     // http://www.gradle.org/docs/current/userguide/artifact_dependencies_tutorial.html
     // http://www.gradle.org/docs/current/userguide/dependency_management.html
+
+    // For ANTLR lexers/parsers and runtime
+    antlr 'org.antlr:antlr4:4.13.2'
+    implementation 'org.antlr:antlr4-runtime:4.13.2'
 }
 
 // This block of code expands all declared replace properties in the specified resource targets.
@@ -153,11 +159,11 @@ dependencies {
 // See https://docs.gradle.org/current/dsl/org.gradle.language.jvm.tasks.ProcessResources.html
 tasks.named('processResources', ProcessResources).configure {
     var replaceProperties = [
-            minecraft_version: minecraft_version, minecraft_version_range: minecraft_version_range,
-            forge_version: forge_version, forge_version_range: forge_version_range,
+            minecraft_version   : minecraft_version, minecraft_version_range: minecraft_version_range,
+            forge_version       : forge_version, forge_version_range: forge_version_range,
             loader_version_range: loader_version_range,
-            mod_id: mod_id, mod_name: mod_name, mod_license: mod_license, mod_version: mod_version,
-            mod_authors: mod_authors, mod_description: mod_description,
+            mod_id              : mod_id, mod_name: mod_name, mod_license: mod_license, mod_version: mod_version,
+            mod_authors         : mod_authors, mod_description: mod_description,
     ]
     inputs.properties replaceProperties
 
@@ -206,4 +212,18 @@ publishing {
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8' // Use the UTF-8 charset for Java compilation
     options.compilerArgs += ["-Xlint:-removal"]
+}
+
+generateGrammarSource {
+    outputDirectory = layout.buildDirectory.dir('generated-src/antlr/main/net/flymachine/minecraftclanguage/content/logic/compiler/frontend/antlr').get().asFile
+    arguments += [
+            "-visitor",
+            "-package", "net.flymachine.minecraftclanguage.content.logic.compiler.frontend.antlr",
+            "-Xexact-output-dir"
+    ]
+
+}
+
+tasks.named("compileJava") {
+    dependsOn(tasks.named("generateGrammarSource"))
 }
