@@ -111,6 +111,7 @@ public final class LA64Assembler {
                 switch (instruction.mnemonic()) {
                     case "li.w" -> {
                         // TODO: 检查操作数类型？或者也可不需要
+                        // li.w dst, imm32
                         LA64Register dst = ((LA64AsmRegOperand) ops.get(0)).reg();
                         int value = (int) ((LA64AsmImmOperand) ops.get(1)).value();
 
@@ -124,9 +125,24 @@ public final class LA64Assembler {
                                         LA64Operand.si12(value) // imm12
                                     }));
                         } else {
-                            // 暂时不支持 32 位立即数
-                            throw new IllegalArgumentException(
-                                "Instruction operands must be a Si12 value: " + instruction.mnemonic());
+                            // lu12i.w rd, upper20
+                            // ori rd, rd, lower12
+                            int lower12 = value & 0xFFF;
+                            int upper20 = value >>> 12;
+                            writeIntLittleEndian(
+                                out, LA64Encoder.encode(
+                                    LA64InstructionSet.getByMnemonic("lu12i.w").orElseThrow(), new LA64Operand[]{
+                                        LA64Operand.reg(dst), // rd
+                                        LA64Operand.si20(upper20) // upper20
+                                    }));
+                            writeIntLittleEndian(
+                                out, LA64Encoder.encode(
+                                    LA64InstructionSet.getByMnemonic("ori").orElseThrow(), new LA64Operand[]{
+                                        LA64Operand.reg(dst), // rd
+                                        LA64Operand.reg(dst), // rd
+                                        LA64Operand.ui12(lower12) // lower12
+                                    }));
+                            offsetIncrease = 8;
                         }
                     }
                     case "ret" -> // jirl zero, ra, 0

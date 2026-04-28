@@ -2,7 +2,9 @@ package net.flymachine.minecraftclanguage.content.logic.architecture.la64.isa.in
 
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
+import net.flymachine.minecraftclanguage.content.logic.architecture.la64.isa.operand.LA64Operand;
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.isa.operand.LA64OperandType;
+import net.flymachine.minecraftclanguage.content.logic.architecture.la64.util.BitMath;
 import net.flymachine.minecraftclanguage.content.logic.cpu.la64.LA64CpuState;
 
 import java.util.*;
@@ -106,6 +108,56 @@ public final class LA64InstructionSet {
                 cpu.pcNext();
             }));
         add(new LA64InstructionInfo(
+            "ori",
+            0b0000_0011_10,
+            10,
+            LA64InstructionFormat.FORMAT_2RI12,
+            new LA64OperandType[]{LA64OperandType.REG, LA64OperandType.REG, LA64OperandType.UI12},
+            null,
+            null,
+            (emulator, operands) -> {
+                // ori rd, rj, ui12
+                /*
+                    GR[rd] = GR[rj] | ZeroExtend(ui12, GRLEN)
+                 */
+                LA64CpuState cpu = emulator.getCpuState();
+                long rjValue = cpu.getGr(operands[1].value());
+                long ui12Value = operands[2].value() & 0xFFFL;
+                cpu.setGr(operands[0].value(), rjValue | ui12Value);
+                cpu.pcNext();
+            }
+        ));
+        add(new LA64InstructionInfo(
+            "lu12i.w",
+            0b0001_010,
+            7,
+            LA64InstructionFormat.MISCELLANEOUS,
+            new LA64OperandType[]{LA64OperandType.REG, LA64OperandType.SI20},
+            (info, ops) -> {
+                // rd, si20
+                int rd = ops[0].value();
+                int si20 = ops[1].value();
+                return (info.opcode() << 25) | ((si20 & 0xFFFFF) << 5) | rd;
+            },
+            (machineCode) -> {
+                // rd, si20
+                int rd = BitMath.getRd(machineCode);
+                int si20 = BitMath.extractSignedBits(machineCode, 5, 20);
+                return new LA64Operand[]{
+                    LA64Operand.reg(rd), LA64Operand.si20(si20)
+                };
+            },
+            (emulator, operands) -> {
+                // lu12i.w rd, si20
+                /*
+                    GR[rd] = SignExtend({si20, 12'b0}, GRLEN)
+                 */
+                LA64CpuState cpu = emulator.getCpuState();
+                cpu.setGr(operands[0].value(), ((long) operands[1].value()) << 12);
+                cpu.pcNext();
+            }
+        ));
+        add(new LA64InstructionInfo(
             "jirl",
             0b0100_11,
             6,
@@ -123,8 +175,7 @@ public final class LA64InstructionSet {
                 cpu.setGr(operands[0].value(), cpu.getPc() + 4);
                 long rjValue = cpu.getGr(operands[1].value());
                 long offset = ((long) operands[2].value()) << 2;
-                long nextPc = rjValue + offset;
-                cpu.setPc(nextPc);
+                cpu.setPc(rjValue + offset);
             }));
     }
 }
