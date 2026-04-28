@@ -94,4 +94,24 @@ public final class LA64RegisterResolver {
         }
         return Optional.ofNullable(arr[number]);
     }
+
+    /**
+     * 根据编号查找通用寄存器
+     *
+     * @param number 0-31
+     * @return 对应的通用寄存器，如果无效则返回空
+     */
+    public Optional<LA64Register> getGeneralPurposeRegister(int number) {
+        return getRegister(LA64Register.RegType.GPR, number);
+    }
+
+    /**
+     * 根据编号查找浮点寄存器
+     *
+     * @param number 0-31
+     * @return 对应的浮点寄存器，如果无效则返回空
+     */
+    public Optional<LA64Register> getFloatingPointRegister(int number) {
+        return getRegister(LA64Register.RegType.FPR, number);
+    }
 }

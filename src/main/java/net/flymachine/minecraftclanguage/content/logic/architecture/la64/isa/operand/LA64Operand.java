@@ -1,12 +1,14 @@
 package net.flymachine.minecraftclanguage.content.logic.architecture.la64.isa.operand;
 
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.register.LA64Register;
+import net.flymachine.minecraftclanguage.content.logic.architecture.la64.register.LA64RegisterResolver;
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.util.BitMath;
+import org.jetbrains.annotations.NotNull;
 
 public record LA64Operand(LA64OperandType type, int value) {
     public LA64Operand {
         value = switch (type) {
-            case REG -> BitMath.extractBits(value, 5);
+            case GPR, FPR -> BitMath.extractBits(value, 5);
             case SI12 -> BitMath.extractSignedBits(value, 12);
             case SI20 -> BitMath.extractSignedBits(value, 20);
             case UI12 -> BitMath.extractBits(value, 12);
@@ -14,12 +16,32 @@ public record LA64Operand(LA64OperandType type, int value) {
         };
     }
 
-    public static LA64Operand reg(int regNumber) {
-        return new LA64Operand(LA64OperandType.REG, regNumber);
+    @Override
+    public @NotNull String toString() {
+        return switch (type) {
+            case GPR ->
+                LA64RegisterResolver.getInstance().getGeneralPurposeRegister(value).orElseThrow().getPrimaryName();
+            case FPR ->
+                LA64RegisterResolver.getInstance().getFloatingPointRegister(value).orElseThrow().getPrimaryName();
+            case SI12, SI20 -> value == 0 ? "0" : String.valueOf(value);
+            case UI12 -> value == 0 ? "0" : "0x" + Integer.toHexString(value);
+            case OFFS16 -> value == 0 ? "0" : String.valueOf(value << 2);
+        };
+    }
+
+    public static LA64Operand gpr(int gprNumber) {
+        return new LA64Operand(LA64OperandType.GPR, gprNumber);
+    }
+
+    public static LA64Operand fpr(int fprNumber) {
+        return new LA64Operand(LA64OperandType.FPR, fprNumber);
     }
 
     public static LA64Operand reg(LA64Register register) {
-        return reg(register.getNumber());
+        return switch (register.getType()) {
+            case GPR -> new LA64Operand(LA64OperandType.GPR, register.getNumber());
+            case FPR -> new LA64Operand(LA64OperandType.FPR, register.getNumber());
+        };
     }
 
     public static LA64Operand si12(int si12) {

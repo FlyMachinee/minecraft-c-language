@@ -50,7 +50,7 @@ public final class LA64Decoder {
         int rj = BitMath.getRj(machineCode);
         int imm12 = BitMath.extractBits(machineCode, 10, 12);
         return new LA64Operand[]{
-            LA64Operand.reg(rd), LA64Operand.reg(rj), new LA64Operand(info.operandTypes()[2], imm12)};
+            LA64Operand.gpr(rd), LA64Operand.gpr(rj), new LA64Operand(info.operandTypes()[2], imm12)};
     }
 
     private static LA64Operand[] decode2RI16(LA64InstructionInfo info, int machineCode) {
@@ -59,7 +59,7 @@ public final class LA64Decoder {
         int rj = BitMath.getRj(machineCode);
         int imm16 = BitMath.extractBits(machineCode, 10, 16);
         return new LA64Operand[]{
-            LA64Operand.reg(rd), LA64Operand.reg(rj), new LA64Operand(info.operandTypes()[2], imm16)};
+            LA64Operand.gpr(rd), LA64Operand.gpr(rj), new LA64Operand(info.operandTypes()[2], imm16)};
     }
 
 }

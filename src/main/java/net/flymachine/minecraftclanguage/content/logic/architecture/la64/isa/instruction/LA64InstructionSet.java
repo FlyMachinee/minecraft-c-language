@@ -91,7 +91,7 @@ public final class LA64InstructionSet {
             0b0000_0010_10,
             10,
             LA64InstructionFormat.FORMAT_2RI12,
-            new LA64OperandType[]{LA64OperandType.REG, LA64OperandType.REG, LA64OperandType.SI12},
+            new LA64OperandType[]{LA64OperandType.GPR, LA64OperandType.GPR, LA64OperandType.SI12},
             null,
             null,
             (emulator, operands) -> {
@@ -112,7 +112,7 @@ public final class LA64InstructionSet {
             0b0000_0011_10,
             10,
             LA64InstructionFormat.FORMAT_2RI12,
-            new LA64OperandType[]{LA64OperandType.REG, LA64OperandType.REG, LA64OperandType.UI12},
+            new LA64OperandType[]{LA64OperandType.GPR, LA64OperandType.GPR, LA64OperandType.UI12},
             null,
             null,
             (emulator, operands) -> {
@@ -132,7 +132,7 @@ public final class LA64InstructionSet {
             0b0001_010,
             7,
             LA64InstructionFormat.MISCELLANEOUS,
-            new LA64OperandType[]{LA64OperandType.REG, LA64OperandType.SI20},
+            new LA64OperandType[]{LA64OperandType.GPR, LA64OperandType.SI20},
             (info, ops) -> {
                 // rd, si20
                 int rd = ops[0].value();
@@ -144,7 +144,7 @@ public final class LA64InstructionSet {
                 int rd = BitMath.getRd(machineCode);
                 int si20 = BitMath.extractSignedBits(machineCode, 5, 20);
                 return new LA64Operand[]{
-                    LA64Operand.reg(rd), LA64Operand.si20(si20)
+                    LA64Operand.gpr(rd), LA64Operand.si20(si20)
                 };
             },
             (emulator, operands) -> {
@@ -162,7 +162,7 @@ public final class LA64InstructionSet {
             0b0100_11,
             6,
             LA64InstructionFormat.FORMAT_2RI16,
-            new LA64OperandType[]{LA64OperandType.REG, LA64OperandType.REG, LA64OperandType.OFFS16},
+            new LA64OperandType[]{LA64OperandType.GPR, LA64OperandType.GPR, LA64OperandType.OFFS16},
             null,
             null,
             (emulator, operands) -> {
