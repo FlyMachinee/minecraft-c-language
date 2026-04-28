@@ -24,7 +24,7 @@ public final class BitMath {
 
 
     public static int getRd(int machineCode) {
-        return extractBits(machineCode, 0, 5);
+        return extractBits(machineCode, 5);
     }
 
     public static int getRj(int machineCode) {
@@ -41,5 +41,10 @@ public final class BitMath {
 
     public static int getOffs16(int machineCode) {
         return extractSignedBits(machineCode, 10, 16);
+    }
+
+    public static boolean isSi12(int number) {
+        // 检查该数字是否可被 12 位的有符号数表示
+        return number >= -2048 && number <= 2047;
     }
 }

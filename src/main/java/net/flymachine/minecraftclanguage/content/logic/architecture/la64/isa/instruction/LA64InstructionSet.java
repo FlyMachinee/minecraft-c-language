@@ -1,6 +1,9 @@
 package net.flymachine.minecraftclanguage.content.logic.architecture.la64.isa.instruction;
 
+import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
+import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.isa.operand.LA64OperandType;
+import net.flymachine.minecraftclanguage.content.logic.cpu.la64.LA64CpuState;
 
 import java.util.*;
 
@@ -16,8 +19,18 @@ public final class LA64InstructionSet {
      * @param mnemonic 指令助记符
      * @return 指令信息
      */
-    public static LA64InstructionInfo getByMnemonic(String mnemonic) {
-        return BY_MNEMONIC.get(mnemonic);
+    public static Optional<LA64InstructionInfo> getByMnemonic(String mnemonic) {
+        return Optional.ofNullable(BY_MNEMONIC.get(mnemonic));
+    }
+
+    /**
+     * 检查字符串是否标识某条指令
+     *
+     * @param str 字符串
+     * @return 如果字符串是某条指令的助记符，则返回 {@code true}，否则返回 {@code false}
+     */
+    public static boolean isMnemonic(String str) {
+        return BY_MNEMONIC.containsKey(str);
     }
 
     /**
@@ -57,7 +70,7 @@ public final class LA64InstructionSet {
     }
 
     private static final Map<String, LA64InstructionInfo> BY_MNEMONIC = new HashMap<>();
-    private static final Map<Integer, LA64InstructionInfo> BY_OPCODE = new HashMap<>();
+    private static final Int2ObjectMap<LA64InstructionInfo> BY_OPCODE = new Int2ObjectOpenHashMap<>();
 
     private static int maxOpcodeLength = 0;
     private static int minOpcodeLength = 32;
@@ -79,7 +92,19 @@ public final class LA64InstructionSet {
             new LA64OperandType[]{LA64OperandType.REG, LA64OperandType.REG, LA64OperandType.SI12},
             null,
             null,
-            (emulator, operands) -> { }));
+            (emulator, operands) -> {
+                // addi.w rd, rj, si12
+                /*
+                    tmp = GR[rj][31:0] + SignExtend(si12, 32)
+                    GR[rd] = SignExtend(tmp[31:0], GRLEN)
+                 */
+                LA64CpuState cpu = emulator.getCpuState();
+                int rjValue = cpu.getGrWord(operands[1].value());
+                int si12Value = operands[2].value();
+                int temp = rjValue + si12Value;
+                cpu.setGr(operands[0].value(), temp);
+                cpu.pcNext();
+            }));
         add(new LA64InstructionInfo(
             "jirl",
             0b0100_11,
@@ -88,6 +113,18 @@ public final class LA64InstructionSet {
             new LA64OperandType[]{LA64OperandType.REG, LA64OperandType.REG, LA64OperandType.OFFS16},
             null,
             null,
-            (emulator, operands) -> { }));
+            (emulator, operands) -> {
+                // jirl rd, rj, offs16
+                /*
+                    GR[rd] = PC + 4
+                    PC = GR[rj] + SignExtend({offs16, 2'b0}, GRLEN)
+                 */
+                LA64CpuState cpu = emulator.getCpuState();
+                cpu.setGr(operands[0].value(), cpu.getPc() + 4);
+                long rjValue = cpu.getGr(operands[1].value());
+                long offset = ((long) operands[2].value()) << 2;
+                long nextPc = rjValue + offset;
+                cpu.setPc(nextPc);
+            }));
     }
 }

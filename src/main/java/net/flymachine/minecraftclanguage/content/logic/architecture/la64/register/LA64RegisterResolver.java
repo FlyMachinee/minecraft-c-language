@@ -68,6 +68,19 @@ public final class LA64RegisterResolver {
     }
 
     /**
+     * 查询字符串是否是一个有效的寄存器名称（不区分大小写）
+     *
+     * @param str 字符串
+     * @return 如果是有效的寄存器名称则返回 {@code true}，否则返回 {@code false}
+     */
+    public boolean isRegisterName(String str) {
+        if (str == null || str.isBlank()) {
+            return false;
+        }
+        return nameToRegister.containsKey(str.trim().toLowerCase());
+    }
+
+    /**
      * 根据类型和编号查找寄存器
      *
      * @param type   GPR 或 FPR

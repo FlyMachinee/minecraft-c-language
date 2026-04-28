@@ -2,7 +2,7 @@ package net.flymachine.minecraftclanguage.content.logic.architecture.la64.isa.in
 
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.isa.operand.LA64Operand;
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.isa.operand.LA64OperandType;
-import net.flymachine.minecraftclanguage.content.logic.emulator.la64.LA64Emulator;
+import net.flymachine.minecraftclanguage.content.logic.emulator.la64.LA64EmulatorHandler;
 import org.apache.logging.log4j.core.config.plugins.validation.constraints.NotBlank;
 import org.jetbrains.annotations.NotNull;
 
@@ -29,4 +29,4 @@ public record LA64InstructionInfo(
     LA64OperandType[] operandTypes,
     @Nullable BiFunction<LA64InstructionInfo, LA64Operand[], Integer> encoder,
     @Nullable Function<Integer, LA64Operand[]> decoder,
-    @NotNull BiConsumer<LA64Emulator, LA64Operand[]> executor) { }
+    @NotNull BiConsumer<LA64EmulatorHandler, LA64Operand[]> executor) { }
