@@ -134,81 +134,41 @@ public final class HighLevelAsmToAsmLowerer {
                 "Cannot move from/to pseudo register, should be replaced earlier");
         }
 
-        // if (src instanceof Immediate immediate) {
-        //     if (dst instanceof GeneralPurposeRegister register) {
-        //         // 立即数到寄存器
-        //         target.add(createLoadImm(register, (int) immediate.value()));
-        //         return;
-        //     } else if (dst instanceof Stack stack) {
-        //         // 立即数到内存地址
-        //         target.add(createLoadImm(GeneralPurposeRegister.T0, (int) immediate.value()));
-        //         target.add(createStore(GeneralPurposeRegister.T0, stack));
-        //         return;
-        //     }
-        // } else if (src instanceof GeneralPurposeRegister srcReg) {
-        //     if (dst instanceof GeneralPurposeRegister dstReg) {
-        //         // 寄存器到寄存器
-        //         target.add(new LA64AsmInstruction("move", List.of(dstReg, srcReg)));
-        //         return;
-        //     } else if (dst instanceof Stack stack) {
-        //         // 寄存器到内存地址
-        //         target.add(createStore(srcReg, stack));
-        //         return;
-        //     }
-        // } else if (src instanceof Stack srcStack) {
-        //     if (dst instanceof GeneralPurposeRegister dstReg) {
-        //         // 内存地址到寄存器
-        //         target.add(createLoad(dstReg, srcStack));
-        //         return;
-        //     } else if (dst instanceof Stack dstStack) {
-        //         target.add(createLoad(GeneralPurposeRegister.T0, srcStack));
-        //         target.add(createStore(GeneralPurposeRegister.T0, dstStack));
-        //         return;
-        //     }
-        // }
-        // throw new UnsupportedOperationException(
-        //     "Unsupported move from " + src.getClass().getSimpleName() + " to " + dst.getClass().getSimpleName());
-
-        // 将源操作数加载到寄存器中（立即数稍后特殊处理）
-        GeneralPurposeRegister srcReg = null;
-        if (src instanceof GeneralPurposeRegister reg) {
-            // 已经在寄存器中
-            srcReg = reg;
-        } else if (src instanceof Stack stack) {
-            // 从内存加载到 t0
-            srcReg = GeneralPurposeRegister.T0;
-            target.add(createLoad(srcReg, stack));
-        } else if (!(src instanceof Immediate)) {
-            throw new UnsupportedOperationException("Unsupported source type: " + src.getClass().getSimpleName());
+        if (src instanceof Immediate immediate) {
+            if (dst instanceof GeneralPurposeRegister register) {
+                // 立即数到寄存器
+                target.add(createLoadImm(register, (int) immediate.value()));
+                return;
+            } else if (dst instanceof Stack stack) {
+                // 立即数到内存地址
+                target.add(createLoadImm(GeneralPurposeRegister.T0, (int) immediate.value()));
+                target.add(createStore(GeneralPurposeRegister.T0, stack));
+                return;
+            }
+        } else if (src instanceof GeneralPurposeRegister srcReg) {
+            if (dst instanceof GeneralPurposeRegister dstReg) {
+                // 寄存器到寄存器
+                target.add(new LA64AsmInstruction("move", List.of(dstReg, srcReg)));
+                return;
+            } else if (dst instanceof Stack stack) {
+                // 寄存器到内存地址
+                target.add(createStore(srcReg, stack));
+                return;
+            }
+        } else if (src instanceof Stack srcStack) {
+            if (dst instanceof GeneralPurposeRegister dstReg) {
+                // 内存地址到寄存器
+                target.add(createLoad(dstReg, srcStack));
+                return;
+            } else if (dst instanceof Stack dstStack) {
+                // 内存地址到内存地址
+                target.add(createLoad(GeneralPurposeRegister.T0, srcStack));
+                target.add(createStore(GeneralPurposeRegister.T0, dstStack));
+                return;
+            }
         }
-        // 立即数不在此处加载，后面生成 li.w
-
-        GeneralPurposeRegister dstReg;
-        boolean needStore = false;
-        if (dst instanceof GeneralPurposeRegister reg) {
-            // 直接存入目标寄存器
-            dstReg = reg;
-        } else if (dst instanceof Stack) {
-            // 先存入临时寄存器，稍后写回内存
-            dstReg = GeneralPurposeRegister.T0;
-            needStore = true;
-        } else {
-            throw new UnsupportedOperationException("Unsupported destination type: " + dst.getClass().getSimpleName());
-        }
-
-        if (src instanceof Immediate imm) {
-            // 立即数加载，li.w 直接加载到目标寄存器
-            target.add(createLoadImm(dstReg, (int) imm.value()));
-        } else {
-            // 寄存器之间的移动，move
-            target.add(new LA64AsmInstruction("move", List.of(dstReg, srcReg)));
-        }
-
-        if (needStore) {
-            // 若存放至内存，得将先前存放在 t0 的结果写回内存
-            target.add(createStore(GeneralPurposeRegister.T0, (Stack) dst));
-        }
-
+        throw new UnsupportedOperationException(
+            "Unsupported move from " + src.getClass().getSimpleName() + " to " + dst.getClass().getSimpleName());
     }
 
     private void lowerUnaryInstruction(Unary unary, List<LA64AsmStatement> target) {
