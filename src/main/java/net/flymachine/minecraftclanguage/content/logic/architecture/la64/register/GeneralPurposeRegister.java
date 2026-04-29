@@ -1,12 +1,13 @@
 package net.flymachine.minecraftclanguage.content.logic.architecture.la64.register;
 
+import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.operand.LA64AsmOperand;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.HighLevelOperand;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-public enum GeneralPurposeRegister implements LA64Register, HighLevelOperand {
+public enum GeneralPurposeRegister implements LA64Register, HighLevelOperand, LA64AsmOperand {
     ZERO(RegType.GPR, 0, "zero", "r0"),
     RA(RegType.GPR, 1, "ra", "r1"),
     TP(RegType.GPR, 2, "tp", "r2"),

@@ -5,4 +5,8 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.ir;
  */
 public interface TacDataStructure {
     void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine);
+
+    default void genFormattedString(StringBuilder stringBuilder) {
+        genFormattedString(stringBuilder, 0, false);
+    }
 }

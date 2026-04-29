@@ -13,7 +13,8 @@ compilationUnit:
 
 // ISO 6.5.1, Primary Expressions
 primaryExpression
-    : IntegerConstant
+    : IntegerConstant                   # IntegerConstantExpression
+    | LeftParen expression RightParen   # ParenthesizedExpression
     ;
 
 // ISO 6.5.2, Postfix Operators
@@ -23,7 +24,13 @@ postfixExpression
 
 // ISO 6.5.3, Unary Operators
 unaryExpression
-    : postfixExpression
+    : postfixExpression                 # DummyPostfixExpressionToUnaryExpression
+    | unaryOperator castExpression      # UnaryOperatorExpression
+    ;
+
+unaryOperator
+    : Minus
+    | Tilde
     ;
 
 // ISO 6.5.4, Cast Operators

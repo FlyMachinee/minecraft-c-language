@@ -1,5 +1,6 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast;
 
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.UnaryOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.antlr.C99Parser;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.antlr.C99ParserBaseVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.*;
@@ -39,8 +40,21 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
     }
 
     @Override
-    public ExpressionNode visitPrimaryExpression(C99Parser.PrimaryExpressionContext ctx) {
+    public IntConstantNode visitIntegerConstantExpression(C99Parser.IntegerConstantExpressionContext ctx) {
         int value = Integer.parseInt(ctx.IntegerConstant().getText());
         return new IntConstantNode(value);
+    }
+
+    @Override
+    public ExpressionNode visitParenthesizedExpression(C99Parser.ParenthesizedExpressionContext ctx) {
+        return (ExpressionNode) visit(ctx.expression());
+    }
+
+    @Override
+    public UnaryExpressionNode visitUnaryOperatorExpression(C99Parser.UnaryOperatorExpressionContext ctx) {
+        String operator = ctx.unaryOperator().getText();
+        UnaryOperator op = UnaryOperator.fromSymbol(operator);
+        ExpressionNode operand = (ExpressionNode) visit(ctx.castExpression());
+        return new UnaryExpressionNode(op, operand);
     }
 }

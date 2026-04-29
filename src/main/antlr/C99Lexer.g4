@@ -24,6 +24,12 @@ fragment DecimalConstant: NonzeroDigit Digit*;
 
 fragment NonzeroDigit: [1-9];
 
+// Operators
+
+Minus: '-';
+MinusMinus: '--';
+Tilde: '~';
+
 // Parentheses
 
 LeftParen: '(';

@@ -2,12 +2,18 @@ package net.flymachine.minecraftclanguage.content.logic.architecture.la64.isa.in
 
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
+import net.flymachine.minecraftclanguage.content.logic.architecture.la64.isa.exception.LA64Exception;
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.isa.operand.LA64Operand;
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.isa.operand.LA64OperandType;
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.util.BitMath;
 import net.flymachine.minecraftclanguage.content.logic.cpu.la64.LA64CpuState;
+import net.flymachine.minecraftclanguage.content.logic.cpu.la64.LA64MemoryManagementUnit;
+import net.flymachine.minecraftclanguage.content.logic.cpu.la64.exception.LA64RuntimeException;
+import net.flymachine.minecraftclanguage.content.logic.emulator.la64.LA64EmulatorHandler;
+import net.flymachine.minecraftclanguage.content.logic.memory.MemoryLikeDevice;
 
 import java.util.*;
+import java.util.function.BiFunction;
 
 public final class LA64InstructionSet {
 
@@ -85,7 +91,96 @@ public final class LA64InstructionSet {
         minOpcodeLength = Math.min(minOpcodeLength, info.opcodeLength());
     }
 
+    private final static LA64OperandType[] FORMAT_3GPR_OPTYPE
+        = new LA64OperandType[]{LA64OperandType.GPR, LA64OperandType.GPR, LA64OperandType.GPR};
+    private final static LA64OperandType[] FORMAT_2GPR_SI12_OPTYPE
+        = new LA64OperandType[]{LA64OperandType.GPR, LA64OperandType.GPR, LA64OperandType.SI12};
+    private final static LA64OperandType[] FORMAT_2GPR_UI12_OPTYPE
+        = new LA64OperandType[]{LA64OperandType.GPR, LA64OperandType.GPR, LA64OperandType.UI12};
+    private final static LA64OperandType[] FORMAT_2GPR_OFFS16_OPTYPE
+        = new LA64OperandType[]{LA64OperandType.GPR, LA64OperandType.GPR, LA64OperandType.OFFS16};
+
+    @FunctionalInterface
+    private interface BinaryDoubleWordExecutor {
+        void execute(
+            LA64EmulatorHandler emulator, LA64Operand[] operands,
+            BiFunction<Long, Long, Long> binaryFunction);
+    }
+
+    @FunctionalInterface
+    private interface BinaryWordExecutor {
+        void execute(
+            LA64EmulatorHandler emulator, LA64Operand[] operands,
+            BiFunction<Integer, Integer, Integer> binaryFunction);
+    }
+
+    private static final BinaryDoubleWordExecutor BINARY_DOUBLE_WORD_EXECUTOR =
+        (emulator, operands, binaryFunction) -> {
+            LA64CpuState cpu = emulator.getCpuState();
+            long rjValue = cpu.getGr(operands[1].value());
+            long rkValue = cpu.getGr(operands[2].value());
+            long result = binaryFunction.apply(rjValue, rkValue);
+            cpu.setGr(operands[0].value(), result);
+            cpu.pcNext();
+        };
+
+    private static final BinaryWordExecutor BINARY_WORD_EXECUTOR =
+        (emulator, operands, binaryFunction) -> {
+            LA64CpuState cpu = emulator.getCpuState();
+            int rjValue = cpu.getGrWord(operands[1].value());
+            int rkValue = cpu.getGrWord(operands[2].value());
+            int result = binaryFunction.apply(rjValue, rkValue);
+            cpu.setGr(operands[0].value(), result);
+            cpu.pcNext();
+        };
+
     static {
+        add(new LA64InstructionInfo(
+            "sub.w",
+            0b0000_0000_0001_0001_0,
+            17,
+            LA64InstructionFormat.FORMAT_3R,
+            FORMAT_3GPR_OPTYPE,
+            null,
+            null,
+            (emulator, operands) -> {
+                // sub.w rd, rj, rk
+                /*
+                    tmp = GR[rj][31:0] - GR[rk][31:0]
+                    GR[rd] = SignExtend(tmp[31:0], GRLEN)
+                 */
+                BINARY_WORD_EXECUTOR.execute(emulator, operands, (rj, rk) -> rj - rk);
+            }));
+        add(new LA64InstructionInfo(
+            "nor",
+            0b0000_0000_0001_0100_0,
+            17,
+            LA64InstructionFormat.FORMAT_3R,
+            FORMAT_3GPR_OPTYPE,
+            null,
+            null,
+            (emulator, operands) -> {
+                // nor rd, rj, rk
+                /*
+                    GR[rd] = ~(GR[rj] | GR[rk])
+                 */
+                BINARY_DOUBLE_WORD_EXECUTOR.execute(emulator, operands, (rj, rk) -> ~(rj | rk));
+            }));
+        add(new LA64InstructionInfo(
+            "or",
+            0b0000_0000_0001_0101_0,
+            17,
+            LA64InstructionFormat.FORMAT_3R,
+            FORMAT_3GPR_OPTYPE,
+            null,
+            null,
+            (emulator, operands) -> {
+                // or rd, rj, rk
+                /*
+                    GR[rd] = GR[rj] | GR[rk]
+                 */
+                BINARY_DOUBLE_WORD_EXECUTOR.execute(emulator, operands, (rj, rk) -> rj | rk);
+            }));
         add(new LA64InstructionInfo(
             "addi.w",
             0b0000_0010_10,
@@ -108,11 +203,32 @@ public final class LA64InstructionSet {
                 cpu.pcNext();
             }));
         add(new LA64InstructionInfo(
+            "addi.d",
+            0b0000_0010_11,
+            10,
+            LA64InstructionFormat.FORMAT_2RI12,
+            FORMAT_2GPR_SI12_OPTYPE,
+            null,
+            null,
+            (emulator, operands) -> {
+                // addi.d rd, rj, si12
+                /*
+                    tmp = GR[rj][63:0] + SignExtend(si12, 64)
+                    GR[rd] = tmp[63:0]
+                 */
+                LA64CpuState cpu = emulator.getCpuState();
+                long rjValue = cpu.getGr(operands[1].value());
+                long si12Value = operands[2].value();
+                long temp = rjValue + si12Value;
+                cpu.setGr(operands[0].value(), temp);
+                cpu.pcNext();
+            }));
+        add(new LA64InstructionInfo(
             "ori",
             0b0000_0011_10,
             10,
             LA64InstructionFormat.FORMAT_2RI12,
-            new LA64OperandType[]{LA64OperandType.GPR, LA64OperandType.GPR, LA64OperandType.UI12},
+            FORMAT_2GPR_UI12_OPTYPE,
             null,
             null,
             (emulator, operands) -> {
@@ -125,8 +241,7 @@ public final class LA64InstructionSet {
                 long ui12Value = operands[2].value() & 0xFFFL;
                 cpu.setGr(operands[0].value(), rjValue | ui12Value);
                 cpu.pcNext();
-            }
-        ));
+            }));
         add(new LA64InstructionInfo(
             "lu12i.w",
             0b0001_010,
@@ -155,14 +270,135 @@ public final class LA64InstructionSet {
                 LA64CpuState cpu = emulator.getCpuState();
                 cpu.setGr(operands[0].value(), ((long) operands[1].value()) << 12);
                 cpu.pcNext();
-            }
-        ));
+            }));
+        add(new LA64InstructionInfo(
+            "ld.w",
+            0b0010_1000_10,
+            10,
+            LA64InstructionFormat.FORMAT_2RI12,
+            FORMAT_2GPR_SI12_OPTYPE,
+            null,
+            null,
+            (emulator, operands) -> {
+                // ld.w rd, rj, si12
+                /*
+                    vaddr = GR[rj] + SignExtend(si12, GRLEN)
+                    AddressComplianceCheck(vaddr)
+                    paddr = AddressTranslation(vaddr)
+                    word = MemoryLoad(paddr, WORD)
+                    GR[rd] = SignExtend(word, GRLEN)
+                 */
+                LA64CpuState cpu = emulator.getCpuState();
+                MemoryLikeDevice ram = emulator.getRam();
+                LA64MemoryManagementUnit mmu = emulator.getMemoryManagementUnit();
+
+                long rjValue = cpu.getGr(operands[1].value());
+                long offset = operands[2].value();
+                long vaddr = rjValue + offset;
+                if ((vaddr & 0b11) != 0) {
+                    throw new LA64RuntimeException(LA64Exception.ALE);
+                }
+                long paddr = mmu.translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.LOAD);
+                int word = ram.loadWord(paddr);
+                cpu.setGr(operands[0].value(), word);
+                cpu.pcNext();
+            }));
+        add(new LA64InstructionInfo(
+            "ld.d",
+            0b0010_1000_11,
+            10,
+            LA64InstructionFormat.FORMAT_2RI12,
+            FORMAT_2GPR_SI12_OPTYPE,
+            null,
+            null,
+            (emulator, operands) -> {
+                // ld.d rd, rj, si12
+                /*
+                    vaddr = GR[rj] + SignExtend(si12, GRLEN)
+                    AddressComplianceCheck(vaddr)
+                    paddr = AddressTranslation(vaddr)
+                    GR[rd] = MemoryLoad(paddr, DOUBLEWORD)
+                 */
+                LA64CpuState cpu = emulator.getCpuState();
+                MemoryLikeDevice ram = emulator.getRam();
+                LA64MemoryManagementUnit mmu = emulator.getMemoryManagementUnit();
+
+                long rjValue = cpu.getGr(operands[1].value());
+                long offset = operands[2].value();
+                long vaddr = rjValue + offset;
+                if ((vaddr & 0b111) != 0) {
+                    throw new LA64RuntimeException(LA64Exception.ALE);
+                }
+                long paddr = mmu.translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.LOAD);
+                cpu.setGr(operands[0].value(), ram.loadDoubleWord(paddr));
+                cpu.pcNext();
+            }));
+        add(new LA64InstructionInfo(
+            "st.w",
+            0b0010_1001_10,
+            10,
+            LA64InstructionFormat.FORMAT_2RI12,
+            FORMAT_2GPR_SI12_OPTYPE,
+            null,
+            null,
+            (emulator, operands) -> {
+                // st.w rd, rj, si12
+                /*
+                    vaddr = GR[rj] + SignExtend(si12, GRLEN)
+                    AddressComplianceCheck(vaddr)
+                    paddr = AddressTranslation(vaddr)
+                    MemoryStore(GR[rd][31:0], paddr, WORD)
+                 */
+                LA64CpuState cpu = emulator.getCpuState();
+                MemoryLikeDevice ram = emulator.getRam();
+                LA64MemoryManagementUnit mmu = emulator.getMemoryManagementUnit();
+
+                long rjValue = cpu.getGr(operands[1].value());
+                long offset = operands[2].value();
+                long vaddr = rjValue + offset;
+                if ((vaddr & 0b11) != 0) {
+                    throw new LA64RuntimeException(LA64Exception.ALE);
+                }
+                long paddr = mmu.translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.STORE);
+                ram.storeWord(paddr, cpu.getGrWord(operands[0].value()));
+                cpu.pcNext();
+            }));
+        add(new LA64InstructionInfo(
+            "st.d",
+            0b0010_1001_11,
+            10,
+            LA64InstructionFormat.FORMAT_2RI12,
+            FORMAT_2GPR_SI12_OPTYPE,
+            null,
+            null,
+            (emulator, operands) -> {
+                // st.d rd, rj, si12
+                /*
+                    vaddr = GR[rj] + SignExtend(si12, GRLEN)
+                    AddressComplianceCheck(vaddr)
+                    paddr = AddressTranslation(vaddr)
+                    MemoryStore(GR[rd][63:0], paddr, DOUBLEWORD)
+                 */
+                LA64CpuState cpu = emulator.getCpuState();
+                MemoryLikeDevice ram = emulator.getRam();
+                LA64MemoryManagementUnit mmu = emulator.getMemoryManagementUnit();
+
+                long rjValue = cpu.getGr(operands[1].value());
+                long offset = operands[2].value();
+                long vaddr = rjValue + offset;
+                if ((vaddr & 0b111) != 0) {
+                    throw new LA64RuntimeException(LA64Exception.ALE);
+                }
+                long paddr = mmu.translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.STORE);
+                ram.storeDoubleWord(paddr, cpu.getGr(operands[0].value()));
+                cpu.pcNext();
+            }));
         add(new LA64InstructionInfo(
             "jirl",
             0b0100_11,
             6,
             LA64InstructionFormat.FORMAT_2RI16,
-            new LA64OperandType[]{LA64OperandType.GPR, LA64OperandType.GPR, LA64OperandType.OFFS16},
+            FORMAT_2GPR_OFFS16_OPTYPE,
             null,
             null,
             (emulator, operands) -> {

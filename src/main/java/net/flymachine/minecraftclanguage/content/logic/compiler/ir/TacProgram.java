@@ -12,7 +12,7 @@ public class TacProgram implements TacDataStructure {
         if (indentFirstLine) {
             stringBuilder.append("  ".repeat(indentLevel));
         }
-        stringBuilder.append("HighLevelProgram(\n");
+        stringBuilder.append("TacProgram(\n");
         functionDefinition.genFormattedString(stringBuilder, indentLevel + 1, true);
         stringBuilder.append("\n").append("  ".repeat(indentLevel)).append(")");
     }

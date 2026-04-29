@@ -1,8 +1,10 @@
 package net.flymachine.minecraftclanguage.content.logic.assembler.la64;
 
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.isa.encoder.LA64Encoder;
+import net.flymachine.minecraftclanguage.content.logic.architecture.la64.isa.instruction.LA64InstructionInfo;
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.isa.instruction.LA64InstructionSet;
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.isa.operand.LA64Operand;
+import net.flymachine.minecraftclanguage.content.logic.architecture.la64.isa.operand.LA64OperandType;
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.register.GeneralPurposeRegister;
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.register.LA64Register;
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.register.LA64RegisterResolver;
@@ -13,15 +15,12 @@ import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.L
 import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.LA64AsmStatement;
 import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.operand.LA64AsmImmOperand;
 import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.operand.LA64AsmOperand;
-import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.operand.LA64AsmRegOperand;
 import net.flymachine.minecraftclanguage.content.logic.memory.Segment;
 import net.flymachine.minecraftclanguage.content.logic.object.la64.LA64Object;
 
 import java.io.ByteArrayOutputStream;
-import java.util.EnumMap;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.stream.IntStream;
 
 public final class LA64Assembler {
 
@@ -110,9 +109,9 @@ public final class LA64Assembler {
                 // 先判断是否是宏指令，如果不是再视为普通指令处理
                 switch (instruction.mnemonic()) {
                     case "li.w" -> {
-                        // TODO: 检查操作数类型？或者也可不需要
+                        // TODO: 检查操作数类型
                         // li.w dst, imm32
-                        LA64Register dst = ((LA64AsmRegOperand) ops.get(0)).reg();
+                        LA64Register dst = ((LA64Register) ops.get(0));
                         int value = (int) ((LA64AsmImmOperand) ops.get(1)).value();
 
                         if (BitMath.isSi12(value)) {
@@ -154,10 +153,50 @@ public final class LA64Assembler {
                                     LA64Operand.reg(GeneralPurposeRegister.RA), // ra
                                     LA64Operand.offs16(0) // 0
                                 }));
+                    case "move" -> {
+                        // move rd, rj
+                        // TODO: 强转前检测
+                        LA64Register dst = ((LA64Register) ops.get(0));
+                        LA64Register src = ((LA64Register) ops.get(1));
+
+                        // or rd, rj, zero
+                        writeIntLittleEndian(
+                            out, LA64Encoder.encode(
+                                LA64InstructionSet.getByMnemonic("or").orElseThrow(), new LA64Operand[]{
+                                    LA64Operand.reg(dst),
+                                    LA64Operand.reg(src),
+                                    LA64Operand.reg(GeneralPurposeRegister.ZERO)}));
+                    }
                     default -> {
-                        // TODO: 暂时不支持其他
-                        throw new IllegalArgumentException(
-                            "Unsupported instruction mnemonic: " + instruction.mnemonic());
+                        Optional<LA64InstructionInfo>
+                            optionalInfo = LA64InstructionSet.getByMnemonic(instruction.mnemonic());
+
+                        if (optionalInfo.isEmpty()) {
+                            throw new IllegalArgumentException(
+                                "Unsupported instruction mnemonic: " + instruction.mnemonic());
+                        }
+
+                        LA64InstructionInfo info = optionalInfo.get();
+                        LA64Operand[] convertedOps = IntStream
+                            .range(0, ops.size())
+                            .mapToObj(i -> {
+                                LA64AsmOperand asmOp = ops.get(i);
+                                LA64OperandType type = info.operandTypes()[i];
+                                checkOpType(type, asmOp);
+
+                                int value;
+                                if (asmOp instanceof LA64Register regOp) {
+                                    value = regOp.getNumber();
+                                } else if (asmOp instanceof LA64AsmImmOperand immOp) {
+                                    value = (int) immOp.value();
+                                } else {
+                                    throw new IllegalArgumentException(
+                                        "Unsupported operand type: " + asmOp.getClass().getName());
+                                }
+                                return new LA64Operand(type, value);
+                            })
+                            .toArray(LA64Operand[]::new);
+                        writeIntLittleEndian(out, LA64Encoder.encode(info, convertedOps));
                     }
                 }
 
@@ -170,7 +209,26 @@ public final class LA64Assembler {
         return new LA64Object(segmentContents.get(Segment.TEXT).toByteArray());
     }
 
-    private void writeIntLittleEndian(ByteArrayOutputStream out, int value) {
+    private static void checkOpType(LA64OperandType type, LA64AsmOperand asmOp) {
+        switch (type) {
+            case GPR, FPR -> {
+                if (!(asmOp instanceof LA64Register)) {
+                    throw new IllegalArgumentException(
+                        "Expected register operand for type " + type + ", but got: " +
+                        asmOp.getClass().getName());
+                }
+            }
+            case SI12, SI20, UI12, OFFS16 -> {
+                if (asmOp instanceof LA64Register) {
+                    throw new IllegalArgumentException(
+                        "Expected immediate operand for type " + type + ", but got register: " +
+                        ((LA64Register) asmOp).getPrimaryName());
+                }
+            }
+        }
+    }
+
+    private static void writeIntLittleEndian(ByteArrayOutputStream out, int value) {
         out.write(value & 0xFF);
         out.write((value >> 8) & 0xFF);
         out.write((value >> 16) & 0xFF);

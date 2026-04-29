@@ -15,6 +15,12 @@ public final class AstToTacLowerer {
         return new TacProgram(functionDefinition);
     }
 
+    private int tempVarCounter = 0;
+
+    private String makeTempVar() {
+        return "tmp." + (tempVarCounter++);
+    }
+
     private TacFunction lowerFunction(FunctionDefinitionNode functionDefinition) {
         List<TacInstruction> instructions = lowerStatement(functionDefinition.body);
         return new TacFunction(functionDefinition.name, instructions);
@@ -23,7 +29,7 @@ public final class AstToTacLowerer {
     private List<TacInstruction> lowerStatement(StatementNode statement) {
         List<TacInstruction> instructions = new ArrayList<>();
         if (statement instanceof ReturnNode returnNode) {
-            TacValue returnValue = lowerExpression(returnNode.expression);
+            TacValue returnValue = lowerExpression(returnNode.expression, instructions);
             instructions.add(new TacReturn(returnValue));
         } else {
             throw new UnsupportedOperationException(
@@ -32,11 +38,17 @@ public final class AstToTacLowerer {
         return instructions;
     }
 
-    private TacValue lowerExpression(ExpressionNode expression) {
+    private TacValue lowerExpression(ExpressionNode expression, List<TacInstruction> instructions) {
         if (expression instanceof IntConstantNode intConstantNode) {
             return new TacIntConstant(intConstantNode.value);
+        } else if (expression instanceof UnaryExpressionNode unaryExpressionNode) {
+            TacValue src = lowerExpression(unaryExpressionNode.exp, instructions);
+            TacVariable dst = new TacVariable(makeTempVar());
+            instructions.add(new TacUnaryOperation(unaryExpressionNode.op, src, dst));
+            return dst;
         }
         throw new UnsupportedOperationException(
             "Unsupported expression type: " + expression.getClass().getSimpleName());
+
     }
 }

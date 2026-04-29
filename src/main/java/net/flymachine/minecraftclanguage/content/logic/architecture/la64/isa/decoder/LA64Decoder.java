@@ -29,6 +29,7 @@ public final class LA64Decoder {
 
         LA64Operand[] ops;
         switch (info.format()) {
+            case FORMAT_3R -> ops = decode3R(info, machineCode);
             case FORMAT_2RI12 -> ops = decode2RI12(info, machineCode);
             case FORMAT_2RI16 -> ops = decode2RI16(info, machineCode);
             case MISCELLANEOUS -> {
@@ -44,13 +45,26 @@ public final class LA64Decoder {
         return new LA64Instruction(info, ops);
     }
 
+    private static LA64Operand[] decode3R(LA64InstructionInfo info, int machineCode) {
+        // rd, rj, rk
+        int rd = BitMath.getRd(machineCode);
+        int rj = BitMath.getRj(machineCode);
+        int rk = BitMath.getRk(machineCode);
+        return new LA64Operand[]{
+            new LA64Operand(info.operandTypes()[0], rd),
+            new LA64Operand(info.operandTypes()[1], rj),
+            new LA64Operand(info.operandTypes()[2], rk)};
+    }
+
     private static LA64Operand[] decode2RI12(LA64InstructionInfo info, int machineCode) {
         // rd, rj, imm12(si12 / ui12)
         int rd = BitMath.getRd(machineCode);
         int rj = BitMath.getRj(machineCode);
         int imm12 = BitMath.extractBits(machineCode, 10, 12);
         return new LA64Operand[]{
-            LA64Operand.gpr(rd), LA64Operand.gpr(rj), new LA64Operand(info.operandTypes()[2], imm12)};
+            new LA64Operand(info.operandTypes()[0], rd),
+            new LA64Operand(info.operandTypes()[1], rj),
+            new LA64Operand(info.operandTypes()[2], imm12)};
     }
 
     private static LA64Operand[] decode2RI16(LA64InstructionInfo info, int machineCode) {
@@ -59,7 +73,9 @@ public final class LA64Decoder {
         int rj = BitMath.getRj(machineCode);
         int imm16 = BitMath.extractBits(machineCode, 10, 16);
         return new LA64Operand[]{
-            LA64Operand.gpr(rd), LA64Operand.gpr(rj), new LA64Operand(info.operandTypes()[2], imm16)};
+            new LA64Operand(info.operandTypes()[0], rd),
+            new LA64Operand(info.operandTypes()[1], rj),
+            new LA64Operand(info.operandTypes()[2], imm16)};
     }
 
 }

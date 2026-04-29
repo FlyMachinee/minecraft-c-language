@@ -16,6 +16,8 @@ public final class LA64Emulator {
     private final SimpleRam ram = new SimpleRam(256 * SimpleRam.PAGE_SIZE); // 1 MB
     private final LA64MemoryManagementUnit mmu = new LA64MemoryManagementUnit();
 
+    private static final long INITIAL_SP = 0x00007ffffffffff0L;
+
     // 目前，当从 0 地址取指时，停止执行并返回 a0
     private boolean stopFlag = false;
 
@@ -25,10 +27,18 @@ public final class LA64Emulator {
             new LA64MemoryManagementUnit.LA64PageTableEntry(
                 0,
                 true));
+        mmu.addPageTableEntry(
+            INITIAL_SP / SimpleRam.PAGE_SIZE,
+            new LA64MemoryManagementUnit.LA64PageTableEntry(
+                1,
+                true
+            ));
     }
 
     public void reset() {
         cpuState.reset();
+        cpuState.setGr(GeneralPurposeRegister.SP.getNumber(), INITIAL_SP);
+        stopFlag = false;
     }
 
     public long runExecutable(LA64Executable executable) {

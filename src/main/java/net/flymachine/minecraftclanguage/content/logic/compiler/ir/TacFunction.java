@@ -16,7 +16,7 @@ public class TacFunction implements TacDataStructure {
         if (indentFirstLine) {
             stringBuilder.append("  ".repeat(indentLevel));
         }
-        stringBuilder.append("HighLevelFunction(\n");
+        stringBuilder.append("TacFunction(\n");
         stringBuilder.append("  ".repeat(indentLevel + 1)).append("name=\"").append(name).append("\",\n");
         stringBuilder.append("  ".repeat(indentLevel + 1)).append("instructions=[\n");
         for (TacInstruction instruction : instructions) {

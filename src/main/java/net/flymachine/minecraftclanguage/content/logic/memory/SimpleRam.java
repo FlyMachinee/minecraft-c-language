@@ -58,7 +58,7 @@ public class SimpleRam implements MemoryLikeDevice, DmaDevice {
         physicalAddress %= size;
         int pageIndex = getPageIndex(physicalAddress);
         int offset = physicalAddress % PAGE_SIZE;
-        if (offset % 2 != 0) {
+        if ((offset & 0b1) != 0) {
             throw new MemoryAccessMisalignException(physicalAddress, 2);
         }
         byte[] page = getPage(pageIndex);
@@ -75,7 +75,7 @@ public class SimpleRam implements MemoryLikeDevice, DmaDevice {
         physicalAddress %= size;
         int pageIndex = getPageIndex(physicalAddress);
         int offset = physicalAddress % PAGE_SIZE;
-        if (offset % 4 != 0) {
+        if ((offset & 0b11) != 0) {
             throw new MemoryAccessMisalignException(physicalAddress, 4);
         }
         byte[] page = getPage(pageIndex);
@@ -95,7 +95,7 @@ public class SimpleRam implements MemoryLikeDevice, DmaDevice {
         physicalAddress %= size;
         int pageIndex = getPageIndex(physicalAddress);
         int offset = physicalAddress % PAGE_SIZE;
-        if (offset % 8 != 0) {
+        if ((offset & 0b111) != 0) {
             throw new MemoryAccessMisalignException(physicalAddress, 8);
         }
         byte[] page = getPage(pageIndex);

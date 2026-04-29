@@ -14,6 +14,7 @@ public final class LA64Encoder {
 
     public static int encode(LA64InstructionInfo info, LA64Operand[] ops) {
         return switch (info.format()) {
+            case FORMAT_3R -> encode3R(info.opcode(), ops);
             case FORMAT_2RI12 -> encode2RI12(info.opcode(), ops);
             case FORMAT_2RI16 -> encode2RI16(info.opcode(), ops);
             case MISCELLANEOUS -> {
@@ -26,6 +27,14 @@ public final class LA64Encoder {
             }
             default -> throw new IllegalArgumentException("Unsupported instruction format: " + info.format());
         };
+    }
+
+    private static int encode3R(int opcode, LA64Operand[] ops) {
+        // rd, rj, rk
+        int rd = ops[0].value();
+        int rj = ops[1].value();
+        int rk = ops[2].value();
+        return (opcode << 15) | (rk << 10) | (rj << 5) | rd;
     }
 
     private static int encode2RI12(int opcode, LA64Operand[] ops) {
