@@ -1,4 +1,4 @@
-package net.flymachine.minecraftclanguage.content.logic.compiler.backend.machineIndependent;
+package net.flymachine.minecraftclanguage.content.logic.compiler.optimizer;
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.TacFunction;
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.TacProgram;
