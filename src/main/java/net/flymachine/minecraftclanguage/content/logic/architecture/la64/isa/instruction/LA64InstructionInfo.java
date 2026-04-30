@@ -29,4 +29,71 @@ public record LA64InstructionInfo(
     LA64OperandType[] operandTypes,
     @Nullable BiFunction<LA64InstructionInfo, LA64Operand[], Integer> encoder,
     @Nullable Function<Integer, LA64Operand[]> decoder,
-    @NotNull BiConsumer<LA64EmulatorHandler, LA64Operand[]> executor) { }
+    @NotNull BiConsumer<LA64EmulatorHandler, LA64Operand[]> executor) {
+
+    public LA64InstructionInfo(
+        @NotBlank String mnemonic,
+        int opcode,
+        int opcodeLength,
+        LA64InstructionFormat format,
+        LA64OperandType[] operandTypes,
+        @NotNull BiConsumer<LA64EmulatorHandler, LA64Operand[]> executor) {
+        this(mnemonic, opcode, opcodeLength, format, operandTypes, null, null, executor);
+    }
+
+    public static LA64InstructionInfo format3Gpr(
+        @NotBlank String mnemonic,
+        int opcode,
+        @NotNull BiConsumer<LA64EmulatorHandler, LA64Operand[]> executor) {
+        return new LA64InstructionInfo(
+            mnemonic,
+            opcode,
+            17,
+            LA64InstructionFormat.FORMAT_3R,
+            LA64OperandType.FORMAT_3GPR_OPTYPE,
+            executor
+        );
+    }
+
+    public static LA64InstructionInfo format2GprSi12(
+        @NotBlank String mnemonic,
+        int opcode,
+        @NotNull BiConsumer<LA64EmulatorHandler, LA64Operand[]> executor) {
+        return new LA64InstructionInfo(
+            mnemonic,
+            opcode,
+            10,
+            LA64InstructionFormat.FORMAT_2RI12,
+            LA64OperandType.FORMAT_2GPR_SI12_OPTYPE,
+            executor
+        );
+    }
+
+    public static LA64InstructionInfo format2GprUi12(
+        @NotBlank String mnemonic,
+        int opcode,
+        @NotNull BiConsumer<LA64EmulatorHandler, LA64Operand[]> executor) {
+        return new LA64InstructionInfo(
+            mnemonic,
+            opcode,
+            10,
+            LA64InstructionFormat.FORMAT_2RI12,
+            LA64OperandType.FORMAT_2GPR_UI12_OPTYPE,
+            executor
+        );
+    }
+
+    public static LA64InstructionInfo format2GPROffs16(
+        @NotBlank String mnemonic,
+        int opcode,
+        @NotNull BiConsumer<LA64EmulatorHandler, LA64Operand[]> executor) {
+        return new LA64InstructionInfo(
+            mnemonic,
+            opcode,
+            6,
+            LA64InstructionFormat.FORMAT_2RI16,
+            LA64OperandType.FORMAT_2GPR_OFFS16_OPTYPE,
+            executor
+        );
+    }
+}

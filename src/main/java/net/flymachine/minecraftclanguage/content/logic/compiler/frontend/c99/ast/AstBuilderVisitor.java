@@ -1,5 +1,6 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast;
 
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.BinaryOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.UnaryOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.antlr.C99Parser;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.antlr.C99ParserBaseVisitor;
@@ -56,5 +57,23 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         UnaryOperator op = UnaryOperator.fromSymbol(operator);
         ExpressionNode operand = (ExpressionNode) visit(ctx.castExpression());
         return new UnaryExpressionNode(op, operand);
+    }
+
+    @Override
+    public BinaryExpressionNode visitMultiplicativeOperatorExpression(C99Parser.MultiplicativeOperatorExpressionContext ctx) {
+        String operator = ctx.multiplicativeOperator().getText();
+        BinaryOperator op = BinaryOperator.fromSymbol(operator);
+        ExpressionNode lhs = (ExpressionNode) visit(ctx.multiplicativeExpression());
+        ExpressionNode rhs = (ExpressionNode) visit(ctx.castExpression());
+        return new BinaryExpressionNode(op, lhs, rhs);
+    }
+
+    @Override
+    public BinaryExpressionNode visitAdditiveOperatorExpression(C99Parser.AdditiveOperatorExpressionContext ctx) {
+        String operator = ctx.additiveOperator().getText();
+        BinaryOperator op = BinaryOperator.fromSymbol(operator);
+        ExpressionNode lhs = (ExpressionNode) visit(ctx.additiveExpression());
+        ExpressionNode rhs = (ExpressionNode) visit(ctx.multiplicativeExpression());
+        return new BinaryExpressionNode(op, lhs, rhs);
     }
 }

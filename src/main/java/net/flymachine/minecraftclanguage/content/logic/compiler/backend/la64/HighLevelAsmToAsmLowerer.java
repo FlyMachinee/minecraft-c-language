@@ -1,5 +1,6 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64;
 
+import com.mojang.datafixers.util.Pair;
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.register.GeneralPurposeRegister;
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.util.BitMath;
 import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.LA64AsmDirective;
@@ -10,14 +11,12 @@ import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.o
 import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.operand.LA64DirectiveSymArg;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.HighLevelFunction;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.HighLevelProgram;
-import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.instruction.HighLevelInstruction;
-import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.instruction.Move;
-import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.instruction.Ret;
-import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.instruction.Unary;
+import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.instruction.*;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.HighLevelOperand;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.Immediate;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.Pseudo;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.Stack;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.BinaryOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.UnaryOperator;
 
 import java.util.ArrayList;
@@ -115,6 +114,8 @@ public final class HighLevelAsmToAsmLowerer {
             generateEpilogue(target);
         } else if (instruction instanceof Unary unary) {
             lowerUnaryInstruction(unary, target);
+        } else if (instruction instanceof Binary binary) {
+            lowerBinaryInstruction(binary, target);
         } else {
             throw new UnsupportedOperationException(
                 "Unsupported instruction type: " + instruction.getClass().getSimpleName());
@@ -175,20 +176,7 @@ public final class HighLevelAsmToAsmLowerer {
         UnaryOperator op = unary.op;
         HighLevelOperand src = unary.src;
         HighLevelOperand dst = unary.dst;
-
-        if (dst instanceof Immediate) {
-            throw new UnsupportedOperationException("Cannot store result in an immediate");
-        }
-
-        if (src instanceof Immediate) {
-            throw new UnsupportedOperationException("Refuse to generate instruction to calculate constant, should be " +
-                                                    "replaced earlier");
-        }
-
-        if (src instanceof Pseudo || dst instanceof Pseudo) {
-            throw new UnsupportedOperationException(
-                "Cannot operate on pseudo register, should be replaced earlier");
-        }
+        testUnaryHighLevelOperand(src, dst);
 
         String opName = switch (op) {
             case NEGATE -> "sub.w";
@@ -196,31 +184,12 @@ public final class HighLevelAsmToAsmLowerer {
         };
 
         // 先加载操作数到寄存器中
-        GeneralPurposeRegister operand;
-        if (src instanceof GeneralPurposeRegister reg) {
-            // 本身就在寄存器，直接使用
-            operand = reg;
-        } else if (src instanceof Stack stack) {
-            // 在内存，加载到 t0 寄存器
-            operand = GeneralPurposeRegister.T0;
-            target.add(createLoad(operand, stack));
-        } else {
-            throw new UnsupportedOperationException("Unsupported source type: " + src.getClass().getSimpleName());
-        }
+        GeneralPurposeRegister operand = loadOperand(src, GeneralPurposeRegister.T0, target);
 
         // 计算结果的存放地点
-        GeneralPurposeRegister dstReg;
-        boolean needStore = false;
-        if (dst instanceof GeneralPurposeRegister reg) {
-            // 存放至寄存器，直接赋值
-            dstReg = reg;
-        } else if (dst instanceof Stack) {
-            // 存放至内存，得先存放到 t0
-            dstReg = GeneralPurposeRegister.T0;
-            needStore = true;
-        } else {
-            throw new UnsupportedOperationException("Unsupported destination type: " + dst.getClass().getSimpleName());
-        }
+        var destResult = calcDestination(dst, GeneralPurposeRegister.T0);
+        GeneralPurposeRegister dstReg = destResult.getFirst();
+        boolean needStore = destResult.getSecond();
 
         // 计算结果
         // op rd, rj, rk
@@ -232,21 +201,169 @@ public final class HighLevelAsmToAsmLowerer {
         }
     }
 
-    private LA64AsmInstruction createLoadImm(GeneralPurposeRegister dst, int imm) {
+    private void lowerBinaryInstruction(Binary binary, List<LA64AsmStatement> target) {
+        BinaryOperator op = binary.op;
+        HighLevelOperand lhs = binary.lhs;
+        HighLevelOperand rhs = binary.rhs;
+        HighLevelOperand dst = binary.dst;
+        testBinaryHighLevelOperand(lhs, rhs, dst);
+
+        // 特殊情况检查
+        // 立即数加法
+        if (op == BinaryOperator.ADD && (lhs instanceof Immediate || rhs instanceof Immediate)) {
+            // 检查立即数是否可用 si12 表示，如果可以，生成 addi.w 指令，否则使用默认处理
+            if (lhs instanceof Immediate imm && BitMath.isSi12((int) imm.value())) {
+                // 立即数在左操作数
+                lowerAddSi12Instruction(new AddSi12(rhs, (int) imm.value(), dst), target);
+                return;
+            } else if (rhs instanceof Immediate imm && BitMath.isSi12((int) imm.value())) {
+                // 立即数在右操作数
+                lowerAddSi12Instruction(new AddSi12(lhs, (int) imm.value(), dst), target);
+                return;
+            }
+        }
+        // 立即数减法，处理减立即数的情况
+        if (op == BinaryOperator.SUBTRACT && rhs instanceof Immediate imm && BitMath.isSi12((int) -imm.value())) {
+            lowerAddSi12Instruction(new AddSi12(lhs, (int) -imm.value(), dst), target);
+            return;
+        }
+
+        String opName = switch (op) {
+            case ADD -> "add.w";
+            case SUBTRACT -> "sub.w";
+            case MULTIPLY -> "mul.w";
+            case DIVIDE -> "div.w";
+            case MODULO -> "mod.w";
+        };
+
+        // 加载左操作数至寄存器
+        GeneralPurposeRegister lhsReg = loadOperand(lhs, GeneralPurposeRegister.T0, target);
+
+        // 加载右操作数至寄存器
+        GeneralPurposeRegister rhsReg = loadOperand(rhs, GeneralPurposeRegister.T1, target);
+
+        // 计算结果的存放地点
+        var destResult = calcDestination(dst, GeneralPurposeRegister.T0);
+        GeneralPurposeRegister dstReg = destResult.getFirst();
+        boolean needStore = destResult.getSecond();
+
+        // 计算结果
+        // op rd, rj, rk
+        target.add(new LA64AsmInstruction(opName, List.of(dstReg, lhsReg, rhsReg)));
+
+        if (needStore) {
+            // 若存放至内存，得将先前存放在 t0 的结果写回内存
+            target.add(createStore(GeneralPurposeRegister.T0, (Stack) dst));
+        }
+    }
+
+    private void lowerAddSi12Instruction(AddSi12 addSi12, List<LA64AsmStatement> target) {
+        HighLevelOperand src = addSi12.src;
+        int si12 = addSi12.si12;
+        HighLevelOperand dst = addSi12.dst;
+        testUnaryHighLevelOperand(src, dst);
+
+        if (!BitMath.isSi12(si12)) {
+            throw new UnsupportedOperationException("The immediate value must be a si12");
+        }
+
+        // 加载操作数至寄存器
+        GeneralPurposeRegister srcReg = loadOperand(src, GeneralPurposeRegister.T0, target);
+
+        // 计算结果的存放地点
+        var destResult = calcDestination(dst, GeneralPurposeRegister.T0);
+        GeneralPurposeRegister dstReg = destResult.getFirst();
+        boolean needStore = destResult.getSecond();
+
+        // 计算结果
+        // addi.w rd, rj, si12
+        target.add(new LA64AsmInstruction("addi.w", List.of(dstReg, srcReg, new LA64AsmImmOperand(si12))));
+
+        if (needStore) {
+            // 若存放至内存，得将先前存放在 t0 的结果写回内存
+            target.add(createStore(GeneralPurposeRegister.T0, (Stack) dst));
+        }
+    }
+
+    private static void testUnaryHighLevelOperand(HighLevelOperand src, HighLevelOperand dst) {
+        if (dst instanceof Immediate) {
+            throw new UnsupportedOperationException("Cannot store result in an immediate");
+        }
+        if (src instanceof Immediate) {
+            throw new UnsupportedOperationException("Refuse to generate instruction to calculate constant, should be " +
+                                                    "replaced earlier");
+        }
+        if (src instanceof Pseudo || dst instanceof Pseudo) {
+            throw new UnsupportedOperationException("Cannot operate on pseudo register, should be replaced earlier");
+        }
+    }
+
+    private static void testBinaryHighLevelOperand(HighLevelOperand lhs, HighLevelOperand rhs, HighLevelOperand dst) {
+        if (dst instanceof Immediate) {
+            throw new UnsupportedOperationException("Cannot store result in an immediate");
+        }
+        if (lhs instanceof Immediate && rhs instanceof Immediate) {
+            throw new UnsupportedOperationException("Refuse to generate instruction to calculate constant, should be " +
+                                                    "replaced earlier");
+        }
+        if (lhs instanceof Pseudo || rhs instanceof Pseudo || dst instanceof Pseudo) {
+            throw new UnsupportedOperationException("Cannot operate on pseudo register, should be replaced earlier");
+        }
+    }
+
+
+    private static GeneralPurposeRegister loadOperand(
+        HighLevelOperand toLoad,
+        GeneralPurposeRegister fallback,
+        List<LA64AsmStatement> target) {
+
+        // 加载操作数至寄存器
+        if (toLoad instanceof GeneralPurposeRegister reg) {
+            // 本身就在寄存器，直接使用
+            return reg;
+        } else if (toLoad instanceof Stack stack) {
+            // 在内存，加载到 fallback 寄存器
+            target.add(createLoad(fallback, stack));
+            return fallback;
+        } else if (toLoad instanceof Immediate immediate) {
+            // 立即数，加载到 fallback 寄存器
+            target.add(createLoadImm(fallback, (int) immediate.value()));
+            return fallback;
+        } else {
+            throw new UnsupportedOperationException("Unsupported operand type: " + toLoad.getClass().getSimpleName());
+        }
+    }
+
+    private static Pair<GeneralPurposeRegister, Boolean> calcDestination(
+        HighLevelOperand dest, GeneralPurposeRegister fallback) {
+
+        // 计算结果的存放地点
+        if (dest instanceof GeneralPurposeRegister reg) {
+            // 存放至寄存器，直接赋值
+            return Pair.of(reg, false);
+        } else if (dest instanceof Stack) {
+            // 存放至内存，得先存放到 fallback
+            return Pair.of(fallback, true);
+        } else {
+            throw new UnsupportedOperationException("Unsupported destination type: " + dest.getClass().getSimpleName());
+        }
+    }
+
+    private static LA64AsmInstruction createLoadImm(GeneralPurposeRegister dst, int imm) {
         return new LA64AsmInstruction(
             "li.w",
             List.of(dst, new LA64AsmImmOperand(imm))
         );
     }
 
-    private LA64AsmInstruction createLoad(GeneralPurposeRegister dst, Stack src) {
+    private static LA64AsmInstruction createLoad(GeneralPurposeRegister dst, Stack src) {
         return new LA64AsmInstruction(
             "ld.w",
             List.of(dst, GeneralPurposeRegister.FP, new LA64AsmImmOperand(src.offset()))
         );
     }
 
-    private LA64AsmInstruction createStore(GeneralPurposeRegister val, Stack src) {
+    private static LA64AsmInstruction createStore(GeneralPurposeRegister val, Stack src) {
         return new LA64AsmInstruction(
             "st.w",
             List.of(val, GeneralPurposeRegister.FP, new LA64AsmImmOperand(src.offset()))

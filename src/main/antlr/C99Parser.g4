@@ -40,12 +40,25 @@ castExpression
 
 // ISO 6.5.5, Multiplicative Operators
 multiplicativeExpression
-    : castExpression
+    : castExpression                                                    # DummyCastExpressionToMultiplicativeExpression
+    | multiplicativeExpression multiplicativeOperator castExpression    # MultiplicativeOperatorExpression
+    ;
+
+multiplicativeOperator
+    : Star
+    | Divide
+    | Modulo
     ;
 
 // ISO 6.5.6, Additive Operators
 additiveExpression
-    : multiplicativeExpression
+    : multiplicativeExpression                                      # DummyMultiplicativeExpressionToAdditiveExpression
+    | additiveExpression additiveOperator multiplicativeExpression  # AdditiveOperatorExpression
+    ;
+
+additiveOperator
+    : Plus
+    | Minus
     ;
 
 // ISO 6.5.7, Bitwise Shift Operators

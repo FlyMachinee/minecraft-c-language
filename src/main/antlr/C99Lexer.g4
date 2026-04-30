@@ -26,8 +26,12 @@ fragment NonzeroDigit: [1-9];
 
 // Operators
 
+Plus: '+';
 Minus: '-';
 MinusMinus: '--';
+Star: '*';
+Divide: '/';
+Modulo: '%';
 Tilde: '~';
 
 // Parentheses

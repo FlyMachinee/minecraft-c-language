@@ -2,6 +2,7 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64;
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.HighLevelFunction;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.HighLevelProgram;
+import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.instruction.Binary;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.instruction.HighLevelInstruction;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.instruction.Move;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.instruction.Unary;
@@ -36,6 +37,10 @@ public final class ReplacePseudoRegisterPass {
             } else if (inst instanceof Unary unary) {
                 unary.src = replacePseudo(unary.src);
                 unary.dst = replacePseudo(unary.dst);
+            } else if (inst instanceof Binary binary) {
+                binary.lhs = replacePseudo(binary.lhs);
+                binary.rhs = replacePseudo(binary.rhs);
+                binary.dst = replacePseudo(binary.dst);
             }
         }
         return stackOffset;

@@ -46,6 +46,12 @@ public final class AstToTacLowerer {
             TacVariable dst = new TacVariable(makeTempVar());
             instructions.add(new TacUnaryOperation(unaryExpressionNode.op, src, dst));
             return dst;
+        } else if (expression instanceof BinaryExpressionNode binaryExpressionNode) {
+            TacValue lhs = lowerExpression(binaryExpressionNode.lhs, instructions);
+            TacValue rhs = lowerExpression(binaryExpressionNode.rhs, instructions);
+            TacVariable dst = new TacVariable(makeTempVar());
+            instructions.add(new TacBinaryOperation(binaryExpressionNode.op, lhs, rhs, dst));
+            return dst;
         }
         throw new UnsupportedOperationException(
             "Unsupported expression type: " + expression.getClass().getSimpleName());

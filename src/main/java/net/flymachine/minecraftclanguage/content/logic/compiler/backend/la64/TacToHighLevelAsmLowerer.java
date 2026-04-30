@@ -3,13 +3,11 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64;
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.register.GeneralPurposeRegister;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.HighLevelFunction;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.HighLevelProgram;
-import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.instruction.HighLevelInstruction;
-import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.instruction.Move;
-import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.instruction.Ret;
-import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.instruction.Unary;
+import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.instruction.*;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.HighLevelOperand;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.Immediate;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.Pseudo;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.BinaryOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.*;
 
 import java.util.ArrayList;
@@ -39,7 +37,7 @@ public final class TacToHighLevelAsmLowerer {
             target.add(new Ret());
         } else if (tacInstruction instanceof TacUnaryOperation tacUnaryOperation) {
             if (tacUnaryOperation.src instanceof TacIntConstant tacIntConstant) {
-                // 若源操作数为常量，直接计算结果并生成一个 Move 指令
+                // 若源操作数为常量，直接计算结果并生成 Move 指令
                 int result = switch (tacUnaryOperation.op) {
                     case NEGATE -> -tacIntConstant.value;
                     case COMPLEMENT -> ~tacIntConstant.value;
@@ -50,6 +48,28 @@ public final class TacToHighLevelAsmLowerer {
                     tacUnaryOperation.op,
                     lowerValue(tacUnaryOperation.src),
                     lowerValue(tacUnaryOperation.dst)));
+            }
+        } else if (tacInstruction instanceof TacBinaryOperation tacBinaryOperation) {
+            if (tacBinaryOperation.lhs instanceof TacIntConstant tacLhsIntConstant &&
+                tacBinaryOperation.rhs instanceof TacIntConstant tacRhsIntConstant && !(
+                ((tacBinaryOperation.op == BinaryOperator.MULTIPLY) ||
+                 (tacBinaryOperation.op == BinaryOperator.DIVIDE)) && tacRhsIntConstant.value == 0
+            )) {
+                // 若左、右操作数均为常量，直接计算结果并生成 Move 指令
+                int result = switch (tacBinaryOperation.op) {
+                    case ADD -> tacLhsIntConstant.value + tacRhsIntConstant.value;
+                    case SUBTRACT -> tacLhsIntConstant.value - tacRhsIntConstant.value;
+                    case MULTIPLY -> tacLhsIntConstant.value * tacRhsIntConstant.value;
+                    case DIVIDE -> tacLhsIntConstant.value / tacRhsIntConstant.value;
+                    case MODULO -> tacLhsIntConstant.value % tacRhsIntConstant.value;
+                };
+                target.add(new Move(new Immediate(result), lowerValue(tacBinaryOperation.dst)));
+            } else {
+                target.add(new Binary(
+                    tacBinaryOperation.op,
+                    lowerValue(tacBinaryOperation.lhs),
+                    lowerValue(tacBinaryOperation.rhs),
+                    lowerValue(tacBinaryOperation.dst)));
             }
         } else {
             throw new UnsupportedOperationException(

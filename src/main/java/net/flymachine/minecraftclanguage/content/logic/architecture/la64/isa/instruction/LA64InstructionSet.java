@@ -91,15 +91,6 @@ public final class LA64InstructionSet {
         minOpcodeLength = Math.min(minOpcodeLength, info.opcodeLength());
     }
 
-    private final static LA64OperandType[] FORMAT_3GPR_OPTYPE
-        = new LA64OperandType[]{LA64OperandType.GPR, LA64OperandType.GPR, LA64OperandType.GPR};
-    private final static LA64OperandType[] FORMAT_2GPR_SI12_OPTYPE
-        = new LA64OperandType[]{LA64OperandType.GPR, LA64OperandType.GPR, LA64OperandType.SI12};
-    private final static LA64OperandType[] FORMAT_2GPR_UI12_OPTYPE
-        = new LA64OperandType[]{LA64OperandType.GPR, LA64OperandType.GPR, LA64OperandType.UI12};
-    private final static LA64OperandType[] FORMAT_2GPR_OFFS16_OPTYPE
-        = new LA64OperandType[]{LA64OperandType.GPR, LA64OperandType.GPR, LA64OperandType.OFFS16};
-
     @FunctionalInterface
     private interface BinaryDoubleWordExecutor {
         void execute(
@@ -135,14 +126,20 @@ public final class LA64InstructionSet {
         };
 
     static {
-        add(new LA64InstructionInfo(
+        add(LA64InstructionInfo.format3Gpr(
+            "add.w",
+            0b0000_0000_0001_0000_0,
+            (emulator, operands) -> {
+                // add.w rd, rj, rk
+                /*
+                    tmp = GR[rj][31:0] + GR[rk][31:0]
+                    GR[rd] = SignExtend(tmp[31:0], GRLEN)
+                 */
+                BINARY_WORD_EXECUTOR.execute(emulator, operands, Integer::sum);
+            }));
+        add(LA64InstructionInfo.format3Gpr(
             "sub.w",
             0b0000_0000_0001_0001_0,
-            17,
-            LA64InstructionFormat.FORMAT_3R,
-            FORMAT_3GPR_OPTYPE,
-            null,
-            null,
             (emulator, operands) -> {
                 // sub.w rd, rj, rk
                 /*
@@ -151,14 +148,42 @@ public final class LA64InstructionSet {
                  */
                 BINARY_WORD_EXECUTOR.execute(emulator, operands, (rj, rk) -> rj - rk);
             }));
-        add(new LA64InstructionInfo(
+        add(LA64InstructionInfo.format3Gpr(
+            "mul.w",
+            0b0000_0000_0001_1100_0,
+            (emulator, operands) -> {
+                // mul.w rd, rj, rk
+                /*
+                    product = signed(GR[rj][31:0]) * signed(GR[rk][31:0])
+                    GR[rd] = SignExtend(product[31:0], GRLEN)
+                 */
+                BINARY_WORD_EXECUTOR.execute(emulator, operands, (rj, rk) -> rj * rk);
+            }));
+        add(LA64InstructionInfo.format3Gpr(
+            "div.w",
+            0b0000_0000_0010_0000_0,
+            (emulator, operands) -> {
+                // div.w rd, rj, rk
+                /*
+                    quotient = signed(GR[rj][31:0]) / signed(GR[rk][31:0])
+                    GR[rd] = SignExtend(quotient[31:0], GRLEN)
+                 */
+                BINARY_WORD_EXECUTOR.execute(emulator, operands, (rj, rk) -> rj / rk);
+            }));
+        add(LA64InstructionInfo.format3Gpr(
+            "mod.w",
+            0b0000_0000_0010_0000_1,
+            (emulator, operands) -> {
+                // mod.w rd, rj, rk
+                /*
+                    remainder = signed(GR[rj][31:0]) % signed(GR[rk][31:0])
+                    GR[rd] = SignExtend(remainder[31:0], GRLEN)
+                 */
+                BINARY_WORD_EXECUTOR.execute(emulator, operands, (rj, rk) -> rj % rk);
+            }));
+        add(LA64InstructionInfo.format3Gpr(
             "nor",
             0b0000_0000_0001_0100_0,
-            17,
-            LA64InstructionFormat.FORMAT_3R,
-            FORMAT_3GPR_OPTYPE,
-            null,
-            null,
             (emulator, operands) -> {
                 // nor rd, rj, rk
                 /*
@@ -166,14 +191,9 @@ public final class LA64InstructionSet {
                  */
                 BINARY_DOUBLE_WORD_EXECUTOR.execute(emulator, operands, (rj, rk) -> ~(rj | rk));
             }));
-        add(new LA64InstructionInfo(
+        add(LA64InstructionInfo.format3Gpr(
             "or",
             0b0000_0000_0001_0101_0,
-            17,
-            LA64InstructionFormat.FORMAT_3R,
-            FORMAT_3GPR_OPTYPE,
-            null,
-            null,
             (emulator, operands) -> {
                 // or rd, rj, rk
                 /*
@@ -181,14 +201,9 @@ public final class LA64InstructionSet {
                  */
                 BINARY_DOUBLE_WORD_EXECUTOR.execute(emulator, operands, (rj, rk) -> rj | rk);
             }));
-        add(new LA64InstructionInfo(
+        add(LA64InstructionInfo.format2GprSi12(
             "addi.w",
             0b0000_0010_10,
-            10,
-            LA64InstructionFormat.FORMAT_2RI12,
-            new LA64OperandType[]{LA64OperandType.GPR, LA64OperandType.GPR, LA64OperandType.SI12},
-            null,
-            null,
             (emulator, operands) -> {
                 // addi.w rd, rj, si12
                 /*
@@ -202,14 +217,9 @@ public final class LA64InstructionSet {
                 cpu.setGr(operands[0].value(), temp);
                 cpu.pcNext();
             }));
-        add(new LA64InstructionInfo(
+        add(LA64InstructionInfo.format2GprSi12(
             "addi.d",
             0b0000_0010_11,
-            10,
-            LA64InstructionFormat.FORMAT_2RI12,
-            FORMAT_2GPR_SI12_OPTYPE,
-            null,
-            null,
             (emulator, operands) -> {
                 // addi.d rd, rj, si12
                 /*
@@ -223,14 +233,9 @@ public final class LA64InstructionSet {
                 cpu.setGr(operands[0].value(), temp);
                 cpu.pcNext();
             }));
-        add(new LA64InstructionInfo(
+        add(LA64InstructionInfo.format2GprUi12(
             "ori",
             0b0000_0011_10,
-            10,
-            LA64InstructionFormat.FORMAT_2RI12,
-            FORMAT_2GPR_UI12_OPTYPE,
-            null,
-            null,
             (emulator, operands) -> {
                 // ori rd, rj, ui12
                 /*
@@ -271,14 +276,9 @@ public final class LA64InstructionSet {
                 cpu.setGr(operands[0].value(), ((long) operands[1].value()) << 12);
                 cpu.pcNext();
             }));
-        add(new LA64InstructionInfo(
+        add(LA64InstructionInfo.format2GprSi12(
             "ld.w",
             0b0010_1000_10,
-            10,
-            LA64InstructionFormat.FORMAT_2RI12,
-            FORMAT_2GPR_SI12_OPTYPE,
-            null,
-            null,
             (emulator, operands) -> {
                 // ld.w rd, rj, si12
                 /*
@@ -303,14 +303,9 @@ public final class LA64InstructionSet {
                 cpu.setGr(operands[0].value(), word);
                 cpu.pcNext();
             }));
-        add(new LA64InstructionInfo(
+        add(LA64InstructionInfo.format2GprSi12(
             "ld.d",
             0b0010_1000_11,
-            10,
-            LA64InstructionFormat.FORMAT_2RI12,
-            FORMAT_2GPR_SI12_OPTYPE,
-            null,
-            null,
             (emulator, operands) -> {
                 // ld.d rd, rj, si12
                 /*
@@ -333,14 +328,9 @@ public final class LA64InstructionSet {
                 cpu.setGr(operands[0].value(), ram.loadDoubleWord(paddr));
                 cpu.pcNext();
             }));
-        add(new LA64InstructionInfo(
+        add(LA64InstructionInfo.format2GprSi12(
             "st.w",
             0b0010_1001_10,
-            10,
-            LA64InstructionFormat.FORMAT_2RI12,
-            FORMAT_2GPR_SI12_OPTYPE,
-            null,
-            null,
             (emulator, operands) -> {
                 // st.w rd, rj, si12
                 /*
@@ -363,14 +353,9 @@ public final class LA64InstructionSet {
                 ram.storeWord(paddr, cpu.getGrWord(operands[0].value()));
                 cpu.pcNext();
             }));
-        add(new LA64InstructionInfo(
+        add(LA64InstructionInfo.format2GprSi12(
             "st.d",
             0b0010_1001_11,
-            10,
-            LA64InstructionFormat.FORMAT_2RI12,
-            FORMAT_2GPR_SI12_OPTYPE,
-            null,
-            null,
             (emulator, operands) -> {
                 // st.d rd, rj, si12
                 /*
@@ -393,14 +378,9 @@ public final class LA64InstructionSet {
                 ram.storeDoubleWord(paddr, cpu.getGr(operands[0].value()));
                 cpu.pcNext();
             }));
-        add(new LA64InstructionInfo(
+        add(LA64InstructionInfo.format2GPROffs16(
             "jirl",
             0b0100_11,
-            6,
-            LA64InstructionFormat.FORMAT_2RI16,
-            FORMAT_2GPR_OFFS16_OPTYPE,
-            null,
-            null,
             (emulator, operands) -> {
                 // jirl rd, rj, offs16
                 /*
