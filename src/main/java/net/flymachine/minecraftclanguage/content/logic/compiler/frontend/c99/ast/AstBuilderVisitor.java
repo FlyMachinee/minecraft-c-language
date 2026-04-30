@@ -76,4 +76,34 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         ExpressionNode rhs = (ExpressionNode) visit(ctx.multiplicativeExpression());
         return new BinaryExpressionNode(op, lhs, rhs);
     }
+
+    @Override
+    public BinaryExpressionNode visitShiftOperatorExpression(C99Parser.ShiftOperatorExpressionContext ctx) {
+        String operator = ctx.shiftOperator().getText();
+        BinaryOperator op = BinaryOperator.fromSymbol(operator);
+        ExpressionNode lhs = (ExpressionNode) visit(ctx.shiftExpression());
+        ExpressionNode rhs = (ExpressionNode) visit(ctx.additiveExpression());
+        return new BinaryExpressionNode(op, lhs, rhs);
+    }
+
+    @Override
+    public BinaryExpressionNode visitBitwiseAndOperatorExpression(C99Parser.BitwiseAndOperatorExpressionContext ctx) {
+        ExpressionNode lhs = (ExpressionNode) visit(ctx.andExpression());
+        ExpressionNode rhs = (ExpressionNode) visit(ctx.equalityExpression());
+        return new BinaryExpressionNode(BinaryOperator.BITWISE_AND, lhs, rhs);
+    }
+
+    @Override
+    public BinaryExpressionNode visitBitwiseExclusiveOrOperatorExpression(C99Parser.BitwiseExclusiveOrOperatorExpressionContext ctx) {
+        ExpressionNode lhs = (ExpressionNode) visit(ctx.exclusiveOrExpression());
+        ExpressionNode rhs = (ExpressionNode) visit(ctx.andExpression());
+        return new BinaryExpressionNode(BinaryOperator.BITWISE_XOR, lhs, rhs);
+    }
+
+    @Override
+    public BinaryExpressionNode visitBitwiseInclusiveOrOperatorExpression(C99Parser.BitwiseInclusiveOrOperatorExpressionContext ctx) {
+        ExpressionNode lhs = (ExpressionNode) visit(ctx.inclusiveOrExpression());
+        ExpressionNode rhs = (ExpressionNode) visit(ctx.exclusiveOrExpression());
+        return new BinaryExpressionNode(BinaryOperator.BITWISE_OR, lhs, rhs);
+    }
 }

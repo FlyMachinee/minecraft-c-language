@@ -63,7 +63,13 @@ additiveOperator
 
 // ISO 6.5.7, Bitwise Shift Operators
 shiftExpression
-    : additiveExpression
+    : additiveExpression                                # DummyAdditiveExpressionToShiftExpression
+    | shiftExpression shiftOperator additiveExpression  # ShiftOperatorExpression
+    ;
+
+shiftOperator
+    : LeftShift
+    | RightShift
     ;
 
 // ISO 6.5.8, Relational Operators
@@ -78,17 +84,20 @@ equalityExpression
 
 // ISO 6.5.10, Bitwise AND Operator
 andExpression
-    : equalityExpression
+    : equalityExpression                    # DummyEqualityExpressionToAndExpression
+    | andExpression And equalityExpression  # BitwiseAndOperatorExpression
     ;
 
 // ISO 6.5.11, Bitwise exclusive OR Operator
 exclusiveOrExpression
-    : andExpression
+    : andExpression                             # DummyAndExpressionToExclusiveOrExpression
+    | exclusiveOrExpression Caret andExpression # BitwiseExclusiveOrOperatorExpression
     ;
 
 // ISO 6.5.12, Bitwise inclusive OR Operator
 inclusiveOrExpression
-    : exclusiveOrExpression
+    : exclusiveOrExpression                             # DummyExclusiveOrExpressionToInclusiveOrExpression
+    | inclusiveOrExpression Or exclusiveOrExpression    # BitwiseInclusiveOrOperatorExpression
     ;
 
 // ISO 6.5.13, Logical AND Operator

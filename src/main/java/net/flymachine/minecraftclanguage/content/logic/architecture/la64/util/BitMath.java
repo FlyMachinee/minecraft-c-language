@@ -47,4 +47,9 @@ public final class BitMath {
         // 检查该数字是否可被 12 位的有符号数表示
         return number >= -2048 && number <= 2047;
     }
+
+    public static boolean isUi12(int number) {
+        // 检查该数字是否可被 12 位的无符号数表示
+        return (number & 0xFFFFF000) == 0;
+    }
 }

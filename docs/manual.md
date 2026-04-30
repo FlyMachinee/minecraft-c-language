@@ -20,6 +20,11 @@
 - 乘法 *
 - 除法 /
 - 取模 %
+- 逻辑左移 <<
+- 算术右移 >>
+- 按位与 &
+- 按位或 |
+- 按位异或 ^
 
 #### 逗号表达式
 
@@ -31,18 +36,28 @@
 
 #### 整数
 
-- 运算
+- 算术类运算
   * add.w
   * sub.w
+  * nor
+  * and
+  * or
+  * xor
   * mul.w
   * div.w
   * mod.w
-  * nor
-  * or
   * addi.w
   * addi.d
+  * andi
   * ori
+  * xori
   * lu12i.w
+
+- 移位类运算
+  * sll.w
+  * sra.w
+  * slli.w
+  * srai.w
 
 - 访存
   * ld.w

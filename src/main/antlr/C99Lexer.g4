@@ -26,12 +26,17 @@ fragment NonzeroDigit: [1-9];
 
 // Operators
 
+LeftShift: '<<';
+RightShift: '>>';
 Plus: '+';
 Minus: '-';
 MinusMinus: '--';
 Star: '*';
 Divide: '/';
 Modulo: '%';
+And: '&';
+Or: '|';
+Caret: '^';
 Tilde: '~';
 
 // Parentheses

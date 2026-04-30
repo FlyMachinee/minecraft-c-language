@@ -227,6 +227,53 @@ public final class HighLevelAsmToAsmLowerer {
             lowerAddSi12Instruction(new AddSi12(lhs, (int) -imm.value(), dst), target);
             return;
         }
+        // 立即数右移或左移，处理右操作数为立即数的情况
+        if ((op == BinaryOperator.LEFT_SHIFT || op == BinaryOperator.RIGHT_SHIFT) && rhs instanceof Immediate imm) {
+            String opName = op == BinaryOperator.LEFT_SHIFT ? "slli.w" : "srai.w";
+            GeneralPurposeRegister srcReg = loadOperand(lhs, GeneralPurposeRegister.T0, target);
+            Pair<GeneralPurposeRegister, Boolean> result = calcDestination(dst, GeneralPurposeRegister.T0);
+            GeneralPurposeRegister dstReg = result.getFirst();
+            boolean needStore = result.getSecond();
+            // slli.w/srai.w rd, rj, ui5
+            target.add(new LA64AsmInstruction(
+                opName, List.of(dstReg, srcReg, new LA64AsmImmOperand(BitMath.extractBits((int) imm.value(), 5)))));
+            if (needStore) {
+                target.add(createStore(dstReg, (Stack) dst));
+            }
+            return;
+        }
+        // 立即数位运算
+        if ((op == BinaryOperator.BITWISE_AND || op == BinaryOperator.BITWISE_OR || op == BinaryOperator.BITWISE_XOR) &&
+            ((lhs instanceof Immediate || rhs instanceof Immediate))) {
+            // 检查立即数是否可用 ui12 表示，如果可以，生成 andi/ori/xori 指令，否则使用默认处理
+
+            if (lhs instanceof Immediate) {
+                // 把立即数放在右操作数
+                lhs = binary.rhs;
+                rhs = binary.lhs;
+            }
+
+            // andi/ori/xori rd, rj, ui12
+            Immediate imm = (Immediate) rhs;
+            if (BitMath.isUi12((int) imm.value())) {
+                String opName = switch (op) {
+                    case BITWISE_AND -> "andi";
+                    case BITWISE_OR -> "ori";
+                    case BITWISE_XOR -> "xori";
+                    default -> throw new IllegalStateException("Unexpected operator: " + op);
+                };
+                GeneralPurposeRegister srcReg = loadOperand(lhs, GeneralPurposeRegister.T0, target);
+                Pair<GeneralPurposeRegister, Boolean> result = calcDestination(dst, GeneralPurposeRegister.T0);
+                GeneralPurposeRegister dstReg = result.getFirst();
+                boolean needStore = result.getSecond();
+                target.add(new LA64AsmInstruction(
+                    opName, List.of(dstReg, srcReg, new LA64AsmImmOperand(imm.value()))));
+                if (needStore) {
+                    target.add(createStore(dstReg, (Stack) dst));
+                }
+                return;
+            }
+        }
 
         String opName = switch (op) {
             case ADD -> "add.w";
@@ -234,6 +281,11 @@ public final class HighLevelAsmToAsmLowerer {
             case MULTIPLY -> "mul.w";
             case DIVIDE -> "div.w";
             case MODULO -> "mod.w";
+            case LEFT_SHIFT -> "sll.w";
+            case RIGHT_SHIFT -> "sra.w"; // 算术右移
+            case BITWISE_AND -> "and";
+            case BITWISE_OR -> "or";
+            case BITWISE_XOR -> "xor";
         };
 
         // 加载左操作数至寄存器
@@ -363,10 +415,10 @@ public final class HighLevelAsmToAsmLowerer {
         );
     }
 
-    private static LA64AsmInstruction createStore(GeneralPurposeRegister val, Stack src) {
+    private static LA64AsmInstruction createStore(GeneralPurposeRegister val, Stack dst) {
         return new LA64AsmInstruction(
             "st.w",
-            List.of(val, GeneralPurposeRegister.FP, new LA64AsmImmOperand(src.offset()))
+            List.of(val, GeneralPurposeRegister.FP, new LA64AsmImmOperand(dst.offset()))
         );
     }
 

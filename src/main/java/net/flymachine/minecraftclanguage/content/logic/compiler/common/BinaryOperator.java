@@ -24,7 +24,32 @@ public enum BinaryOperator {
     /**
      * 取模
      */
-    MODULO("%");
+    MODULO("%"),
+
+    /**
+     * 左移
+     */
+    LEFT_SHIFT("<<"),
+
+    /**
+     * 右移（实现为算术右移）
+     */
+    RIGHT_SHIFT(">>"),
+
+    /**
+     * 按位与
+     */
+    BITWISE_AND("&"),
+
+    /**
+     * 按位或
+     */
+    BITWISE_OR("|"),
+
+    /**
+     * 按位异或
+     */
+    BITWISE_XOR("^");
 
     private final String symbol;
 

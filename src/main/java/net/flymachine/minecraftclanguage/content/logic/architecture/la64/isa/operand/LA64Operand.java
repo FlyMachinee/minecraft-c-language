@@ -8,7 +8,7 @@ import org.jetbrains.annotations.NotNull;
 public record LA64Operand(LA64OperandType type, int value) {
     public LA64Operand {
         value = switch (type) {
-            case GPR, FPR -> BitMath.extractBits(value, 5);
+            case GPR, FPR, UI5 -> BitMath.extractBits(value, 5);
             case SI12 -> BitMath.extractSignedBits(value, 12);
             case SI20 -> BitMath.extractSignedBits(value, 20);
             case UI12 -> BitMath.extractBits(value, 12);
@@ -23,7 +23,7 @@ public record LA64Operand(LA64OperandType type, int value) {
                 LA64RegisterResolver.getInstance().getGeneralPurposeRegister(value).orElseThrow().getPrimaryName();
             case FPR ->
                 LA64RegisterResolver.getInstance().getFloatingPointRegister(value).orElseThrow().getPrimaryName();
-            case SI12, SI20 -> value == 0 ? "0" : String.valueOf(value);
+            case UI5, SI12, SI20 -> value == 0 ? "0" : String.valueOf(value);
             case UI12 -> value == 0 ? "0" : "0x" + Integer.toHexString(value);
             case OFFS16 -> value == 0 ? "0" : String.valueOf(value << 2);
         };
@@ -42,6 +42,10 @@ public record LA64Operand(LA64OperandType type, int value) {
             case GPR -> new LA64Operand(LA64OperandType.GPR, register.getNumber());
             case FPR -> new LA64Operand(LA64OperandType.FPR, register.getNumber());
         };
+    }
+
+    public static LA64Operand ui5(int ui5) {
+        return new LA64Operand(LA64OperandType.UI5, ui5);
     }
 
     public static LA64Operand si12(int si12) {

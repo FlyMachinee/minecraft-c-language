@@ -56,13 +56,7 @@ public final class TacToHighLevelAsmLowerer {
                  (tacBinaryOperation.op == BinaryOperator.DIVIDE)) && tacRhsIntConstant.value == 0
             )) {
                 // 若左、右操作数均为常量，直接计算结果并生成 Move 指令
-                int result = switch (tacBinaryOperation.op) {
-                    case ADD -> tacLhsIntConstant.value + tacRhsIntConstant.value;
-                    case SUBTRACT -> tacLhsIntConstant.value - tacRhsIntConstant.value;
-                    case MULTIPLY -> tacLhsIntConstant.value * tacRhsIntConstant.value;
-                    case DIVIDE -> tacLhsIntConstant.value / tacRhsIntConstant.value;
-                    case MODULO -> tacLhsIntConstant.value % tacRhsIntConstant.value;
-                };
+                int result = getResult(tacBinaryOperation, tacLhsIntConstant, tacRhsIntConstant);
                 target.add(new Move(new Immediate(result), lowerValue(tacBinaryOperation.dst)));
             } else {
                 target.add(new Binary(
@@ -76,6 +70,26 @@ public final class TacToHighLevelAsmLowerer {
                 "Unsupported instruction type: " + tacInstruction.getClass().getSimpleName());
         }
 
+    }
+
+    private static int getResult(
+        TacBinaryOperation tacBinaryOperation,
+        TacIntConstant tacLhsIntConstant,
+        TacIntConstant tacRhsIntConstant) {
+        int lhs = tacLhsIntConstant.value;
+        int rhs = tacRhsIntConstant.value;
+        return switch (tacBinaryOperation.op) {
+            case ADD -> lhs + rhs;
+            case SUBTRACT -> lhs - rhs;
+            case MULTIPLY -> lhs * rhs;
+            case DIVIDE -> lhs / rhs;
+            case MODULO -> lhs % rhs;
+            case LEFT_SHIFT -> lhs << rhs;
+            case RIGHT_SHIFT -> lhs >> rhs;
+            case BITWISE_AND -> lhs & rhs;
+            case BITWISE_OR -> lhs | rhs;
+            case BITWISE_XOR -> lhs ^ rhs;
+        };
     }
 
     private HighLevelOperand lowerValue(TacValue tacValue) {
