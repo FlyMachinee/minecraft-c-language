@@ -1,21 +1,21 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.ir;
 
 public interface TacVisitor<T> {
-    T visitReturn(TacReturn inst);
+    T visit(TacReturn inst);
 
-    T visitUnaryOperation(TacUnaryOperation inst);
+    T visit(TacUnaryOperation inst);
 
-    T visitBinaryOperation(TacBinaryOperation inst);
+    T visit(TacBinaryOperation inst);
 
-    T visitCopy(TacCopy inst);
+    T visit(TacCopy inst);
 
-    T visitLabel(TacLabel inst);
+    T visit(TacLabel inst);
 
-    T visitJump(TacJump inst);
+    T visit(TacJump inst);
 
-    T visitJumpIfZero(TacJumpIfZero inst);
+    T visit(TacJumpIfZero inst);
 
-    T visitJumpIfNotZero(TacJumpIfNotZero inst);
+    T visit(TacJumpIfNotZero inst);
 
-    T visitJumpIfComparison(TacJumpIfComparison inst);
+    T visit(TacJumpIfComparison inst);
 }

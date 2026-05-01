@@ -21,6 +21,6 @@ public class TacJumpIfZero implements TacInstruction {
 
     @Override
     public <T> T accept(TacVisitor<T> visitor) {
-        return visitor.visitJumpIfZero(this);
+        return visitor.visit(this);
     }
 }

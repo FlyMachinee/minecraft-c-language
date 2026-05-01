@@ -31,6 +31,6 @@ public class TacBinaryOperation implements TacInstruction {
 
     @Override
     public <T> T accept(TacVisitor<T> visitor) {
-        return visitor.visitBinaryOperation(this);
+        return visitor.visit(this);
     }
 }

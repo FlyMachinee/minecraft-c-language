@@ -23,6 +23,6 @@ public class TacCopy implements TacInstruction {
 
     @Override
     public <T> T accept(TacVisitor<T> visitor) {
-        return visitor.visitCopy(this);
+        return visitor.visit(this);
     }
 }

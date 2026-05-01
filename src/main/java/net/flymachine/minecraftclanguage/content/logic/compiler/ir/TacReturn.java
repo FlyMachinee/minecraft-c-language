@@ -21,6 +21,6 @@ public class TacReturn implements TacInstruction {
 
     @Override
     public <T> T accept(TacVisitor<T> visitor) {
-        return visitor.visitReturn(this);
+        return visitor.visit(this);
     }
 }

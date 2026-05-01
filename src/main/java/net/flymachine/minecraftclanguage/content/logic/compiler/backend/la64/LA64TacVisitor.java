@@ -22,14 +22,14 @@ public class LA64TacVisitor implements TacVisitor<Void> {
     }
 
     @Override
-    public Void visitReturn(TacReturn inst) {
+    public Void visit(TacReturn inst) {
         target.add(new Move(lowerValue(inst.value), GeneralPurposeRegister.A0));
         target.add(new Ret());
         return null;
     }
 
     @Override
-    public Void visitUnaryOperation(TacUnaryOperation inst) {
+    public Void visit(TacUnaryOperation inst) {
         if (inst.src instanceof TacIntConstant tacIntConstant) {
             // 若源操作数为常量，直接计算结果并生成 Move 指令
             int result = switch (inst.op) {
@@ -48,7 +48,7 @@ public class LA64TacVisitor implements TacVisitor<Void> {
     }
 
     @Override
-    public Void visitBinaryOperation(TacBinaryOperation inst) {
+    public Void visit(TacBinaryOperation inst) {
         if (inst.lhs instanceof TacIntConstant tacLhsIntConstant &&
             inst.rhs instanceof TacIntConstant tacRhsIntConstant && !(
             ((inst.op == BinaryOperator.MULTIPLY) ||
@@ -68,25 +68,25 @@ public class LA64TacVisitor implements TacVisitor<Void> {
     }
 
     @Override
-    public Void visitCopy(TacCopy inst) {
+    public Void visit(TacCopy inst) {
         target.add(new Move(lowerValue(inst.src), lowerValue(inst.dst)));
         return null;
     }
 
     @Override
-    public Void visitLabel(TacLabel inst) {
+    public Void visit(TacLabel inst) {
         target.add(new Label(inst.identifier));
         return null;
     }
 
     @Override
-    public Void visitJump(TacJump inst) {
+    public Void visit(TacJump inst) {
         target.add(new Branch(inst.target));
         return null;
     }
 
     @Override
-    public Void visitJumpIfZero(TacJumpIfZero inst) {
+    public Void visit(TacJumpIfZero inst) {
         if (inst.cond instanceof TacIntConstant tacIntConstant) {
             // 常量检查
             if (tacIntConstant.value == 0) {
@@ -99,7 +99,7 @@ public class LA64TacVisitor implements TacVisitor<Void> {
     }
 
     @Override
-    public Void visitJumpIfNotZero(TacJumpIfNotZero inst) {
+    public Void visit(TacJumpIfNotZero inst) {
         if (inst.cond instanceof TacIntConstant tacIntConstant) {
             // 常量检查
             if (tacIntConstant.value != 0) {
@@ -112,7 +112,7 @@ public class LA64TacVisitor implements TacVisitor<Void> {
     }
 
     @Override
-    public Void visitJumpIfComparison(TacJumpIfComparison inst) {
+    public Void visit(TacJumpIfComparison inst) {
         if (inst.lhs instanceof TacIntConstant lhsIntConstant && inst.rhs instanceof TacIntConstant rhsIntConstant) {
             // 常量检查
             int lhs = lhsIntConstant.value;

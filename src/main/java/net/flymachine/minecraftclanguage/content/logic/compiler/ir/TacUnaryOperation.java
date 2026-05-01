@@ -27,6 +27,6 @@ public class TacUnaryOperation implements TacInstruction {
 
     @Override
     public <T> T accept(TacVisitor<T> visitor) {
-        return visitor.visitUnaryOperation(this);
+        return visitor.visit(this);
     }
 }
