@@ -16,13 +16,15 @@ graph TD
         subgraph AsmGen [汇编代码生成]
             direction TD
             TacToHighLevelAsm(中间代码至抽象汇编)
+            ReplacePseudoRegister(替换伪寄存器)
             HighLevelAsmToAsm(抽象汇编至汇编)
         end
     end
 
     subgraph Assembler [汇编器]
         direction TD
-        ReplacePesudoAsm(替换伪指令)
+        CollectSymbols(收集符号信息)
+        ReplacePseudoAsm(替换伪指令)
         AsmToObjectFile(汇编至目标文件)
     end
 
@@ -36,8 +38,10 @@ graph TD
     --> |tokens| Parser
     --> |AST| TacGen
     --> |TAC| TacToHighLevelAsm
+    --> |HL Asm| ReplacePseudoRegister
     --> |HL Asm| HighLevelAsmToAsm
-    --> |Asm / program.s| ReplacePesudoAsm
+    --> |Asm / program.s| CollectSymbols
+    --> |Asm| ReplacePseudoAsm
     --> |Asm| AsmToObjectFile
     --> |Object / program.o| Redirect
     --> |Executable| Stop(输出可执行文件)

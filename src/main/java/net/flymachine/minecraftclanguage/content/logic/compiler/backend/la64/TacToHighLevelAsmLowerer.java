@@ -1,16 +1,11 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64;
 
-import net.flymachine.minecraftclanguage.content.logic.architecture.la64.register.GeneralPurposeRegister;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.HighLevelFunction;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.HighLevelProgram;
-import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.instruction.*;
-import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.HighLevelOperand;
-import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.Immediate;
-import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.Pseudo;
-import net.flymachine.minecraftclanguage.content.logic.compiler.common.BinaryOperator;
-import net.flymachine.minecraftclanguage.content.logic.compiler.ir.*;
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.TacFunction;
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.TacInstruction;
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.TacProgram;
 
-import java.util.ArrayList;
 import java.util.List;
 
 public final class TacToHighLevelAsmLowerer {
@@ -24,81 +19,10 @@ public final class TacToHighLevelAsmLowerer {
 
     private HighLevelFunction lowerFunction(TacFunction tacFunction) {
         List<TacInstruction> instructions = tacFunction.instructions;
-        List<HighLevelInstruction> highLevelInstructions = new ArrayList<>();
+        LA64TacVisitor visitor = new LA64TacVisitor();
         for (TacInstruction instruction : instructions) {
-            lowerInstruction(instruction, highLevelInstructions);
+            instruction.accept(visitor);
         }
-        return new HighLevelFunction(tacFunction.name, highLevelInstructions);
+        return new HighLevelFunction(tacFunction.name, visitor.getTarget());
     }
-
-    private void lowerInstruction(TacInstruction tacInstruction, List<HighLevelInstruction> target) {
-        if (tacInstruction instanceof TacReturn tacReturn) {
-            target.add(new Move(lowerValue(tacReturn.value), GeneralPurposeRegister.A0));
-            target.add(new Ret());
-        } else if (tacInstruction instanceof TacUnaryOperation tacUnaryOperation) {
-            if (tacUnaryOperation.src instanceof TacIntConstant tacIntConstant) {
-                // 若源操作数为常量，直接计算结果并生成 Move 指令
-                int result = switch (tacUnaryOperation.op) {
-                    case NEGATE -> -tacIntConstant.value;
-                    case COMPLEMENT -> ~tacIntConstant.value;
-                };
-                target.add(new Move(new Immediate(result), lowerValue(tacUnaryOperation.dst)));
-            } else {
-                target.add(new Unary(
-                    tacUnaryOperation.op,
-                    lowerValue(tacUnaryOperation.src),
-                    lowerValue(tacUnaryOperation.dst)));
-            }
-        } else if (tacInstruction instanceof TacBinaryOperation tacBinaryOperation) {
-            if (tacBinaryOperation.lhs instanceof TacIntConstant tacLhsIntConstant &&
-                tacBinaryOperation.rhs instanceof TacIntConstant tacRhsIntConstant && !(
-                ((tacBinaryOperation.op == BinaryOperator.MULTIPLY) ||
-                 (tacBinaryOperation.op == BinaryOperator.DIVIDE)) && tacRhsIntConstant.value == 0
-            )) {
-                // 若左、右操作数均为常量，直接计算结果并生成 Move 指令
-                int result = getResult(tacBinaryOperation, tacLhsIntConstant, tacRhsIntConstant);
-                target.add(new Move(new Immediate(result), lowerValue(tacBinaryOperation.dst)));
-            } else {
-                target.add(new Binary(
-                    tacBinaryOperation.op,
-                    lowerValue(tacBinaryOperation.lhs),
-                    lowerValue(tacBinaryOperation.rhs),
-                    lowerValue(tacBinaryOperation.dst)));
-            }
-        } else {
-            throw new UnsupportedOperationException(
-                "Unsupported instruction type: " + tacInstruction.getClass().getSimpleName());
-        }
-
-    }
-
-    private static int getResult(
-        TacBinaryOperation tacBinaryOperation,
-        TacIntConstant tacLhsIntConstant,
-        TacIntConstant tacRhsIntConstant) {
-        int lhs = tacLhsIntConstant.value;
-        int rhs = tacRhsIntConstant.value;
-        return switch (tacBinaryOperation.op) {
-            case ADD -> lhs + rhs;
-            case SUBTRACT -> lhs - rhs;
-            case MULTIPLY -> lhs * rhs;
-            case DIVIDE -> lhs / rhs;
-            case MODULO -> lhs % rhs;
-            case LEFT_SHIFT -> lhs << rhs;
-            case RIGHT_SHIFT -> lhs >> rhs;
-            case BITWISE_AND -> lhs & rhs;
-            case BITWISE_OR -> lhs | rhs;
-            case BITWISE_XOR -> lhs ^ rhs;
-        };
-    }
-
-    private HighLevelOperand lowerValue(TacValue tacValue) {
-        if (tacValue instanceof TacIntConstant tacIntConstant) {
-            return new Immediate(tacIntConstant.value);
-        } else if (tacValue instanceof TacVariable tacVariable) {
-            return new Pseudo(tacVariable.identifier);
-        }
-        throw new UnsupportedOperationException("Unsupported value type: " + tacValue.getClass().getSimpleName());
-    }
-
 }

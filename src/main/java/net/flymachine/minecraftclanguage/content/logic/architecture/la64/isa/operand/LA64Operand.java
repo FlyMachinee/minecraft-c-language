@@ -13,6 +13,8 @@ public record LA64Operand(LA64OperandType type, int value) {
             case SI20 -> BitMath.extractSignedBits(value, 20);
             case UI12 -> BitMath.extractBits(value, 12);
             case OFFS16 -> BitMath.extractSignedBits(value, 16);
+            case OFFS21 -> BitMath.extractSignedBits(value, 21);
+            case OFFS26 -> BitMath.extractSignedBits(value, 26);
         };
     }
 
@@ -25,7 +27,7 @@ public record LA64Operand(LA64OperandType type, int value) {
                 LA64RegisterResolver.getInstance().getFloatingPointRegister(value).orElseThrow().getPrimaryName();
             case UI5, SI12, SI20 -> value == 0 ? "0" : String.valueOf(value);
             case UI12 -> value == 0 ? "0" : "0x" + Integer.toHexString(value);
-            case OFFS16 -> value == 0 ? "0" : String.valueOf(value << 2);
+            case OFFS16, OFFS21, OFFS26 -> value == 0 ? "0" : String.valueOf(value << 2);
         };
     }
 
@@ -63,4 +65,13 @@ public record LA64Operand(LA64OperandType type, int value) {
     public static LA64Operand offs16(int offs16) {
         return new LA64Operand(LA64OperandType.OFFS16, offs16);
     }
+
+    public static LA64Operand offs21(int offs21) {
+        return new LA64Operand(LA64OperandType.OFFS21, offs21);
+    }
+    
+    public static LA64Operand offs26(int offs26) {
+        return new LA64Operand(LA64OperandType.OFFS26, offs26);
+    }
+
 }

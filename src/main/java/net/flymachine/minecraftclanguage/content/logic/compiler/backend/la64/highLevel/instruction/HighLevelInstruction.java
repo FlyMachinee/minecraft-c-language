@@ -1,3 +1,5 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.instruction;
 
-public interface HighLevelInstruction { }
+public interface HighLevelInstruction {
+    <T> T accept(HighLevelVisitor<T> visitor);
+}

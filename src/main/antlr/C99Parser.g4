@@ -31,6 +31,7 @@ unaryExpression
 unaryOperator
     : Minus
     | Tilde
+    | Not
     ;
 
 // ISO 6.5.4, Cast Operators
@@ -74,12 +75,26 @@ shiftOperator
 
 // ISO 6.5.8, Relational Operators
 relationalExpression
-    : shiftExpression
+    : shiftExpression                                           # DummyShiftExpressionToRelationalExpression
+    | relationalExpression relationalOperator shiftExpression   # RelationalOperatorExpression
+    ;
+
+relationalOperator
+    : Less
+    | Greater
+    | LessEqual
+    | GreaterEqual
     ;
 
 // ISO 6.5.9, Equality Operators
 equalityExpression
-    : relationalExpression
+    : relationalExpression                                      # DummyRelationalExpressionToEqualityExpression
+    | equalityExpression equalityOperator relationalExpression  # EqualityOperatorExpression
+    ;
+
+equalityOperator
+    : Equal
+    | NotEqual
     ;
 
 // ISO 6.5.10, Bitwise AND Operator
@@ -102,12 +117,14 @@ inclusiveOrExpression
 
 // ISO 6.5.13, Logical AND Operator
 logicalAndExpression
-    : inclusiveOrExpression
+    : inclusiveOrExpression                              # DummyInclusiveOrExpressionToLogicalAndExpression
+    | logicalAndExpression AndAnd inclusiveOrExpression  # LogicalAndOperatorExpression
     ;
 
 // ISO 6.5.14, Logical OR Operator
 logicalOrExpression
-    : logicalAndExpression
+    : logicalAndExpression                          # DummyLogicalAndExpressionToLogicalOrExpression
+    | logicalOrExpression OrOr logicalAndExpression # LogicalOrOperatorExpression
     ;
 
 // ISO 6.5.15, Conditional Operator

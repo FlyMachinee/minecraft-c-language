@@ -48,8 +48,28 @@ public final class BitMath {
         return number >= -2048 && number <= 2047;
     }
 
+    public static boolean isSi20(int number) {
+        // 检查该数字是否可被 20 位的有符号数表示
+        return number >= -524288 && number <= 524287;
+    }
+
     public static boolean isUi12(int number) {
         // 检查该数字是否可被 12 位的无符号数表示
         return (number & 0xFFFFF000) == 0;
+    }
+
+    public static boolean isOffs16(int number) {
+        // 检查该数字是否可被 16 位的有符号数表示
+        return number >= -32768 && number <= 32767;
+    }
+
+    public static boolean isOffs21(int number) {
+        // 检查该数字是否可被 21 位的有符号数表示
+        return number >= -1048576 && number <= 1048575;
+    }
+
+    public static boolean isOffs26(int number) {
+        // 检查该数字是否可被 26 位的有符号数表示
+        return number >= -33554432 && number <= 33554431;
     }
 }

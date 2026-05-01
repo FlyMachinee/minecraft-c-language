@@ -24,4 +24,9 @@ public class TacUnaryOperation implements TacInstruction {
         dst.genFormattedString(stringBuilder);
         stringBuilder.append(")");
     }
+
+    @Override
+    public <T> T accept(TacVisitor<T> visitor) {
+        return visitor.visitUnaryOperation(this);
+    }
 }

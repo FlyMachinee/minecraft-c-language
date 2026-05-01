@@ -32,6 +32,8 @@ public final class LA64Decoder {
             case FORMAT_3R -> ops = decode3R(info, machineCode);
             case FORMAT_2RI12 -> ops = decode2RI12(info, machineCode);
             case FORMAT_2RI16 -> ops = decode2RI16(info, machineCode);
+            case FORMAT_1RI21 -> ops = decode1RI21(info, machineCode);
+            case FORMAT_I26 -> ops = decodeI26(info, machineCode);
             case MISCELLANEOUS -> {
                 Function<Integer, LA64Operand[]> decoder = info.decoder();
                 if (decoder == null) {
@@ -78,4 +80,22 @@ public final class LA64Decoder {
             new LA64Operand(info.operandTypes()[2], imm16)};
     }
 
+    private static LA64Operand[] decode1RI21(LA64InstructionInfo info, int machineCode) {
+        // rj, imm21
+        // opcode | i21[15:0] | rj | i21[20:16]
+        int rj = BitMath.getRj(machineCode);
+        int imm21 = ((machineCode >> 10) & 0xFFFF) | ((machineCode & 0x1F) << 16);
+        imm21 = BitMath.extractSignedBits(imm21, 21);
+        return new LA64Operand[]{
+            new LA64Operand(info.operandTypes()[0], rj),
+            new LA64Operand(info.operandTypes()[1], imm21)};
+    }
+
+    private static LA64Operand[] decodeI26(LA64InstructionInfo info, int machineCode) {
+        // imm26
+        // opcode | i26[15:0] | i21[25:16]
+        int imm26 = ((machineCode >> 10) & 0xFFFF) | ((machineCode & 0x3FF) << 16);
+        imm26 = BitMath.extractSignedBits(imm26, 26);
+        return new LA64Operand[]{new LA64Operand(info.operandTypes()[0], imm26)};
+    }
 }

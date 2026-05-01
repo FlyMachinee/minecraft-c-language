@@ -1,55 +1,24 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.common;
 
 public enum BinaryOperator {
-    /**
-     * 加法
-     */
     ADD("+"),
-
-    /**
-     * 减法
-     */
     SUBTRACT("-"),
-
-    /**
-     * 乘法
-     */
     MULTIPLY("*"),
-
-    /**
-     * 除法
-     */
     DIVIDE("/"),
-
-    /**
-     * 取模
-     */
     MODULO("%"),
-
-    /**
-     * 左移
-     */
     LEFT_SHIFT("<<"),
-
-    /**
-     * 右移（实现为算术右移）
-     */
     RIGHT_SHIFT(">>"),
-
-    /**
-     * 按位与
-     */
     BITWISE_AND("&"),
-
-    /**
-     * 按位或
-     */
     BITWISE_OR("|"),
-
-    /**
-     * 按位异或
-     */
-    BITWISE_XOR("^");
+    BITWISE_XOR("^"),
+    LOGICAL_AND("&&"),
+    LOGICAL_OR("||"),
+    LESS_THAN("<"),
+    GREATER_THAN(">"),
+    EQUAL("=="),
+    NOT_EQUAL("!="),
+    LESS_OR_EQUAL("<="),
+    GREATER_OR_EQUAL(">=");
 
     private final String symbol;
 

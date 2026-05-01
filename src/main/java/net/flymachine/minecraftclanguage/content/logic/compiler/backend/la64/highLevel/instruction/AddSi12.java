@@ -12,4 +12,9 @@ public class AddSi12 implements HighLevelInstruction {
         this.si12 = si12;
         this.dst = dst;
     }
+
+    @Override
+    public <T> T accept(HighLevelVisitor<T> visitor) {
+        return visitor.visitAddSi12(this);
+    }
 }

@@ -13,4 +13,9 @@ public class Unary implements HighLevelInstruction {
         this.src = src;
         this.dst = dst;
     }
+
+    @Override
+    public <T> T accept(HighLevelVisitor<T> visitor) {
+        return visitor.visitUnary(this);
+    }
 }

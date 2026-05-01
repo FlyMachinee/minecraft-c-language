@@ -106,4 +106,36 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         ExpressionNode rhs = (ExpressionNode) visit(ctx.exclusiveOrExpression());
         return new BinaryExpressionNode(BinaryOperator.BITWISE_OR, lhs, rhs);
     }
+
+    @Override
+    public BinaryExpressionNode visitRelationalOperatorExpression(C99Parser.RelationalOperatorExpressionContext ctx) {
+        String operator = ctx.relationalOperator().getText();
+        BinaryOperator op = BinaryOperator.fromSymbol(operator);
+        ExpressionNode lhs = (ExpressionNode) visit(ctx.relationalExpression());
+        ExpressionNode rhs = (ExpressionNode) visit(ctx.shiftExpression());
+        return new BinaryExpressionNode(op, lhs, rhs);
+    }
+
+    @Override
+    public BinaryExpressionNode visitEqualityOperatorExpression(C99Parser.EqualityOperatorExpressionContext ctx) {
+        String operator = ctx.equalityOperator().getText();
+        BinaryOperator op = BinaryOperator.fromSymbol(operator);
+        ExpressionNode lhs = (ExpressionNode) visit(ctx.equalityExpression());
+        ExpressionNode rhs = (ExpressionNode) visit(ctx.relationalExpression());
+        return new BinaryExpressionNode(op, lhs, rhs);
+    }
+
+    @Override
+    public BinaryExpressionNode visitLogicalAndOperatorExpression(C99Parser.LogicalAndOperatorExpressionContext ctx) {
+        ExpressionNode lhs = (ExpressionNode) visit(ctx.logicalAndExpression());
+        ExpressionNode rhs = (ExpressionNode) visit(ctx.inclusiveOrExpression());
+        return new BinaryExpressionNode(BinaryOperator.LOGICAL_AND, lhs, rhs);
+    }
+
+    @Override
+    public BinaryExpressionNode visitLogicalOrOperatorExpression(C99Parser.LogicalOrOperatorExpressionContext ctx) {
+        ExpressionNode lhs = (ExpressionNode) visit(ctx.logicalOrExpression());
+        ExpressionNode rhs = (ExpressionNode) visit(ctx.logicalAndExpression());
+        return new BinaryExpressionNode(BinaryOperator.LOGICAL_OR, lhs, rhs);
+    }
 }

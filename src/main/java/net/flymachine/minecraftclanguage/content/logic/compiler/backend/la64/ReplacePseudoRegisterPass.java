@@ -10,7 +10,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.hig
 import java.util.HashMap;
 import java.util.Map;
 
-public final class ReplacePseudoRegisterPass {
+public final class ReplacePseudoRegisterPass implements HighLevelVisitor<Void> {
 
     public ReplacePseudoRegisterPass() { }
 
@@ -28,22 +28,72 @@ public final class ReplacePseudoRegisterPass {
 
     public int runOnFunction(HighLevelFunction function) {
         for (HighLevelInstruction inst : function.instructions) {
-            if (inst instanceof Move move) {
-                move.src = replacePseudo(move.src);
-                move.dst = replacePseudo(move.dst);
-            } else if (inst instanceof Unary unary) {
-                unary.src = replacePseudo(unary.src);
-                unary.dst = replacePseudo(unary.dst);
-            } else if (inst instanceof Binary binary) {
-                binary.lhs = replacePseudo(binary.lhs);
-                binary.rhs = replacePseudo(binary.rhs);
-                binary.dst = replacePseudo(binary.dst);
-            } else if (inst instanceof AddSi12 addSi12) {
-                addSi12.src = replacePseudo(addSi12.src);
-                addSi12.dst = replacePseudo(addSi12.dst);
-            }
+            inst.accept(this);
         }
         return stackOffset;
+    }
+
+    @Override
+    public Void visitMove(Move inst) {
+        inst.src = replacePseudo(inst.src);
+        inst.dst = replacePseudo(inst.dst);
+        return null;
+    }
+
+    @Override
+    public Void visitRet(Ret inst) {
+        return null;
+    }
+
+    @Override
+    public Void visitUnary(Unary inst) {
+        inst.src = replacePseudo(inst.src);
+        inst.dst = replacePseudo(inst.dst);
+        return null;
+    }
+
+    @Override
+    public Void visitBinary(Binary inst) {
+        inst.lhs = replacePseudo(inst.lhs);
+        inst.rhs = replacePseudo(inst.rhs);
+        inst.dst = replacePseudo(inst.dst);
+        return null;
+    }
+
+    @Override
+    public Void visitAddSi12(AddSi12 inst) {
+        inst.src = replacePseudo(inst.src);
+        inst.dst = replacePseudo(inst.dst);
+        return null;
+    }
+
+    @Override
+    public Void visitLabel(Label inst) {
+        return null;
+    }
+
+    @Override
+    public Void visitBranch(Branch inst) {
+        return null;
+    }
+
+    @Override
+    public Void visitBranchIfZero(BranchIfZero inst) {
+        inst.cond = replacePseudo(inst.cond);
+        return null;
+    }
+
+    @Override
+    public Void visitBranchIfNotZero(BranchIfNotZero inst) {
+        inst.cond = replacePseudo(inst.cond);
+        return null;
+    }
+
+    @Override
+    public Void visitBranchIfComparison(BranchIfComparison inst) {
+        inst.lhs = replacePseudo(inst.lhs);
+        inst.rhs = replacePseudo(inst.rhs);
+        return null;
     }
 
     private HighLevelOperand replacePseudo(HighLevelOperand operand) {

@@ -1,10 +1,10 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.ir;
 
-public class TacReturn implements TacInstruction {
-    public TacValue value;
+public class TacJump implements TacInstruction {
+    public String target;
 
-    public TacReturn(TacValue value) {
-        this.value = value;
+    public TacJump(String target) {
+        this.target = target;
     }
 
     @Override
@@ -12,15 +12,11 @@ public class TacReturn implements TacInstruction {
         if (indentFirstLine) {
             stringBuilder.append("  ".repeat(indentLevel));
         }
-        stringBuilder.append("Return(");
-        if (value != null) {
-            value.genFormattedString(stringBuilder, 0, false);
-        }
-        stringBuilder.append(")");
+        stringBuilder.append("Jump(").append(target).append(")");
     }
 
     @Override
     public <T> T accept(TacVisitor<T> visitor) {
-        return visitor.visitReturn(this);
+        return visitor.visitJump(this);
     }
 }

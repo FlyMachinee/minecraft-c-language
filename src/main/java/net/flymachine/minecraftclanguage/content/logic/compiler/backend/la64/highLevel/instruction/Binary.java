@@ -15,4 +15,9 @@ public class Binary implements HighLevelInstruction {
         this.rhs = rhs;
         this.dst = dst;
     }
+
+    @Override
+    public <T> T accept(HighLevelVisitor<T> visitor) {
+        return visitor.visitBinary(this);
+    }
 }

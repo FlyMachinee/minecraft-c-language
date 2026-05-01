@@ -1,15 +1,9 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.common;
 
 public enum UnaryOperator {
-    /**
-     * 取相反数
-     */
     NEGATE("-"),
-
-    /**
-     * 按位取反
-     */
-    COMPLEMENT("~");
+    COMPLEMENT("~"),
+    NOT("!");
 
     private final String symbol;
 

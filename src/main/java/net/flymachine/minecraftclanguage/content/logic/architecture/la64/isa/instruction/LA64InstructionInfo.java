@@ -96,4 +96,33 @@ public record LA64InstructionInfo(
             executor
         );
     }
+
+    public static LA64InstructionInfo format1GPROffs21(
+        @NotBlank String mnemonic,
+        int opcode,
+        @NotNull BiConsumer<LA64EmulatorHandler, LA64Operand[]> executor) {
+        return new LA64InstructionInfo(
+            mnemonic,
+            opcode,
+            6,
+            LA64InstructionFormat.FORMAT_1RI21,
+            LA64OperandType.FORMAT_1GPR_OFFS21_OPTYPE,
+            executor
+        );
+    }
+
+    public static LA64InstructionInfo formatOffs26(
+        @NotBlank String mnemonic,
+        int opcode,
+        @NotNull BiConsumer<LA64EmulatorHandler, LA64Operand[]> executor) {
+        return new LA64InstructionInfo(
+            mnemonic,
+            opcode,
+            6,
+            LA64InstructionFormat.FORMAT_I26,
+            LA64OperandType.FORMAT_OFFS26_OPTYPE,
+            executor
+        );
+    }
+
 }

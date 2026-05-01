@@ -26,6 +26,10 @@ fragment NonzeroDigit: [1-9];
 
 // Operators
 
+Less: '<';
+LessEqual: '<=';
+Greater: '>';
+GreaterEqual: '>=';
 LeftShift: '<<';
 RightShift: '>>';
 Plus: '+';
@@ -35,9 +39,14 @@ Star: '*';
 Divide: '/';
 Modulo: '%';
 And: '&';
+AndAnd: '&&';
 Or: '|';
+OrOr: '||';
 Caret: '^';
+Not: '!';
 Tilde: '~';
+Equal: '==';
+NotEqual: '!=';
 
 // Parentheses
 

@@ -17,6 +17,8 @@ public final class LA64Encoder {
             case FORMAT_3R -> encode3R(info.opcode(), ops);
             case FORMAT_2RI12 -> encode2RI12(info.opcode(), ops);
             case FORMAT_2RI16 -> encode2RI16(info.opcode(), ops);
+            case FORMAT_1RI21 -> encode1RI21(info.opcode(), ops);
+            case FORMAT_I26 -> encodeI26(info.opcode(), ops);
             case MISCELLANEOUS -> {
                 BiFunction<LA64InstructionInfo, LA64Operand[], Integer> encoder = info.encoder();
                 if (encoder == null) {
@@ -52,4 +54,22 @@ public final class LA64Encoder {
         int imm16 = ops[2].value();
         return (opcode << 26) | ((imm16 & 0xFFFF) << 10) | (rj << 5) | rd;
     }
+
+    private static int encode1RI21(int opcode, LA64Operand[] ops) {
+        // rj, imm21
+        int rj = ops[0].value();
+        int imm21 = ops[1].value();
+
+        // opcode | i21[15:0] | rj | i21[20:16]
+        return (opcode << 26) | ((imm21 & 0xFFFF) << 10) | (rj << 5) | ((imm21 >> 16) & 0x1F);
+    }
+
+    private static int encodeI26(int opcode, LA64Operand[] ops) {
+        // imm26
+        int imm26 = ops[0].value();
+
+        // opcode | i26[15:0] | i21[25:16]
+        return (opcode << 26) | ((imm26 & 0xFFFF) << 10) | ((imm26 >> 16) & 0x3FF);
+    }
+
 }
