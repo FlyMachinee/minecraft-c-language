@@ -104,4 +104,14 @@ public final class VariableResolutionPass implements AstVisitor<Void> {
         node.rhs.accept(this);
         return null;
     }
+
+    @Override
+    public Void visit(IncrementDecrementNode node) {
+        if (!(node.operand instanceof VariableNode)) {
+            semanticError = true;
+            throw new RuntimeException("Invalid lvalue: " + node.operand.toString());
+        }
+        node.operand.accept(this);
+        return null;
+    }
 }

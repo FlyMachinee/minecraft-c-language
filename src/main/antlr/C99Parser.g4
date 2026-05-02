@@ -20,12 +20,16 @@ primaryExpression
 
 // ISO 6.5.2, Postfix Operators
 postfixExpression
-    : primaryExpression
+    : primaryExpression             # DummyPrimaryExpressionToPostfixExpression
+    | postfixExpression PlusPlus    # PostfixIncrementOperatorExpression
+    | postfixExpression MinusMinus  # PostfixDecrementOperatorExpression
     ;
 
 // ISO 6.5.3, Unary Operators
 unaryExpression
     : postfixExpression                 # DummyPostfixExpressionToUnaryExpression
+    | PlusPlus unaryExpression          # PrefixIncrementOperatorExpression
+    | MinusMinus unaryExpression        # PrefixDecrementOperatorExpression
     | unaryOperator castExpression      # UnaryOperatorExpression
     ;
 
@@ -140,6 +144,16 @@ assignmentExpression
     ;
 assignmentOperator
     : Assign
+    | StarAssign
+    | DivideAssign
+    | ModuloAssign
+    | PlusAssign
+    | MinusAssign
+    | LeftShiftAssign
+    | RightShiftAssign
+    | AndAssign
+    | CaretAssign
+    | OrAssign
     ;
 
 // ISO 6.5.17, Comma Operator

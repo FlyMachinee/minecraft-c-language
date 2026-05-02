@@ -22,4 +22,6 @@ public interface AstVisitor<T> {
     T visit(VariableNode node);
 
     T visit(AssignmentNode node);
+
+    T visit(IncrementDecrementNode node);
 }

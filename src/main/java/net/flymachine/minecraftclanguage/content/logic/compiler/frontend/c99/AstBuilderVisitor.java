@@ -1,5 +1,6 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99;
 
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.AssignmentOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.BinaryOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.UnaryOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.antlr.C99Parser;
@@ -96,6 +97,30 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
     }
 
     @Override
+    public ExpressionNode visitPostfixIncrementOperatorExpression(C99Parser.PostfixIncrementOperatorExpressionContext ctx) {
+        ExpressionNode operand = (ExpressionNode) visit(ctx.postfixExpression());
+        return new IncrementDecrementNode(true, false, operand);
+    }
+
+    @Override
+    public ExpressionNode visitPostfixDecrementOperatorExpression(C99Parser.PostfixDecrementOperatorExpressionContext ctx) {
+        ExpressionNode operand = (ExpressionNode) visit(ctx.postfixExpression());
+        return new IncrementDecrementNode(false, false, operand);
+    }
+
+    @Override
+    public ExpressionNode visitPrefixIncrementOperatorExpression(C99Parser.PrefixIncrementOperatorExpressionContext ctx) {
+        ExpressionNode operand = (ExpressionNode) visit(ctx.unaryExpression());
+        return new IncrementDecrementNode(true, true, operand);
+    }
+
+    @Override
+    public ExpressionNode visitPrefixDecrementOperatorExpression(C99Parser.PrefixDecrementOperatorExpressionContext ctx) {
+        ExpressionNode operand = (ExpressionNode) visit(ctx.unaryExpression());
+        return new IncrementDecrementNode(false, true, operand);
+    }
+
+    @Override
     public UnaryExpressionNode visitUnaryOperatorExpression(C99Parser.UnaryOperatorExpressionContext ctx) {
         String operator = ctx.unaryOperator().getText();
         UnaryOperator op = UnaryOperator.fromSymbol(operator);
@@ -185,8 +210,9 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
 
     @Override
     public AssignmentNode visitAssignmentOperatorExpression(C99Parser.AssignmentOperatorExpressionContext ctx) {
+        AssignmentOperator op = AssignmentOperator.fromSymbol(ctx.assignmentOperator().getText());
         ExpressionNode lhs = (ExpressionNode) visit(ctx.unaryExpression());
         ExpressionNode rhs = (ExpressionNode) visit(ctx.assignmentExpression());
-        return new AssignmentNode(lhs, rhs);
+        return new AssignmentNode(op, lhs, rhs);
     }
 }

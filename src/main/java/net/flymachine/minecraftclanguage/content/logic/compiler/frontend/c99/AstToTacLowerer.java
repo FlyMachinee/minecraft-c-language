@@ -1,5 +1,7 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99;
 
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.AssignmentOperator;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.BinaryOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.Comparison;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.UnaryOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.*;
@@ -57,9 +59,7 @@ public final class AstToTacLowerer {
             instructions.add(new TacReturn(returnValue));
         } else if (statement instanceof ExpressionNode expressionNode) {
             lowerExpression(expressionNode, instructions);
-        } else if (statement instanceof NullStatementNode) {
-            // 无需生成任何指令
-        } else {
+        } else if (!(statement instanceof NullStatementNode)) {
             throw new UnsupportedOperationException(
                 "Unsupported statement type: " + statement.getClass().getSimpleName());
         }
@@ -120,13 +120,34 @@ public final class AstToTacLowerer {
             instructions.add(new TacBinaryOperation(binaryExpressionNode.op, lhs, rhs, dst));
             return dst;
         } else if (expression instanceof AssignmentNode assignmentNode) {
-            // 赋值语句
+            // 赋值表达式
             TacValue rhs = lowerExpression(assignmentNode.rhs, instructions);
             TacVariable dst = new TacVariable(((VariableNode) assignmentNode.lhs).identifier);
-            instructions.add(new TacCopy(rhs, dst));
+            if (assignmentNode.operator == AssignmentOperator.ASSIGN) {
+                // 普通赋值
+                instructions.add(new TacCopy(rhs, dst));
+            } else {
+                // 复合赋值
+                instructions.add(new TacBinaryOperation(assignmentNode.operator.getBinaryOperator(), dst, rhs, dst));
+            }
             return dst;
         } else if (expression instanceof VariableNode variableNode) {
             return new TacVariable(variableNode.identifier);
+        } else if (expression instanceof IncrementDecrementNode incrementDecrementNode) {
+            // 自增自减表达式
+            BinaryOperator op = incrementDecrementNode.isIncrement ? BinaryOperator.ADD : BinaryOperator.SUBTRACT;
+            TacVariable dst = new TacVariable(((VariableNode) incrementDecrementNode.operand).identifier);
+            if (incrementDecrementNode.isPrefix) {
+                // ++/--a => a = a +/- 1; yield a;
+                instructions.add(new TacBinaryOperation(op, dst, new TacIntConstant(1), dst));
+                return dst;
+            } else {
+                // a++/-- => temp = a; a = a +/- 1; yield temp;
+                TacVariable temp = new TacVariable(makeTempVar());
+                instructions.add(new TacCopy(dst, temp));
+                instructions.add(new TacBinaryOperation(op, dst, new TacIntConstant(1), dst));
+                return temp;
+            }
         }
         throw new UnsupportedOperationException(
             "Unsupported expression type: " + expression.getClass().getSimpleName());
