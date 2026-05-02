@@ -2,8 +2,6 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99;
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.antlr.C99Lexer;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.antlr.C99Parser;
-import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstBuilderVisitor;
-import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstToTacLowerer;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.AstNode;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.ProgramNode;
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.TacProgram;
@@ -40,6 +38,10 @@ public final class C99Frontend {
         }
 
         AstNode ast = new AstBuilderVisitor().visit(tree);
+
+        VariableResolutionPass pass1 = new VariableResolutionPass();
+        ast.accept(pass1);
+
         return new AstToTacLowerer().lower((ProgramNode) ast);
     }
 }

@@ -1,6 +1,7 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node;
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.BinaryOperator;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
 
 public class BinaryExpressionNode implements ExpressionNode {
     public BinaryOperator op;
@@ -11,6 +12,11 @@ public class BinaryExpressionNode implements ExpressionNode {
         this.op = op;
         this.lhs = lhs;
         this.rhs = rhs;
+    }
+
+    @Override
+    public <T> T accept(AstVisitor<T> visitor) {
+        return visitor.visit(this);
     }
 
     @Override

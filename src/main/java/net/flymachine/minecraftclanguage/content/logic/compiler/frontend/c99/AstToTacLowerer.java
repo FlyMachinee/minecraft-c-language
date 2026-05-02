@@ -1,4 +1,4 @@
-package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast;
+package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99;
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.Comparison;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.UnaryOperator;
@@ -34,20 +34,35 @@ public final class AstToTacLowerer {
     }
 
     private TacFunction lowerFunction(FunctionDefinitionNode functionDefinition) {
-        List<TacInstruction> instructions = lowerStatement(functionDefinition.body);
+        List<TacInstruction> instructions = new ArrayList<>();
+        for (BlockItemNode blockItemNode : functionDefinition.body) {
+            if (blockItemNode instanceof StatementNode statementNode) {
+                lowerStatement(statementNode, instructions);
+            } else if (blockItemNode instanceof DeclarationNode declarationNode) {
+                if (declarationNode.initializer != null) {
+                    TacValue initValue = lowerExpression(declarationNode.initializer, instructions);
+                    instructions.add(new TacCopy(initValue, new TacVariable(declarationNode.identifier)));
+                }
+            } else {
+                throw new RuntimeException("Unknown instruction: " + blockItemNode.toString());
+            }
+        }
+        instructions.add(new TacReturn(new TacIntConstant(0)));
         return new TacFunction(functionDefinition.name, instructions);
     }
 
-    private List<TacInstruction> lowerStatement(StatementNode statement) {
-        List<TacInstruction> instructions = new ArrayList<>();
+    private void lowerStatement(StatementNode statement, List<TacInstruction> instructions) {
         if (statement instanceof ReturnNode returnNode) {
             TacValue returnValue = lowerExpression(returnNode.expression, instructions);
             instructions.add(new TacReturn(returnValue));
+        } else if (statement instanceof ExpressionNode expressionNode) {
+            lowerExpression(expressionNode, instructions);
+        } else if (statement instanceof NullStatementNode) {
+            // 无需生成任何指令
         } else {
             throw new UnsupportedOperationException(
                 "Unsupported statement type: " + statement.getClass().getSimpleName());
         }
-        return instructions;
     }
 
     /**
@@ -104,6 +119,14 @@ public final class AstToTacLowerer {
             TacVariable dst = new TacVariable(makeTempVar());
             instructions.add(new TacBinaryOperation(binaryExpressionNode.op, lhs, rhs, dst));
             return dst;
+        } else if (expression instanceof AssignmentNode assignmentNode) {
+            // 赋值语句
+            TacValue rhs = lowerExpression(assignmentNode.rhs, instructions);
+            TacVariable dst = new TacVariable(((VariableNode) assignmentNode.lhs).identifier);
+            instructions.add(new TacCopy(rhs, dst));
+            return dst;
+        } else if (expression instanceof VariableNode variableNode) {
+            return new TacVariable(variableNode.identifier);
         }
         throw new UnsupportedOperationException(
             "Unsupported expression type: " + expression.getClass().getSimpleName());

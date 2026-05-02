@@ -1,10 +1,13 @@
-package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast;
+package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99;
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.BinaryOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.UnaryOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.antlr.C99Parser;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.antlr.C99ParserBaseVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.*;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * 将生成的语法树转换为自定义 AST
@@ -25,19 +28,60 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
     @Override
     public FunctionDefinitionNode visitFunctionDefinition(C99Parser.FunctionDefinitionContext ctx) {
         String name = ctx.declarator().directDeclarator().Identifier().getText();
-        StatementNode body = visitCompoundStatement(ctx.compoundStatement());
+        List<BlockItemNode> body = new ArrayList<>();
+        var blockItemList = ctx.compoundStatement().blockItemList();
+        if (blockItemList != null) {
+            for (var blockItem : blockItemList.blockItem()) {
+                BlockItemNode item = (BlockItemNode) visit(blockItem);
+                if (item != null) {
+                    body.add(item);
+                }
+            }
+        }
         return new FunctionDefinitionNode(name, body);
     }
 
     @Override
-    public StatementNode visitCompoundStatement(C99Parser.CompoundStatementContext ctx) {
-        return (StatementNode) visit(ctx.blockItemList());
+    public DeclarationNode visitDeclaration(C99Parser.DeclarationContext ctx) {
+        var list = ctx.initDeclaratorList();
+        if (list != null) {
+            return (DeclarationNode) visit(list);
+        } else {
+            return null;
+        }
+    }
+
+    @Override
+    public DeclarationNode visitInitDeclarator(C99Parser.InitDeclaratorContext ctx) {
+        String name = ctx.declarator().directDeclarator().Identifier().getText();
+        var initializer = ctx.initializer();
+        if (initializer != null) {
+            ExpressionNode initValue = (ExpressionNode) visit(initializer);
+            return new DeclarationNode(name, initValue);
+        } else {
+            return new DeclarationNode(name, null);
+        }
+    }
+
+    @Override
+    public BlockItemNode visitExpressionStatement(C99Parser.ExpressionStatementContext ctx) {
+        if (ctx.expression() != null) {
+            return (ExpressionNode) visit(ctx.expression());
+        } else {
+            return new NullStatementNode();
+        }
     }
 
     @Override
     public ReturnNode visitJumpStatement(C99Parser.JumpStatementContext ctx) {
         ExpressionNode expression = (ExpressionNode) visit(ctx.expression());
         return new ReturnNode(expression);
+    }
+
+    @Override
+    public VariableNode visitIdentifierExpression(C99Parser.IdentifierExpressionContext ctx) {
+        String identifier = ctx.Identifier().getText();
+        return new VariableNode(identifier);
     }
 
     @Override
@@ -137,5 +181,12 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         ExpressionNode lhs = (ExpressionNode) visit(ctx.logicalOrExpression());
         ExpressionNode rhs = (ExpressionNode) visit(ctx.logicalAndExpression());
         return new BinaryExpressionNode(BinaryOperator.LOGICAL_OR, lhs, rhs);
+    }
+
+    @Override
+    public AssignmentNode visitAssignmentOperatorExpression(C99Parser.AssignmentOperatorExpressionContext ctx) {
+        ExpressionNode lhs = (ExpressionNode) visit(ctx.unaryExpression());
+        ExpressionNode rhs = (ExpressionNode) visit(ctx.assignmentExpression());
+        return new AssignmentNode(lhs, rhs);
     }
 }

@@ -1,6 +1,7 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node;
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.UnaryOperator;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
 
 public class UnaryExpressionNode implements ExpressionNode {
     public UnaryOperator op;
@@ -9,6 +10,11 @@ public class UnaryExpressionNode implements ExpressionNode {
     public UnaryExpressionNode(UnaryOperator op, ExpressionNode exp) {
         this.op = op;
         this.exp = exp;
+    }
+
+    @Override
+    public <T> T accept(AstVisitor<T> visitor) {
+        return visitor.visit(this);
     }
 
     @Override

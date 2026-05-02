@@ -45,6 +45,7 @@ OrOr: '||';
 Caret: '^';
 Not: '!';
 Tilde: '~';
+Assign: '=';
 Equal: '==';
 NotEqual: '!=';
 

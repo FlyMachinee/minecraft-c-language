@@ -13,7 +13,8 @@ compilationUnit:
 
 // ISO 6.5.1, Primary Expressions
 primaryExpression
-    : IntegerConstant                   # IntegerConstantExpression
+    : Identifier                        # IdentifierExpression
+    | IntegerConstant                   # IntegerConstantExpression
     | LeftParen expression RightParen   # ParenthesizedExpression
     ;
 
@@ -134,7 +135,11 @@ conditionalExpression
 
 // ISO 6.5.16, Assignment Operators
 assignmentExpression
-    : conditionalExpression
+    : conditionalExpression                                     # DummyConditionalExpressionToAssignmentExpression
+    | unaryExpression assignmentOperator assignmentExpression   # AssignmentOperatorExpression
+    ;
+assignmentOperator
+    : Assign
     ;
 
 // ISO 6.5.17, Comma Operator
@@ -143,8 +148,17 @@ expression:
     ;
 
 // ISO 6.7, Declarations
+declaration
+    : declarationSpecifiers initDeclaratorList? Semicolon
+    ;
 declarationSpecifiers
     : typeSpecifier declarationSpecifiers?
+    ;
+initDeclaratorList
+    : initDeclarator
+    ;
+initDeclarator
+    : declarator (Assign initializer)?
     ;
 
 // ISO 6.7.2, Type Specifiers
@@ -170,9 +184,15 @@ parameterTypeList
     : Void
     ;
 
+// ISO 6.7.8, Initialization
+initializer
+    : assignmentExpression
+    ;
+
 // ISO 6.8, Statements and Blocks
 statement
-    : jumpStatement
+    : expressionStatement
+    | jumpStatement
     ;
 
 // ISO 6.8.2, Compound Statements
@@ -180,15 +200,21 @@ compoundStatement
     : LeftBrace blockItemList? RightBrace
     ;
 blockItemList:
-    blockItem
+    blockItem+
     ;
 blockItem
-    : statement
+    : declaration
+    | statement
+    ;
+
+// ISO 6.8.3, Expression and Null Statements
+expressionStatement
+    : expression? Semicolon
     ;
 
 // ISO 6.8.6, Jump Statements
 jumpStatement
-    : Return expression? Semicolon
+    : Return expression Semicolon
     ;
 
 // ISO 6.9, External Definitions
