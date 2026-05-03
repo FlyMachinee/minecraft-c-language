@@ -11,7 +11,7 @@ public class NullStatementNode extends StatementNode {
 
     @Override
     public <T> T accept(AstVisitor<T> visitor) {
-        return null;
+        return visitor.visit(this);
     }
 
     @Override
@@ -19,6 +19,12 @@ public class NullStatementNode extends StatementNode {
         if (indentFirstLine) {
             stringBuilder.append("  ".repeat(indentLevel));
         }
-        stringBuilder.append("NullStatementNode()\n");
+        if (!gotoLabels.isEmpty()) {
+            stringBuilder.append("NullStatementNode(");
+            genFormatedStringForGotoLabels(stringBuilder);
+            stringBuilder.append(")\n");
+        } else {
+            stringBuilder.append("NullStatementNode()\n");
+        }
     }
 }

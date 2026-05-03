@@ -86,6 +86,19 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
     }
 
     @Override
+    public StatementNode visitLabeledStatement(C99Parser.LabeledStatementContext ctx) {
+        StatementNode statement = (StatementNode) visit(ctx.statement());
+        if (ctx.Identifier() != null) {
+            String label = ctx.Identifier().getText();
+            SourceLocation labelLocation = getSourceLocation(ctx.Identifier());
+            statement.gotoLabels.add(new StatementNode.GotoLabelInfo(new IdentifierNode(labelLocation, label)));
+            return statement;
+        } else {
+            throw new IllegalStateException("Unknown labeled statement");
+        }
+    }
+
+    @Override
     public StatementNode visitExpressionStatement(C99Parser.ExpressionStatementContext ctx) {
         if (ctx.expression() != null) {
             return new ExpressionStatementNode((ExpressionNode) visit(ctx.expression()));
@@ -110,9 +123,17 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
     }
 
     @Override
-    public ReturnNode visitJumpStatement(C99Parser.JumpStatementContext ctx) {
-        ExpressionNode expression = (ExpressionNode) visit(ctx.expression());
-        return new ReturnNode(getSourceLocation(ctx.Return()), expression);
+    public StatementNode visitJumpStatement(C99Parser.JumpStatementContext ctx) {
+        if (ctx.Goto() != null) {
+            String identifier = ctx.Identifier().getText();
+            SourceLocation identifierLocation = getSourceLocation(ctx.Identifier());
+            return new GotoNode(getSourceLocation(ctx.Goto()), new IdentifierNode(identifierLocation, identifier));
+        } else if (ctx.Return() != null) {
+            ExpressionNode expression = (ExpressionNode) visit(ctx.expression());
+            return new ReturnNode(getSourceLocation(ctx.Return()), expression);
+        } else {
+            throw new IllegalStateException("Unknown jump statement");
+        }
     }
 
     @Override
@@ -126,7 +147,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         } else if (ctx.LeftParen() != null) {
             return (ExpressionNode) visit(ctx.expression());
         } else {
-            throw new RuntimeException("Unknown primary expression");
+            throw new IllegalStateException("Unknown primary expression");
         }
     }
 
@@ -141,7 +162,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
             ExpressionNode operand = (ExpressionNode) visit(ctx.postfixExpression());
             return new IncrementDecrementNode(getSourceLocation(ctx.MinusMinus()), false, false, operand);
         } else {
-            throw new RuntimeException("Unknown postfix expression");
+            throw new IllegalStateException("Unknown postfix expression");
         }
     }
 
@@ -160,7 +181,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
             ExpressionNode operand = (ExpressionNode) visit(ctx.castExpression());
             return new UnaryExpressionNode(operator, operand);
         } else {
-            throw new RuntimeException("Unknown unary operator");
+            throw new IllegalStateException("Unknown unary operator");
         }
     }
 
@@ -181,7 +202,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         } else if (ctx.castExpression() != null) {
             return (ExpressionNode) visit(ctx.castExpression());
         } else {
-            throw new RuntimeException("Unknown multiplicative expression");
+            throw new IllegalStateException("Unknown multiplicative expression");
         }
     }
 
@@ -202,7 +223,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         } else if (ctx.multiplicativeExpression() != null) {
             return (ExpressionNode) visit(ctx.multiplicativeExpression());
         } else {
-            throw new RuntimeException("Unknown additive expression");
+            throw new IllegalStateException("Unknown additive expression");
         }
     }
 
@@ -223,7 +244,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         } else if (ctx.additiveExpression() != null) {
             return (ExpressionNode) visit(ctx.additiveExpression());
         } else {
-            throw new RuntimeException("Unknown shift expression");
+            throw new IllegalStateException("Unknown shift expression");
         }
     }
 
@@ -244,7 +265,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         } else if (ctx.shiftExpression() != null) {
             return (ExpressionNode) visit(ctx.shiftExpression());
         } else {
-            throw new RuntimeException("Unknown relational expression");
+            throw new IllegalStateException("Unknown relational expression");
         }
     }
 
@@ -265,7 +286,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         } else if (ctx.relationalExpression() != null) {
             return (ExpressionNode) visit(ctx.relationalExpression());
         } else {
-            throw new RuntimeException("Unknown equality expression");
+            throw new IllegalStateException("Unknown equality expression");
         }
     }
 
@@ -286,7 +307,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         } else if (ctx.equalityExpression() != null) {
             return (ExpressionNode) visit(ctx.equalityExpression());
         } else {
-            throw new RuntimeException("Unknown and expression");
+            throw new IllegalStateException("Unknown and expression");
         }
     }
 
@@ -300,7 +321,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         } else if (ctx.andExpression() != null) {
             return (ExpressionNode) visit(ctx.andExpression());
         } else {
-            throw new RuntimeException("Unknown exclusive or expression");
+            throw new IllegalStateException("Unknown exclusive or expression");
         }
     }
 
@@ -314,7 +335,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         } else if (ctx.exclusiveOrExpression() != null) {
             return (ExpressionNode) visit(ctx.exclusiveOrExpression());
         } else {
-            throw new RuntimeException("Unknown inclusive or expression");
+            throw new IllegalStateException("Unknown inclusive or expression");
         }
     }
 
@@ -328,7 +349,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         } else if (ctx.inclusiveOrExpression() != null) {
             return (ExpressionNode) visit(ctx.inclusiveOrExpression());
         } else {
-            throw new RuntimeException("Unknown logical and expression");
+            throw new IllegalStateException("Unknown logical and expression");
         }
     }
 
@@ -342,7 +363,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         } else if (ctx.logicalAndExpression() != null) {
             return (ExpressionNode) visit(ctx.logicalAndExpression());
         } else {
-            throw new RuntimeException("Unknown logical or expression");
+            throw new IllegalStateException("Unknown logical or expression");
         }
     }
 
@@ -356,7 +377,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         } else if (ctx.logicalOrExpression() != null) {
             return (ExpressionNode) visit(ctx.logicalOrExpression());
         } else {
-            throw new RuntimeException("Unknown conditional expression");
+            throw new IllegalStateException("Unknown conditional expression");
         }
     }
 
@@ -370,7 +391,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
             ExpressionNode rhs = (ExpressionNode) visit(ctx.assignmentExpression());
             return new AssignmentNode(op, lhs, rhs);
         } else {
-            throw new RuntimeException("Unknown assignment expression");
+            throw new IllegalStateException("Unknown assignment expression");
         }
     }
 

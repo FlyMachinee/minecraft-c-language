@@ -51,6 +51,14 @@ public final class C99Frontend {
             return null;
         }
 
+        LabelResolutionPass pass2 = new LabelResolutionPass();
+        pass2.setSourceFile(sourceFile);
+        ast.accept(pass2);
+
+        if (pass2.hasSemanticError()) {
+            return null;
+        }
+
         return new AstToTacLowerer().lower((ProgramNode) ast);
     }
 }

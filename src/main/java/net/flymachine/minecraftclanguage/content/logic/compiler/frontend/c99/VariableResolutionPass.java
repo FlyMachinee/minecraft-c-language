@@ -10,6 +10,9 @@ import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceFile;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * 将变量的名字替换为唯一的名字，并检查变量的重复定义和未定义使用
+ */
 public final class VariableResolutionPass implements AstVisitor<Void> {
 
     private Logger logger;
@@ -109,6 +112,11 @@ public final class VariableResolutionPass implements AstVisitor<Void> {
     }
 
     @Override
+    public Void visit(NullStatementNode node) {
+        return null;
+    }
+
+    @Override
     public Void visit(IdentifierNode node) {
         String name = node.id;
         IdentifierNode renamed = variableRenamingMap.get(name);
@@ -165,6 +173,11 @@ public final class VariableResolutionPass implements AstVisitor<Void> {
         node.cond.accept(this);
         node.thenExpr.accept(this);
         node.elseExpr.accept(this);
+        return null;
+    }
+
+    @Override
+    public Void visit(GotoNode node) {
         return null;
     }
 }

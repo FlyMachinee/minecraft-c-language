@@ -206,9 +206,15 @@ initializer
 
 // ISO 6.8, Statements and Blocks
 statement
-    : expressionStatement
+    : labeledStatement
+    | expressionStatement
     | selectionStatement
     | jumpStatement
+    ;
+
+// ISO 6.8.1, Labeled Statements
+labeledStatement
+    : Identifier Colon statement
     ;
 
 // ISO 6.8.2, Compound Statements
@@ -235,7 +241,8 @@ selectionStatement
 
 // ISO 6.8.6, Jump Statements
 jumpStatement
-    : Return expression Semicolon
+    : Goto Identifier Semicolon
+    | Return expression Semicolon
     ;
 
 // ISO 6.9, External Definitions

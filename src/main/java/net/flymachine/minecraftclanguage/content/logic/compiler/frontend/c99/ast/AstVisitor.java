@@ -17,6 +17,8 @@ public interface AstVisitor<T> {
 
     T visit(ExpressionStatementNode node);
 
+    T visit(NullStatementNode node);
+
     T visit(IdentifierNode node);
 
     T visit(AssignmentNode node);
@@ -26,4 +28,6 @@ public interface AstVisitor<T> {
     T visit(IfStatementNode node);
 
     T visit(ConditionalExpressionNode node);
+
+    T visit(GotoNode node);
 }

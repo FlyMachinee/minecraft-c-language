@@ -23,12 +23,33 @@ public final class IfStatementNode extends StatementNode {
     }
 
     @Override
+    public boolean containsActiveGotoLabel() {
+        return super.containsActiveGotoLabel() || thenStmt.containsActiveGotoLabel() ||
+               (elseStmt != null && elseStmt.containsActiveGotoLabel());
+    }
+
+    @Override
     public <T> T accept(AstVisitor<T> visitor) {
         return visitor.visit(this);
     }
 
     @Override
     public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
-
+        if (indentFirstLine) { stringBuilder.append("  ".repeat(indentLevel)); }
+        stringBuilder.append("IfStatementNode(\n");
+        if (!gotoLabels.isEmpty()) {
+            stringBuilder.append("  ".repeat(indentLevel + 1));
+            genFormatedStringForGotoLabels(stringBuilder);
+            stringBuilder.append(",\n");
+        }
+        stringBuilder.append("  ".repeat(indentLevel + 1)).append("cond=");
+        cond.genFormattedString(stringBuilder, indentLevel + 1, false);
+        stringBuilder.append("  ".repeat(indentLevel + 1)).append("thenStmt=");
+        thenStmt.genFormattedString(stringBuilder, indentLevel + 1, false);
+        if (elseStmt != null) {
+            stringBuilder.append("  ".repeat(indentLevel + 1)).append("elseStmt=");
+            elseStmt.genFormattedString(stringBuilder, indentLevel + 1, false);
+        }
+        stringBuilder.append("  ".repeat(indentLevel)).append(")\n");
     }
 }

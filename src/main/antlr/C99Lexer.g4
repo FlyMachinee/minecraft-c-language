@@ -3,6 +3,7 @@ lexer grammar C99Lexer;
 // Keywords
 
 Else: 'else';
+Goto: 'goto';
 If: 'if';
 Int: 'int';
 Return: 'return';

@@ -6,6 +6,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.Compariso
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.UnaryOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.*;
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.*;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -54,6 +55,13 @@ public final class AstToTacLowerer {
     }
 
     private void lowerStatement(StatementNode statement, List<TacInstruction> instructions) {
+        // 为活跃的 goto 标签生成标签
+        for (StatementNode.GotoLabelInfo info : statement.gotoLabels) {
+            if (info.active) {
+                instructions.add(new TacLabel(info.label.id));
+            }
+        }
+
         if (statement instanceof ReturnNode returnNode) {
             TacValue returnValue = lowerExpression(returnNode.expression, instructions);
             instructions.add(new TacReturn(returnValue));
@@ -61,17 +69,33 @@ public final class AstToTacLowerer {
             lowerExpression(expressionStatementNode.expression, instructions);
         } else if (statement instanceof IfStatementNode ifStatementNode) {
             if (ifStatementNode.elseStmt != null) {
+                // if (cond) thenStmt else elseStmt
+                // =>
+                // if (!cond) goto else
+                // thenStmt
+                // goto end
+                // else:
+                // elseStmt
+                // end:
                 String labelElse = makeLabel("else");
                 switch (lowerBoolean(ifStatementNode.cond, labelElse, true, instructions)) {
                     case ALWAYS_JUMP -> {
-                        instructions.add(new TacLabel(labelElse));
-                        lowerStatement(ifStatementNode.elseStmt, instructions);
-                        return;
+                        if (!ifStatementNode.thenStmt.containsActiveGotoLabel()) {
+                            // 当 then 子语句没有活跃的 goto 标签，将其优化
+                            instructions.add(new TacLabel(labelElse));
+                            lowerStatement(ifStatementNode.elseStmt, instructions);
+                            return;
+                        }
+                        // 否则生成无条件跳转
+                        instructions.add(new TacJump(labelElse));
                     }
                     case NEVER_JUMP -> {
-                        lowerStatement(ifStatementNode.thenStmt, instructions);
-                        instructions.add(new TacLabel(labelElse));
-                        return;
+                        if (!ifStatementNode.elseStmt.containsActiveGotoLabel()) {
+                            // 当 else 子语句没有活跃的 goto 标签，将其优化
+                            lowerStatement(ifStatementNode.thenStmt, instructions);
+                            instructions.add(new TacLabel(labelElse));
+                            return;
+                        }
                     }
                 }
                 String labelEndIf = makeLabel("endif");
@@ -81,15 +105,28 @@ public final class AstToTacLowerer {
                 lowerStatement(ifStatementNode.elseStmt, instructions);
                 instructions.add(new TacLabel(labelEndIf));
             } else {
+                // if (cond) thenStmt
+                // =>
+                // if (!cond) goto end
+                // thenStmt
+                // end:
                 String labelEndIf = makeLabel("endif");
                 if (lowerBoolean(ifStatementNode.cond, labelEndIf, true, instructions) ==
                     BooleanGenerationResult.ALWAYS_JUMP) {
-                    instructions.add(new TacLabel(labelEndIf));
-                    return;
+                    if (!ifStatementNode.thenStmt.containsActiveGotoLabel()) {
+                        // 当 then 子语句没有活跃的 goto 标签，将其优化
+                        instructions.add(new TacLabel(labelEndIf));
+                        return;
+                    }
+                    // 否则生成无条件跳转
+                    instructions.add(new TacJump(labelEndIf));
                 }
                 lowerStatement(ifStatementNode.thenStmt, instructions);
                 instructions.add(new TacLabel(labelEndIf));
             }
+        } else if (statement instanceof GotoNode gotoNode) {
+            // 为 goto 语句生成无条件跳转
+            instructions.add(new TacJump(gotoNode.target.id));
         } else if (!(statement instanceof NullStatementNode)) {
             throw new UnsupportedOperationException(
                 "Unsupported statement type: " + statement.getClass().getSimpleName());
@@ -104,7 +141,6 @@ public final class AstToTacLowerer {
      * @return 表达式的求值结果
      */
     private TacValue lowerExpression(ExpressionNode expression, List<TacInstruction> instructions) {
-        // TODO: 进行常量折叠
         if (expression instanceof IntConstantNode intConstantNode) {
             return new TacIntConstant(intConstantNode.value);
         } else if (expression instanceof UnaryExpressionNode unaryExpressionNode) {
@@ -125,36 +161,60 @@ public final class AstToTacLowerer {
             switch (binaryExpressionNode.op.op) {
                 case LOGICAL_AND -> {
                     // 短路与求值
+                    // if (a && b) yield 1; else yield 0;
+                    // =>
+                    // if (!a) goto zero
+                    // if (!b) goto zero
+                    // tmp = 1
+                    // goto end
+                    // zero:
+                    // tmp = 0
+                    // end:
+                    // yield tmp
                     String labelFalse = makeLabel("and_false");
-                    String labelEvalEnd = makeLabel("eval_end");
+
+                    // 注意短路语义，即使右操作数为0，左操作数也要求值
+                    // 显然左操作数永远都需要求值
                     switch (lowerBoolean(binaryExpressionNode.lhs, labelFalse, true, instructions)) {
                         case VARIOUS -> {
+                            // a 未知
                             if (lowerBoolean(
                                 binaryExpressionNode.rhs, labelFalse, true, instructions) ==
                                 BooleanGenerationResult.ALWAYS_JUMP) {
-
+                                // if (!b) goto zero 始终跳转，即 b=0
+                                // 推导出值为0
                                 instructions.add(new TacLabel(labelFalse));
                                 return new TacIntConstant(0);
                             }
+                            // 其他情况都不能断言结果值
                         }
                         case ALWAYS_JUMP -> {
+                            // if (!a) goto zero 始终跳转，即 a=0
+                            // 显然值为0，由于短路语义，右操作数永远不求值，可以优化
                             instructions.add(new TacLabel(labelFalse));
                             return new TacIntConstant(0);
                         }
                         case NEVER_JUMP -> {
+                            // if (!a) goto zero 永不跳转，即 a=1
+                            // 得继续求值
                             switch (lowerBoolean(binaryExpressionNode.rhs, labelFalse, true, instructions)) {
                                 case ALWAYS_JUMP -> {
+                                    // b=0 => 推导值为0
                                     instructions.add(new TacLabel(labelFalse));
                                     return new TacIntConstant(0);
                                 }
                                 case NEVER_JUMP -> {
+                                    // b=1 => 推导值为1
                                     instructions.add(new TacLabel(labelFalse));
                                     return new TacIntConstant(1);
                                 }
                             }
+                            // b 未知，无法断言
                         }
                     }
 
+                    // 无法断言的情况，需要生成指令来进行求值
+                    String labelEvalEnd = makeLabel("eval_end");
                     TacVariable dst = new TacVariable(makeTempVar());
                     instructions.add(new TacCopy(new TacIntConstant(1), dst));
                     instructions.add(new TacJump(labelEvalEnd));
@@ -165,35 +225,59 @@ public final class AstToTacLowerer {
                 }
                 case LOGICAL_OR -> {
                     // 短路或求值
+                    // if (a || b) yield 1; else yield 0;
+                    // =>
+                    // if (a) goto one
+                    // if (b) goto one
+                    // tmp = 0
+                    // goto end
+                    // one:
+                    // tmp = 1
+                    // end:
+                    // yield tmp
                     String labelTrue = makeLabel("or_true");
+
+                    // 注意短路语义，即使右操作数为1，左操作数也要求值
+                    // 显然左操作数永远都需要求值
                     switch (lowerBoolean(binaryExpressionNode.lhs, labelTrue, false, instructions)) {
                         case VARIOUS -> {
+                            // a 未知
                             if (lowerBoolean(
                                 binaryExpressionNode.rhs, labelTrue, false, instructions) ==
                                 BooleanGenerationResult.ALWAYS_JUMP) {
-
+                                // if (b) goto one 始终跳转，即 b=1
+                                // 推导出值为0
                                 instructions.add(new TacLabel(labelTrue));
                                 return new TacIntConstant(1);
                             }
+                            // 其他情况都不能断言结果值
                         }
                         case ALWAYS_JUMP -> {
+                            // if (a) goto one 始终跳转，即 a=1
+                            // 显然值为1，由于短路语义，右操作数永远不求值，可以优化
                             instructions.add(new TacLabel(labelTrue));
                             return new TacIntConstant(1);
                         }
                         case NEVER_JUMP -> {
+                            // if (a) goto one 永不跳转，即 a=0
+                            // 得继续求值
                             switch (lowerBoolean(binaryExpressionNode.rhs, labelTrue, false, instructions)) {
                                 case ALWAYS_JUMP -> {
+                                    // b=1 => 推导值为1
                                     instructions.add(new TacLabel(labelTrue));
                                     return new TacIntConstant(1);
                                 }
                                 case NEVER_JUMP -> {
+                                    // b=0 => 推导值为0
                                     instructions.add(new TacLabel(labelTrue));
                                     return new TacIntConstant(0);
                                 }
                             }
+                            // b 未知，无法断言
                         }
                     }
 
+                    // 无法断言的情况，需要生成指令来进行求值
                     String labelEvalEnd = makeLabel("eval_end");
                     TacVariable dst = new TacVariable(makeTempVar());
                     instructions.add(new TacCopy(new TacIntConstant(0), dst));
@@ -207,6 +291,7 @@ public final class AstToTacLowerer {
             // 普通求值
             TacValue lhs = lowerExpression(binaryExpressionNode.lhs, instructions);
             TacValue rhs = lowerExpression(binaryExpressionNode.rhs, instructions);
+            // TODO: 提取公共函数
             if (lhs instanceof TacIntConstant lhsInt && rhs instanceof TacIntConstant rhsInt) {
                 int res = switch (binaryExpressionNode.op.op) {
                     case ADD -> lhsInt.value + rhsInt.value;
@@ -266,13 +351,26 @@ public final class AstToTacLowerer {
             }
         } else if (expression instanceof ConditionalExpressionNode conditionalExpressionNode) {
             // 条件表达式
+            // cond ? a : b
+            // =>
+            // if (!cond) goto false
+            // tmp = a
+            // goto end
+            // false:
+            // tmp = b
+            // end:
+            // yield tmp
             String labelCondFalse = makeLabel("cond_false");
+
+            // 条件表达式也有求值顺序要求，先求条件值
             switch (lowerBoolean(conditionalExpressionNode.cond, labelCondFalse, true, instructions)) {
                 case ALWAYS_JUMP -> {
+                    // cond=0，只需求假分支即可
                     instructions.add(new TacLabel(labelCondFalse));
                     return lowerExpression(conditionalExpressionNode.elseExpr, instructions);
                 }
                 case NEVER_JUMP -> {
+                    // cond=1，只需求真分支即可
                     TacValue ret = lowerExpression(conditionalExpressionNode.thenExpr, instructions);
                     instructions.add(new TacLabel(labelCondFalse));
                     return ret;
@@ -295,6 +393,8 @@ public final class AstToTacLowerer {
 
     /**
      * 对表达式进行求值，在求值末尾处生成“若求值结果为真”则跳转的指令
+     * <p>
+     * 需要保证传入的标签始终有定义，即使该方法最终断言始终跳转或永不跳转也不例外
      *
      * @param expression   要求值的表达式
      * @param jumpTarget   生成跳转指令的跳转目标
@@ -304,7 +404,7 @@ public final class AstToTacLowerer {
      * {@link BooleanGenerationResult#NEVER_JUMP}，否则返回 {@link BooleanGenerationResult#VARIOUS}。
      * 返回 {@link BooleanGenerationResult#ALWAYS_JUMP} 或 {@link BooleanGenerationResult#NEVER_JUMP} 时将不生成任何跳转指令
      */
-    private BooleanGenerationResult lowerBoolean(
+    private @NotNull BooleanGenerationResult lowerBoolean(
         ExpressionNode expression, String jumpTarget, boolean inverse, List<TacInstruction> instructions) {
 
         if (expression instanceof IntConstantNode intConstantNode) {
@@ -323,84 +423,105 @@ public final class AstToTacLowerer {
                         // if (!(a && b)) jump => if (!a) jump ; if (!b) jump
                         switch (lowerBoolean(binaryExpressionNode.lhs, jumpTarget, true, instructions)) {
                             case VARIOUS -> {
+                                // a 未知
                                 if (lowerBoolean(
                                     binaryExpressionNode.rhs, jumpTarget, true, instructions) ==
                                     BooleanGenerationResult.ALWAYS_JUMP) {
+                                    // b=0 => !(a && b) = 1
                                     return BooleanGenerationResult.ALWAYS_JUMP;
                                 } else {
+                                    // 无法断言
                                     return BooleanGenerationResult.VARIOUS;
                                 }
                             }
                             case ALWAYS_JUMP -> {
+                                // a=0 => !(a && b) = 1
                                 return BooleanGenerationResult.ALWAYS_JUMP;
                             }
                             case NEVER_JUMP -> {
-                                return lowerBoolean(binaryExpressionNode.lhs, jumpTarget, true, instructions);
+                                // a=1 => if (!b) jump;
+                                return lowerBoolean(binaryExpressionNode.rhs, jumpTarget, true, instructions);
                             }
                         }
-                        lowerBoolean(binaryExpressionNode.rhs, jumpTarget, true, instructions);
                     } else {
-                        // if (a && b) jump => if (!a) jump false ; if (b) jump
+                        // if (a && b) jump => if (!a) jump false ; if (b) jump; false:
                         String label = makeLabel("and_false");
                         BooleanGenerationResult ret = BooleanGenerationResult.VARIOUS;
                         switch (lowerBoolean(binaryExpressionNode.lhs, label, true, instructions)) {
                             case VARIOUS -> {
+                                // a 未知
                                 if (lowerBoolean(
                                     binaryExpressionNode.rhs, jumpTarget, false, instructions) ==
                                     BooleanGenerationResult.NEVER_JUMP) {
+                                    // b=0 => a && b = 0
                                     ret = BooleanGenerationResult.NEVER_JUMP;
                                 }
+                                // 无法断言
                             }
                             case ALWAYS_JUMP -> {
+                                // a=0 => a && b = 0
                                 ret = BooleanGenerationResult.NEVER_JUMP;
                             }
                             case NEVER_JUMP -> {
-                                ret = lowerBoolean(binaryExpressionNode.lhs, jumpTarget, false, instructions);
+                                // a=1 => if (b) jump;
+                                ret = lowerBoolean(binaryExpressionNode.rhs, jumpTarget, false, instructions);
                             }
                         }
+                        // 保证标签有定义
                         instructions.add(new TacLabel(label));
                         return ret;
                     }
                 }
                 case LOGICAL_OR -> {
                     if (inverse) {
-                        // if (!(a || b)) jump => if (a) jump false ; if (!b) jump
+                        // if (!(a || b)) jump => if (a) jump false ; if (!b) jump; false:
                         String label = makeLabel("or_false");
                         BooleanGenerationResult ret = BooleanGenerationResult.VARIOUS;
                         switch (lowerBoolean(binaryExpressionNode.lhs, label, false, instructions)) {
                             case VARIOUS -> {
+                                // a 未知
                                 if (lowerBoolean(
                                     binaryExpressionNode.rhs, jumpTarget, true, instructions) ==
                                     BooleanGenerationResult.NEVER_JUMP) {
+                                    // b=1 => !(a || b) = 0
                                     ret = BooleanGenerationResult.NEVER_JUMP;
                                 }
+                                // 无法断言
                             }
                             case ALWAYS_JUMP -> {
+                                // a=1 => !(a || b) = 0
                                 ret = BooleanGenerationResult.NEVER_JUMP;
                             }
                             case NEVER_JUMP -> {
-                                ret = lowerBoolean(binaryExpressionNode.lhs, jumpTarget, true, instructions);
+                                // a=0 => if (!b) jump;
+                                ret = lowerBoolean(binaryExpressionNode.rhs, jumpTarget, true, instructions);
                             }
                         }
+                        // 保证标签有定义
                         instructions.add(new TacLabel(label));
                         return ret;
                     } else {
                         // if (a || b) jump => if (a) jump ; if (b) jump
                         switch (lowerBoolean(binaryExpressionNode.lhs, jumpTarget, false, instructions)) {
                             case VARIOUS -> {
+                                // a 未知
                                 if (lowerBoolean(
                                     binaryExpressionNode.rhs, jumpTarget, false, instructions) ==
                                     BooleanGenerationResult.ALWAYS_JUMP) {
+                                    // b=1 => a || b = 1
                                     return BooleanGenerationResult.ALWAYS_JUMP;
                                 } else {
+                                    // 无法断言
                                     return BooleanGenerationResult.VARIOUS;
                                 }
                             }
                             case ALWAYS_JUMP -> {
+                                // a=1 => a || b = 1
                                 return BooleanGenerationResult.ALWAYS_JUMP;
                             }
                             case NEVER_JUMP -> {
-                                return lowerBoolean(binaryExpressionNode.lhs, jumpTarget, false, instructions);
+                                // a=0 => if (b) jump;
+                                return lowerBoolean(binaryExpressionNode.rhs, jumpTarget, false, instructions);
                             }
                         }
                     }
@@ -419,6 +540,7 @@ public final class AstToTacLowerer {
 
                     TacValue lhs = lowerExpression(binaryExpressionNode.lhs, instructions);
                     TacValue rhs = lowerExpression(binaryExpressionNode.rhs, instructions);
+                    // TODO: 提取函数
                     if (lhs instanceof TacIntConstant lhsInt && rhs instanceof TacIntConstant rhsInt) {
                         boolean isJump = switch (cond) {
                             case EQUAL -> lhsInt.value == rhsInt.value;

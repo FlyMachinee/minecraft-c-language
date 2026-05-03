@@ -3,14 +3,14 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.as
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
-public class ReturnNode extends StatementNode {
-    public ExpressionNode expression;
-    public SourceLocation returnLocation;
+public final class GotoNode extends StatementNode {
+    public IdentifierNode target;
+    public SourceLocation gotoLocation;
 
-    public ReturnNode(SourceLocation returnLocation, ExpressionNode expression) {
-        super(SourceLocation.concat(returnLocation, expression.wholeLocation));
-        this.returnLocation = returnLocation;
-        this.expression = expression;
+    public GotoNode(SourceLocation gotoLocation, IdentifierNode target) {
+        super(SourceLocation.concat(gotoLocation, target.wholeLocation));
+        this.target = target;
+        this.gotoLocation = gotoLocation;
     }
 
     @Override
@@ -21,16 +21,14 @@ public class ReturnNode extends StatementNode {
     @Override
     public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) { stringBuilder.append("  ".repeat(indentLevel)); }
-        stringBuilder.append("ReturnNode(\n");
+        stringBuilder.append("GotoNode(\n");
         if (!gotoLabels.isEmpty()) {
             stringBuilder.append("  ".repeat(indentLevel + 1));
             genFormatedStringForGotoLabels(stringBuilder);
             stringBuilder.append(",\n");
         }
-        stringBuilder.append("  ".repeat(indentLevel + 1)).append("exp=");
-        expression.genFormattedString(stringBuilder, indentLevel + 1, false);
-        stringBuilder.append("  ".repeat(indentLevel));
-        stringBuilder.append(")\n");
+        stringBuilder.append("  ".repeat(indentLevel + 1)).append("target=");
+        target.genFormattedString(stringBuilder, indentLevel + 1, false);
+        stringBuilder.append("  ".repeat(indentLevel)).append(")\n");
     }
 }
-

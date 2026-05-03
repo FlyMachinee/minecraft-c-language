@@ -20,7 +20,13 @@ public class ExpressionStatementNode extends StatementNode {
         if (indentFirstLine) {
             stringBuilder.append("  ".repeat(indentLevel));
         }
-        stringBuilder.append("ExpressionStatementNode(\n").append("  ".repeat(indentLevel + 1)).append("exp=");
+        stringBuilder.append("ExpressionStatementNode(\n");
+        if (!gotoLabels.isEmpty()) {
+            stringBuilder.append("  ".repeat(indentLevel + 1));
+            genFormatedStringForGotoLabels(stringBuilder);
+            stringBuilder.append(",\n");
+        }
+        stringBuilder.append("  ".repeat(indentLevel + 1)).append("exp=");
         expression.genFormattedString(stringBuilder, indentLevel + 1, false);
         stringBuilder.append("  ".repeat(indentLevel)).append(")\n");
     }

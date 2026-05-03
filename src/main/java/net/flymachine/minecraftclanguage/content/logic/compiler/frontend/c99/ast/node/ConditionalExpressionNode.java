@@ -22,6 +22,16 @@ public final class ConditionalExpressionNode extends ExpressionNode {
 
     @Override
     public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
-
+        if (indentFirstLine) {
+            stringBuilder.append("    ".repeat(indentLevel));
+        }
+        stringBuilder.append("ConditionalExpressionNode(\n");
+        stringBuilder.append("  ".repeat(indentLevel + 1)).append("cond=");
+        cond.genFormattedString(stringBuilder, indentLevel + 1, false);
+        stringBuilder.append("  ".repeat(indentLevel + 1)).append("thenExpr=");
+        thenExpr.genFormattedString(stringBuilder, indentLevel + 1, false);
+        stringBuilder.append("  ".repeat(indentLevel + 1)).append("elseExpr=");
+        elseExpr.genFormattedString(stringBuilder, indentLevel + 1, false);
+        stringBuilder.append("  ".repeat(indentLevel)).append(")\n");
     }
 }
