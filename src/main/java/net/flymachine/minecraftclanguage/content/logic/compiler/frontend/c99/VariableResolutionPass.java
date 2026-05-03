@@ -149,4 +149,22 @@ public final class VariableResolutionPass implements AstVisitor<Void> {
         node.operand.accept(this);
         return null;
     }
+
+    @Override
+    public Void visit(IfStatementNode node) {
+        node.cond.accept(this);
+        node.thenStmt.accept(this);
+        if (node.elseStmt != null) {
+            node.elseStmt.accept(this);
+        }
+        return null;
+    }
+
+    @Override
+    public Void visit(ConditionalExpressionNode node) {
+        node.cond.accept(this);
+        node.thenExpr.accept(this);
+        node.elseExpr.accept(this);
+        return null;
+    }
 }

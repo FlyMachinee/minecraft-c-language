@@ -37,6 +37,9 @@ public final class C99Frontend {
         parser.addErrorListener(parserErrorListener);
 
         C99Parser.CompilationUnitContext tree = parser.compilationUnit();
+        if (lexerErrorListener.hasErrors() || parserErrorListener.hasErrors()) {
+            return null;
+        }
 
         AstNode ast = new AstBuilderVisitor().visit(tree);
 
@@ -44,7 +47,7 @@ public final class C99Frontend {
         pass1.setSourceFile(sourceFile);
         ast.accept(pass1);
 
-        if (lexerErrorListener.hasErrors() || parser.getNumberOfSyntaxErrors() > 0 || pass1.hasSemanticError()) {
+        if (pass1.hasSemanticError()) {
             return null;
         }
 

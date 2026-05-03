@@ -2,6 +2,8 @@ lexer grammar C99Lexer;
 
 // Keywords
 
+Else: 'else';
+If: 'if';
 Int: 'int';
 Return: 'return';
 Void: 'void';
@@ -46,6 +48,8 @@ OrOr: '||';
 Caret: '^';
 Not: '!';
 Tilde: '~';
+Question: '?';
+Colon: ':';
 Assign: '=';
 StarAssign: '*=';
 DivideAssign: '/=';

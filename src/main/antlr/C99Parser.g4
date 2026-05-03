@@ -135,6 +135,7 @@ logicalOrExpression
 // ISO 6.5.15, Conditional Operator
 conditionalExpression
     : logicalOrExpression
+    | logicalOrExpression Question expression Colon conditionalExpression
     ;
 
 // ISO 6.5.16, Assignment Operators
@@ -206,6 +207,7 @@ initializer
 // ISO 6.8, Statements and Blocks
 statement
     : expressionStatement
+    | selectionStatement
     | jumpStatement
     ;
 
@@ -224,6 +226,11 @@ blockItem
 // ISO 6.8.3, Expression and Null Statements
 expressionStatement
     : expression? Semicolon
+    ;
+
+// ISO 6.8.4, Selection Statements
+selectionStatement
+    : If LeftParen expression RightParen statement (Else statement)?
     ;
 
 // ISO 6.8.6, Jump Statements

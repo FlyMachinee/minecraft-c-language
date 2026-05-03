@@ -59,6 +59,22 @@ public final class AstToTacLowerer {
             instructions.add(new TacReturn(returnValue));
         } else if (statement instanceof ExpressionStatementNode expressionStatementNode) {
             lowerExpression(expressionStatementNode.expression, instructions);
+        } else if (statement instanceof IfStatementNode ifStatementNode) {
+            if (ifStatementNode.elseStmt != null) {
+                String labelElse = makeLabel("else");
+                String labelEndIf = makeLabel("endif");
+                lowerBoolean(ifStatementNode.cond, labelElse, true, instructions);
+                lowerStatement(ifStatementNode.thenStmt, instructions);
+                instructions.add(new TacJump(labelEndIf));
+                instructions.add(new TacLabel(labelElse));
+                lowerStatement(ifStatementNode.elseStmt, instructions);
+                instructions.add(new TacLabel(labelEndIf));
+            } else {
+                String labelEndIf = makeLabel("endif");
+                lowerBoolean(ifStatementNode.cond, labelEndIf, true, instructions);
+                lowerStatement(ifStatementNode.thenStmt, instructions);
+                instructions.add(new TacLabel(labelEndIf));
+            }
         } else if (!(statement instanceof NullStatementNode)) {
             throw new UnsupportedOperationException(
                 "Unsupported statement type: " + statement.getClass().getSimpleName());
@@ -148,6 +164,20 @@ public final class AstToTacLowerer {
                 instructions.add(new TacBinaryOperation(op, dst, new TacIntConstant(1), dst));
                 return temp;
             }
+        } else if (expression instanceof ConditionalExpressionNode conditionalExpressionNode) {
+            // 条件表达式
+            String labelCondFalse = makeLabel("cond_false");
+            String labelCondEnd = makeLabel("cond_end");
+            TacVariable dst = new TacVariable(makeTempVar());
+            lowerBoolean(conditionalExpressionNode.cond, labelCondFalse, true, instructions);
+            TacValue thenValue = lowerExpression(conditionalExpressionNode.thenExpr, instructions);
+            instructions.add(new TacCopy(thenValue, dst));
+            instructions.add(new TacJump(labelCondEnd));
+            instructions.add(new TacLabel(labelCondFalse));
+            TacValue elseValue = lowerExpression(conditionalExpressionNode.elseExpr, instructions);
+            instructions.add(new TacCopy(elseValue, dst));
+            instructions.add(new TacLabel(labelCondEnd));
+            return dst;
         }
         throw new UnsupportedOperationException(
             "Unsupported expression type: " + expression.getClass().getSimpleName());

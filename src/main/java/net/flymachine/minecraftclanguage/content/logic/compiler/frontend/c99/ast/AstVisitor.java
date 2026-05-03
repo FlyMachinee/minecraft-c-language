@@ -22,4 +22,8 @@ public interface AstVisitor<T> {
     T visit(AssignmentNode node);
 
     T visit(IncrementDecrementNode node);
+
+    T visit(IfStatementNode node);
+
+    T visit(ConditionalExpressionNode node);
 }

@@ -11,6 +11,7 @@ import org.antlr.v4.runtime.misc.IntervalSet;
 public class ParserErrorListener extends BaseErrorListener {
 
     private Logger logger;
+    private boolean hasErrors = false;
     private SourceFile sourceFile;
 
     public ParserErrorListener() {
@@ -27,6 +28,10 @@ public class ParserErrorListener extends BaseErrorListener {
 
     public void setLogger(Logger logger) {
         this.logger = logger;
+    }
+
+    public boolean hasErrors() {
+        return hasErrors;
     }
 
     public SourceFile getSourceFile() {
@@ -79,5 +84,6 @@ public class ParserErrorListener extends BaseErrorListener {
             "' after '" + logger.formatWithColor(previousTokenText, Logger.Color.WHITE) +
             "', expecting " + expectingList;
         ErrorHandleUtil.logErrorWithSourceLine(logger, sourceFile, line, charPositionInLine, tokenLength, errorInfo);
+        hasErrors = true;
     }
 }

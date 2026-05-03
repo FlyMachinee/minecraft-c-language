@@ -95,6 +95,21 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
     }
 
     @Override
+    public StatementNode visitSelectionStatement(C99Parser.SelectionStatementContext ctx) {
+        if (ctx.If() != null) {
+            ExpressionNode cond = (ExpressionNode) visit(ctx.expression());
+            StatementNode thenStmt = (StatementNode) visit(ctx.statement(0));
+            if (ctx.Else() != null) {
+                StatementNode elseStmt = (StatementNode) visit(ctx.statement(1));
+                return new IfStatementNode(cond, thenStmt, elseStmt);
+            } else {
+                return new IfStatementNode(cond, thenStmt);
+            }
+        }
+        return null;
+    }
+
+    @Override
     public ReturnNode visitJumpStatement(C99Parser.JumpStatementContext ctx) {
         ExpressionNode expression = (ExpressionNode) visit(ctx.expression());
         return new ReturnNode(getSourceLocation(ctx.Return()), expression);
@@ -328,6 +343,20 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
             return (ExpressionNode) visit(ctx.logicalAndExpression());
         } else {
             throw new RuntimeException("Unknown logical or expression");
+        }
+    }
+
+    @Override
+    public ExpressionNode visitConditionalExpression(C99Parser.ConditionalExpressionContext ctx) {
+        if (ctx.Question() != null) {
+            ExpressionNode cond = (ExpressionNode) visit(ctx.logicalOrExpression());
+            ExpressionNode thenExpr = (ExpressionNode) visit(ctx.expression());
+            ExpressionNode elseExpr = (ExpressionNode) visit(ctx.conditionalExpression());
+            return new ConditionalExpressionNode(cond, thenExpr, elseExpr);
+        } else if (ctx.logicalOrExpression() != null) {
+            return (ExpressionNode) visit(ctx.logicalOrExpression());
+        } else {
+            throw new RuntimeException("Unknown conditional expression");
         }
     }
 
