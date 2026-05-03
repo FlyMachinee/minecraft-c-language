@@ -1,4 +1,11 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node;
 
-public interface ExpressionNode extends StatementNode { }
+import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
+
+public abstract class ExpressionNode extends AstNode {
+    
+    protected ExpressionNode(SourceLocation wholeLocation) {
+        super(wholeLocation);
+    }
+}
 

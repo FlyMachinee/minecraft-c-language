@@ -4,12 +4,14 @@ import net.flymachine.minecraftclanguage.content.logger.ConsoleLogger;
 import net.flymachine.minecraftclanguage.content.logger.Logger;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.antlr.C99Parser;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.ErrorHandleUtil;
+import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceFile;
 import org.antlr.v4.runtime.*;
 import org.antlr.v4.runtime.misc.IntervalSet;
 
 public class ParserErrorListener extends BaseErrorListener {
 
     private Logger logger;
+    private SourceFile sourceFile;
 
     public ParserErrorListener() {
         this.logger = new ConsoleLogger();
@@ -27,6 +29,14 @@ public class ParserErrorListener extends BaseErrorListener {
         this.logger = logger;
     }
 
+    public SourceFile getSourceFile() {
+        return sourceFile;
+    }
+
+    public void setSourceFile(SourceFile sourceFile) {
+        this.sourceFile = sourceFile;
+    }
+
     @Override
     public void syntaxError(
         Recognizer<?, ?> recognizer, Object offendingSymbol, int line,
@@ -34,7 +44,6 @@ public class ParserErrorListener extends BaseErrorListener {
 
         C99Parser parser = (C99Parser) recognizer;
         TokenStream stream = parser.getInputStream();
-        String sourceName = parser.getSourceName();
 
         Token offendingToken = (Token) offendingSymbol;
         String errorToken = offendingToken.getText();
@@ -43,7 +52,7 @@ public class ParserErrorListener extends BaseErrorListener {
         }
         int tokenLength = errorToken.equals("<EOF>") ? 0 : errorToken.length();
 
-        String previousTokenText = "";
+        String previousTokenText;
         int idx = offendingToken.getTokenIndex();
         if (idx > 0) {
             Token prev = stream.get(idx - 1);
@@ -52,7 +61,7 @@ public class ParserErrorListener extends BaseErrorListener {
             previousTokenText = "start of input";
         }
 
-        String expectingList = "";
+        String expectingList;
         IntervalSet expectedTokens;
         if (e != null) {
             expectedTokens = e.getExpectedTokens();
@@ -66,29 +75,9 @@ public class ParserErrorListener extends BaseErrorListener {
         }
 
         String errorInfo =
-            logger.formatWithColor(sourceName + ":" + line + ":" + charPositionInLine + ": ", Logger.Color.WHITE) +
-            logger.formatWithColor("error: ", Logger.Color.RED) +
             "unexpected '" + logger.formatWithColor(errorToken, Logger.Color.WHITE) +
             "' after '" + logger.formatWithColor(previousTokenText, Logger.Color.WHITE) +
             "', expecting " + expectingList;
-
-        logger.logLine(errorInfo);
-
-        TokenSource tokenSource = stream.getTokenSource();
-
-        CharStream charStream = null;
-        if (tokenSource instanceof Lexer) {
-            charStream = tokenSource.getInputStream();
-        }
-
-        if (charStream != null) {
-            ErrorHandleUtil.logSourceLineWithColor(
-                logger,
-                charStream,
-                line,
-                charPositionInLine,
-                tokenLength,
-                Logger.Color.RED);
-        }
+        ErrorHandleUtil.logErrorWithSourceLine(logger, sourceFile, line, charPositionInLine, tokenLength, errorInfo);
     }
 }

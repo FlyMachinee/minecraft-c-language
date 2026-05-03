@@ -1,13 +1,14 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node;
 
-import net.flymachine.minecraftclanguage.content.logic.compiler.common.UnaryOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
+import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
-public class UnaryExpressionNode implements ExpressionNode {
-    public UnaryOperator op;
+public class UnaryExpressionNode extends ExpressionNode {
+    public UnaryOperatorNode op;
     public ExpressionNode exp;
 
-    public UnaryExpressionNode(UnaryOperator op, ExpressionNode exp) {
+    public UnaryExpressionNode(UnaryOperatorNode op, ExpressionNode exp) {
+        super(SourceLocation.concat(op.wholeLocation, exp.wholeLocation));
         this.op = op;
         this.exp = exp;
     }
@@ -20,13 +21,10 @@ public class UnaryExpressionNode implements ExpressionNode {
     @Override
     public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) { stringBuilder.append("  ".repeat(indentLevel)); }
-        stringBuilder.append("UnaryExpressionNode(\n");
-        stringBuilder.append("  ".repeat(indentLevel + 1));
-        stringBuilder.append("op=").append(op).append(",\n");
-        stringBuilder.append("  ".repeat(indentLevel + 1));
-        stringBuilder.append("exp=");
+        stringBuilder.append("UnaryExpressionNode(\n").append("  ".repeat(indentLevel + 1)).append("op=");
+        op.genFormattedString(stringBuilder);
+        stringBuilder.append(",\n").append("  ".repeat(indentLevel + 1)).append("exp=");
         exp.genFormattedString(stringBuilder, indentLevel + 1, false);
-        stringBuilder.append("  ".repeat(indentLevel));
-        stringBuilder.append(")\n");
+        stringBuilder.append("  ".repeat(indentLevel)).append(")\n");
     }
 }

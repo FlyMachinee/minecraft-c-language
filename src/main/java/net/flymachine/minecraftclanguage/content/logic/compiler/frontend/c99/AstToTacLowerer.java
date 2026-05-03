@@ -43,22 +43,22 @@ public final class AstToTacLowerer {
             } else if (blockItemNode instanceof DeclarationNode declarationNode) {
                 if (declarationNode.initializer != null) {
                     TacValue initValue = lowerExpression(declarationNode.initializer, instructions);
-                    instructions.add(new TacCopy(initValue, new TacVariable(declarationNode.identifier)));
+                    instructions.add(new TacCopy(initValue, new TacVariable(declarationNode.variable.id)));
                 }
             } else {
                 throw new RuntimeException("Unknown instruction: " + blockItemNode.toString());
             }
         }
         instructions.add(new TacReturn(new TacIntConstant(0)));
-        return new TacFunction(functionDefinition.name, instructions);
+        return new TacFunction(functionDefinition.identifier.id, instructions);
     }
 
     private void lowerStatement(StatementNode statement, List<TacInstruction> instructions) {
         if (statement instanceof ReturnNode returnNode) {
             TacValue returnValue = lowerExpression(returnNode.expression, instructions);
             instructions.add(new TacReturn(returnValue));
-        } else if (statement instanceof ExpressionNode expressionNode) {
-            lowerExpression(expressionNode, instructions);
+        } else if (statement instanceof ExpressionStatementNode expressionStatementNode) {
+            lowerExpression(expressionStatementNode.expression, instructions);
         } else if (!(statement instanceof NullStatementNode)) {
             throw new UnsupportedOperationException(
                 "Unsupported statement type: " + statement.getClass().getSimpleName());
@@ -79,11 +79,11 @@ public final class AstToTacLowerer {
         } else if (expression instanceof UnaryExpressionNode unaryExpressionNode) {
             TacValue src = lowerExpression(unaryExpressionNode.exp, instructions);
             TacVariable dst = new TacVariable(makeTempVar());
-            instructions.add(new TacUnaryOperation(unaryExpressionNode.op, src, dst));
+            instructions.add(new TacUnaryOperation(unaryExpressionNode.op.op, src, dst));
             return dst;
         } else if (expression instanceof BinaryExpressionNode binaryExpressionNode) {
             // 短路求值
-            switch (binaryExpressionNode.op) {
+            switch (binaryExpressionNode.op.op) {
                 case LOGICAL_AND -> {
                     // 短路与求值
                     String labelFalse = makeLabel("and_false");
@@ -117,26 +117,26 @@ public final class AstToTacLowerer {
             TacValue lhs = lowerExpression(binaryExpressionNode.lhs, instructions);
             TacValue rhs = lowerExpression(binaryExpressionNode.rhs, instructions);
             TacVariable dst = new TacVariable(makeTempVar());
-            instructions.add(new TacBinaryOperation(binaryExpressionNode.op, lhs, rhs, dst));
+            instructions.add(new TacBinaryOperation(binaryExpressionNode.op.op, lhs, rhs, dst));
             return dst;
         } else if (expression instanceof AssignmentNode assignmentNode) {
             // 赋值表达式
             TacValue rhs = lowerExpression(assignmentNode.rhs, instructions);
-            TacVariable dst = new TacVariable(((VariableNode) assignmentNode.lhs).identifier);
-            if (assignmentNode.operator == AssignmentOperator.ASSIGN) {
+            TacVariable dst = new TacVariable(((IdentifierNode) assignmentNode.lhs).id);
+            if (assignmentNode.op.op == AssignmentOperator.ASSIGN) {
                 // 普通赋值
                 instructions.add(new TacCopy(rhs, dst));
             } else {
                 // 复合赋值
-                instructions.add(new TacBinaryOperation(assignmentNode.operator.getBinaryOperator(), dst, rhs, dst));
+                instructions.add(new TacBinaryOperation(assignmentNode.op.op.getBinaryOperator(), dst, rhs, dst));
             }
             return dst;
-        } else if (expression instanceof VariableNode variableNode) {
-            return new TacVariable(variableNode.identifier);
+        } else if (expression instanceof IdentifierNode identifierNode) {
+            return new TacVariable(identifierNode.id);
         } else if (expression instanceof IncrementDecrementNode incrementDecrementNode) {
             // 自增自减表达式
             BinaryOperator op = incrementDecrementNode.isIncrement ? BinaryOperator.ADD : BinaryOperator.SUBTRACT;
-            TacVariable dst = new TacVariable(((VariableNode) incrementDecrementNode.operand).identifier);
+            TacVariable dst = new TacVariable(((IdentifierNode) incrementDecrementNode.operand).id);
             if (incrementDecrementNode.isPrefix) {
                 // ++/--a => a = a +/- 1; yield a;
                 instructions.add(new TacBinaryOperation(op, dst, new TacIntConstant(1), dst));
@@ -173,7 +173,7 @@ public final class AstToTacLowerer {
         }
 
         if (expression instanceof BinaryExpressionNode binaryExpressionNode) {
-            switch (binaryExpressionNode.op) {
+            switch (binaryExpressionNode.op.op) {
                 case LOGICAL_AND -> {
                     if (inverse) {
                         // if (!(a && b)) jump => if (!a) jump ; if (!b) jump
@@ -204,7 +204,7 @@ public final class AstToTacLowerer {
                 }
                 case EQUAL, NOT_EQUAL, LESS_THAN, LESS_OR_EQUAL, GREATER_THAN, GREATER_OR_EQUAL -> {
                     // 直接生成比较跳转指令，而不是比较置位指令
-                    Comparison cond = switch (binaryExpressionNode.op) {
+                    Comparison cond = switch (binaryExpressionNode.op.op) {
                         case EQUAL -> inverse ? Comparison.NOT_EQUAL : Comparison.EQUAL;
                         case NOT_EQUAL -> inverse ? Comparison.EQUAL : Comparison.NOT_EQUAL;
                         case LESS_THAN -> inverse ? Comparison.GREATER_EQUAL : Comparison.LESS;
@@ -221,7 +221,7 @@ public final class AstToTacLowerer {
                 }
             }
         } else if (expression instanceof UnaryExpressionNode unaryExpressionNode) {
-            if (unaryExpressionNode.op == UnaryOperator.NOT) {
+            if (unaryExpressionNode.op.op == UnaryOperator.NOT) {
                 lowerBoolean(unaryExpressionNode.exp, jumpTarget, !inverse, instructions);
                 return;
             }

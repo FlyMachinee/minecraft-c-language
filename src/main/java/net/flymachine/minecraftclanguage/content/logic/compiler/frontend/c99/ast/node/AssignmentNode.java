@@ -1,21 +1,16 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node;
 
-import net.flymachine.minecraftclanguage.content.logic.compiler.common.AssignmentOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
+import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
-public class AssignmentNode implements ExpressionNode {
-    public AssignmentOperator operator;
+public class AssignmentNode extends ExpressionNode {
+    public AssignmentOperatorNode op;
     public ExpressionNode lhs;
     public ExpressionNode rhs;
 
-    public AssignmentNode(ExpressionNode lhs, ExpressionNode rhs) {
-        operator = AssignmentOperator.ASSIGN;
-        this.lhs = lhs;
-        this.rhs = rhs;
-    }
-
-    public AssignmentNode(AssignmentOperator operator, ExpressionNode lhs, ExpressionNode rhs) {
-        this.operator = operator;
+    public AssignmentNode(AssignmentOperatorNode op, ExpressionNode lhs, ExpressionNode rhs) {
+        super(SourceLocation.concat(lhs.wholeLocation, rhs.wholeLocation));
+        this.op = op;
         this.lhs = lhs;
         this.rhs = rhs;
     }
@@ -28,9 +23,9 @@ public class AssignmentNode implements ExpressionNode {
     @Override
     public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) { stringBuilder.append("  ".repeat(indentLevel)); }
-        stringBuilder.append("AssignmentNode(\n");
-        stringBuilder.append("  ".repeat(indentLevel + 1)).append("op=").append(operator).append("\n");
-        stringBuilder.append("  ".repeat(indentLevel + 1)).append("lhs=");
+        stringBuilder.append("AssignmentNode(\n").append("  ".repeat(indentLevel + 1)).append("op=");
+        op.genFormattedString(stringBuilder);
+        stringBuilder.append("\n").append("  ".repeat(indentLevel + 1)).append("lhs=");
         lhs.genFormattedString(stringBuilder, indentLevel + 1, false);
         stringBuilder.append("  ".repeat(indentLevel + 1)).append("rhs=");
         rhs.genFormattedString(stringBuilder, indentLevel + 1, false);

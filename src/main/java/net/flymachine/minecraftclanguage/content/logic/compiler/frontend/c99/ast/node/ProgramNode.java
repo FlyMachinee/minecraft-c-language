@@ -2,10 +2,11 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.as
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
 
-public class ProgramNode implements AstNode {
+public class ProgramNode extends AstNode {
     public FunctionDefinitionNode functionDefinition;
 
     public ProgramNode(FunctionDefinitionNode functionDefinition) {
+        super(functionDefinition.wholeLocation);
         this.functionDefinition = functionDefinition;
     }
 

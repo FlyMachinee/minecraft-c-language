@@ -1,12 +1,15 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node;
 
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.AssignmentOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
-public class NullStatementNode extends StatementNode {
+public final class AssignmentOperatorNode extends AstNode {
+    public AssignmentOperator op;
 
-    public NullStatementNode(SourceLocation wholeLocation) {
+    public AssignmentOperatorNode(SourceLocation wholeLocation, AssignmentOperator op) {
         super(wholeLocation);
+        this.op = op;
     }
 
     @Override
@@ -16,9 +19,6 @@ public class NullStatementNode extends StatementNode {
 
     @Override
     public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
-        if (indentFirstLine) {
-            stringBuilder.append("  ".repeat(indentLevel));
-        }
-        stringBuilder.append("NullStatementNode()\n");
+        stringBuilder.append(op);
     }
 }

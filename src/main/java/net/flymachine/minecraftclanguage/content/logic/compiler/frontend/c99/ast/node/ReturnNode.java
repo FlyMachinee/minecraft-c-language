@@ -1,12 +1,15 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node;
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
+import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
-// public record ReturnNode(ExpressionNode expression) implements StatementNode {
-public class ReturnNode implements StatementNode {
+public class ReturnNode extends StatementNode {
     public ExpressionNode expression;
+    public SourceLocation returnLocation;
 
-    public ReturnNode(ExpressionNode expression) {
+    public ReturnNode(SourceLocation returnLocation, ExpressionNode expression) {
+        super(SourceLocation.concat(returnLocation, expression.wholeLocation));
+        this.returnLocation = returnLocation;
         this.expression = expression;
     }
 

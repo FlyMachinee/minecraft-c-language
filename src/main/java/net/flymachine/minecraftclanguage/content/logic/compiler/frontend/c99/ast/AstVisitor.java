@@ -9,17 +9,15 @@ public interface AstVisitor<T> {
 
     T visit(ReturnNode node);
 
-    T visit(IntConstantNode node);
-
     T visit(UnaryExpressionNode node);
 
     T visit(BinaryExpressionNode node);
 
     T visit(DeclarationNode node);
 
-    T visit(NullStatementNode node);
+    T visit(ExpressionStatementNode node);
 
-    T visit(VariableNode node);
+    T visit(IdentifierNode node);
 
     T visit(AssignmentNode node);
 
