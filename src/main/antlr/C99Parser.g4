@@ -13,24 +13,24 @@ compilationUnit:
 
 // ISO 6.5.1, Primary Expressions
 primaryExpression
-    : Identifier                        # IdentifierExpression
-    | IntegerConstant                   # IntegerConstantExpression
-    | LeftParen expression RightParen   # ParenthesizedExpression
+    : Identifier
+    | IntegerConstant
+    | LeftParen expression RightParen
     ;
 
 // ISO 6.5.2, Postfix Operators
 postfixExpression
-    : primaryExpression             # DummyPrimaryExpressionToPostfixExpression
-    | postfixExpression PlusPlus    # PostfixIncrementOperatorExpression
-    | postfixExpression MinusMinus  # PostfixDecrementOperatorExpression
+    : primaryExpression
+    | postfixExpression PlusPlus
+    | postfixExpression MinusMinus
     ;
 
 // ISO 6.5.3, Unary Operators
 unaryExpression
-    : postfixExpression                 # DummyPostfixExpressionToUnaryExpression
-    | PlusPlus unaryExpression          # PrefixIncrementOperatorExpression
-    | MinusMinus unaryExpression        # PrefixDecrementOperatorExpression
-    | unaryOperator castExpression      # UnaryOperatorExpression
+    : postfixExpression
+    | PlusPlus unaryExpression
+    | MinusMinus unaryExpression
+    | unaryOperator castExpression
     ;
 
 unaryOperator
@@ -46,8 +46,8 @@ castExpression
 
 // ISO 6.5.5, Multiplicative Operators
 multiplicativeExpression
-    : castExpression                                                    # DummyCastExpressionToMultiplicativeExpression
-    | multiplicativeExpression multiplicativeOperator castExpression    # MultiplicativeOperatorExpression
+    : castExpression
+    | multiplicativeExpression multiplicativeOperator castExpression
     ;
 
 multiplicativeOperator
@@ -58,8 +58,8 @@ multiplicativeOperator
 
 // ISO 6.5.6, Additive Operators
 additiveExpression
-    : multiplicativeExpression                                      # DummyMultiplicativeExpressionToAdditiveExpression
-    | additiveExpression additiveOperator multiplicativeExpression  # AdditiveOperatorExpression
+    : multiplicativeExpression
+    | additiveExpression additiveOperator multiplicativeExpression
     ;
 
 additiveOperator
@@ -69,8 +69,8 @@ additiveOperator
 
 // ISO 6.5.7, Bitwise Shift Operators
 shiftExpression
-    : additiveExpression                                # DummyAdditiveExpressionToShiftExpression
-    | shiftExpression shiftOperator additiveExpression  # ShiftOperatorExpression
+    : additiveExpression
+    | shiftExpression shiftOperator additiveExpression
     ;
 
 shiftOperator
@@ -80,8 +80,8 @@ shiftOperator
 
 // ISO 6.5.8, Relational Operators
 relationalExpression
-    : shiftExpression                                           # DummyShiftExpressionToRelationalExpression
-    | relationalExpression relationalOperator shiftExpression   # RelationalOperatorExpression
+    : shiftExpression
+    | relationalExpression relationalOperator shiftExpression
     ;
 
 relationalOperator
@@ -93,8 +93,8 @@ relationalOperator
 
 // ISO 6.5.9, Equality Operators
 equalityExpression
-    : relationalExpression                                      # DummyRelationalExpressionToEqualityExpression
-    | equalityExpression equalityOperator relationalExpression  # EqualityOperatorExpression
+    : relationalExpression
+    | equalityExpression equalityOperator relationalExpression
     ;
 
 equalityOperator
@@ -104,32 +104,32 @@ equalityOperator
 
 // ISO 6.5.10, Bitwise AND Operator
 andExpression
-    : equalityExpression                    # DummyEqualityExpressionToAndExpression
-    | andExpression And equalityExpression  # BitwiseAndOperatorExpression
+    : equalityExpression
+    | andExpression And equalityExpression
     ;
 
 // ISO 6.5.11, Bitwise exclusive OR Operator
 exclusiveOrExpression
-    : andExpression                             # DummyAndExpressionToExclusiveOrExpression
-    | exclusiveOrExpression Caret andExpression # BitwiseExclusiveOrOperatorExpression
+    : andExpression
+    | exclusiveOrExpression Caret andExpression
     ;
 
 // ISO 6.5.12, Bitwise inclusive OR Operator
 inclusiveOrExpression
-    : exclusiveOrExpression                             # DummyExclusiveOrExpressionToInclusiveOrExpression
-    | inclusiveOrExpression Or exclusiveOrExpression    # BitwiseInclusiveOrOperatorExpression
+    : exclusiveOrExpression
+    | inclusiveOrExpression Or exclusiveOrExpression
     ;
 
 // ISO 6.5.13, Logical AND Operator
 logicalAndExpression
-    : inclusiveOrExpression                              # DummyInclusiveOrExpressionToLogicalAndExpression
-    | logicalAndExpression AndAnd inclusiveOrExpression  # LogicalAndOperatorExpression
+    : inclusiveOrExpression
+    | logicalAndExpression AndAnd inclusiveOrExpression
     ;
 
 // ISO 6.5.14, Logical OR Operator
 logicalOrExpression
-    : logicalAndExpression                          # DummyLogicalAndExpressionToLogicalOrExpression
-    | logicalOrExpression OrOr logicalAndExpression # LogicalOrOperatorExpression
+    : logicalAndExpression
+    | logicalOrExpression OrOr logicalAndExpression
     ;
 
 // ISO 6.5.15, Conditional Operator
@@ -139,8 +139,8 @@ conditionalExpression
 
 // ISO 6.5.16, Assignment Operators
 assignmentExpression
-    : conditionalExpression                                     # DummyConditionalExpressionToAssignmentExpression
-    | unaryExpression assignmentOperator assignmentExpression   # AssignmentOperatorExpression
+    : conditionalExpression
+    | unaryExpression assignmentOperator assignmentExpression
     ;
 assignmentOperator
     : Assign

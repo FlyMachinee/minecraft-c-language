@@ -86,7 +86,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
     }
 
     @Override
-    public BlockItemNode visitExpressionStatement(C99Parser.ExpressionStatementContext ctx) {
+    public StatementNode visitExpressionStatement(C99Parser.ExpressionStatementContext ctx) {
         if (ctx.expression() != null) {
             return new ExpressionStatementNode((ExpressionNode) visit(ctx.expression()));
         } else {
@@ -101,51 +101,52 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
     }
 
     @Override
-    public IdentifierNode visitIdentifierExpression(C99Parser.IdentifierExpressionContext ctx) {
-        String identifier = ctx.Identifier().getText();
-        return new IdentifierNode(getSourceLocation(ctx.Identifier()), identifier);
+    public ExpressionNode visitPrimaryExpression(C99Parser.PrimaryExpressionContext ctx) {
+        if (ctx.Identifier() != null) {
+            String identifier = ctx.Identifier().getText();
+            return new IdentifierNode(getSourceLocation(ctx.Identifier()), identifier);
+        } else if (ctx.IntegerConstant() != null) {
+            int value = Integer.parseInt(ctx.IntegerConstant().getText());
+            return new IntConstantNode(getSourceLocation(ctx.IntegerConstant()), value);
+        } else if (ctx.LeftParen() != null) {
+            return (ExpressionNode) visit(ctx.expression());
+        } else {
+            throw new RuntimeException("Unknown primary expression");
+        }
     }
 
     @Override
-    public IntConstantNode visitIntegerConstantExpression(C99Parser.IntegerConstantExpressionContext ctx) {
-        int value = Integer.parseInt(ctx.IntegerConstant().getText());
-        return new IntConstantNode(getSourceLocation(ctx.IntegerConstant()), value);
+    public ExpressionNode visitPostfixExpression(C99Parser.PostfixExpressionContext ctx) {
+        if (ctx.primaryExpression() != null) {
+            return (ExpressionNode) visit(ctx.primaryExpression());
+        } else if (ctx.PlusPlus() != null) {
+            ExpressionNode operand = (ExpressionNode) visit(ctx.postfixExpression());
+            return new IncrementDecrementNode(getSourceLocation(ctx.PlusPlus()), true, false, operand);
+        } else if (ctx.MinusMinus() != null) {
+            ExpressionNode operand = (ExpressionNode) visit(ctx.postfixExpression());
+            return new IncrementDecrementNode(getSourceLocation(ctx.MinusMinus()), false, false, operand);
+        } else {
+            throw new RuntimeException("Unknown postfix expression");
+        }
     }
 
     @Override
-    public ExpressionNode visitParenthesizedExpression(C99Parser.ParenthesizedExpressionContext ctx) {
-        return (ExpressionNode) visit(ctx.expression());
-    }
-
-    @Override
-    public ExpressionNode visitPostfixIncrementOperatorExpression(C99Parser.PostfixIncrementOperatorExpressionContext ctx) {
-        ExpressionNode operand = (ExpressionNode) visit(ctx.postfixExpression());
-        return new IncrementDecrementNode(getSourceLocation(ctx.PlusPlus()), true, false, operand);
-    }
-
-    @Override
-    public ExpressionNode visitPostfixDecrementOperatorExpression(C99Parser.PostfixDecrementOperatorExpressionContext ctx) {
-        ExpressionNode operand = (ExpressionNode) visit(ctx.postfixExpression());
-        return new IncrementDecrementNode(getSourceLocation(ctx.MinusMinus()), false, false, operand);
-    }
-
-    @Override
-    public ExpressionNode visitPrefixIncrementOperatorExpression(C99Parser.PrefixIncrementOperatorExpressionContext ctx) {
-        ExpressionNode operand = (ExpressionNode) visit(ctx.unaryExpression());
-        return new IncrementDecrementNode(getSourceLocation(ctx.PlusPlus()), true, true, operand);
-    }
-
-    @Override
-    public ExpressionNode visitPrefixDecrementOperatorExpression(C99Parser.PrefixDecrementOperatorExpressionContext ctx) {
-        ExpressionNode operand = (ExpressionNode) visit(ctx.unaryExpression());
-        return new IncrementDecrementNode(getSourceLocation(ctx.MinusMinus()), false, true, operand);
-    }
-
-    @Override
-    public UnaryExpressionNode visitUnaryOperatorExpression(C99Parser.UnaryOperatorExpressionContext ctx) {
-        UnaryOperatorNode op = visitUnaryOperator(ctx.unaryOperator());
-        ExpressionNode operand = (ExpressionNode) visit(ctx.castExpression());
-        return new UnaryExpressionNode(op, operand);
+    public ExpressionNode visitUnaryExpression(C99Parser.UnaryExpressionContext ctx) {
+        if (ctx.postfixExpression() != null) {
+            return (ExpressionNode) visit(ctx.postfixExpression());
+        } else if (ctx.PlusPlus() != null) {
+            ExpressionNode operand = (ExpressionNode) visit(ctx.unaryExpression());
+            return new IncrementDecrementNode(getSourceLocation(ctx.PlusPlus()), true, true, operand);
+        } else if (ctx.MinusMinus() != null) {
+            ExpressionNode operand = (ExpressionNode) visit(ctx.unaryExpression());
+            return new IncrementDecrementNode(getSourceLocation(ctx.MinusMinus()), false, true, operand);
+        } else if (ctx.unaryOperator() != null) {
+            UnaryOperatorNode operator = (UnaryOperatorNode) visit(ctx.unaryOperator());
+            ExpressionNode operand = (ExpressionNode) visit(ctx.castExpression());
+            return new UnaryExpressionNode(operator, operand);
+        } else {
+            throw new RuntimeException("Unknown unary operator");
+        }
     }
 
     @Override
@@ -156,11 +157,17 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
     }
 
     @Override
-    public BinaryExpressionNode visitMultiplicativeOperatorExpression(C99Parser.MultiplicativeOperatorExpressionContext ctx) {
-        BinaryOperatorNode op = visitMultiplicativeOperator(ctx.multiplicativeOperator());
-        ExpressionNode lhs = (ExpressionNode) visit(ctx.multiplicativeExpression());
-        ExpressionNode rhs = (ExpressionNode) visit(ctx.castExpression());
-        return new BinaryExpressionNode(op, lhs, rhs);
+    public ExpressionNode visitMultiplicativeExpression(C99Parser.MultiplicativeExpressionContext ctx) {
+        if (ctx.multiplicativeOperator() != null) {
+            BinaryOperatorNode op = visitMultiplicativeOperator(ctx.multiplicativeOperator());
+            ExpressionNode lhs = (ExpressionNode) visit(ctx.multiplicativeExpression());
+            ExpressionNode rhs = (ExpressionNode) visit(ctx.castExpression());
+            return new BinaryExpressionNode(op, lhs, rhs);
+        } else if (ctx.castExpression() != null) {
+            return (ExpressionNode) visit(ctx.castExpression());
+        } else {
+            throw new RuntimeException("Unknown multiplicative expression");
+        }
     }
 
     @Override
@@ -171,11 +178,17 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
     }
 
     @Override
-    public BinaryExpressionNode visitAdditiveOperatorExpression(C99Parser.AdditiveOperatorExpressionContext ctx) {
-        BinaryOperatorNode op = visitAdditiveOperator(ctx.additiveOperator());
-        ExpressionNode lhs = (ExpressionNode) visit(ctx.additiveExpression());
-        ExpressionNode rhs = (ExpressionNode) visit(ctx.multiplicativeExpression());
-        return new BinaryExpressionNode(op, lhs, rhs);
+    public ExpressionNode visitAdditiveExpression(C99Parser.AdditiveExpressionContext ctx) {
+        if (ctx.additiveOperator() != null) {
+            BinaryOperatorNode op = visitAdditiveOperator(ctx.additiveOperator());
+            ExpressionNode lhs = (ExpressionNode) visit(ctx.additiveExpression());
+            ExpressionNode rhs = (ExpressionNode) visit(ctx.multiplicativeExpression());
+            return new BinaryExpressionNode(op, lhs, rhs);
+        } else if (ctx.multiplicativeExpression() != null) {
+            return (ExpressionNode) visit(ctx.multiplicativeExpression());
+        } else {
+            throw new RuntimeException("Unknown additive expression");
+        }
     }
 
     @Override
@@ -186,11 +199,17 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
     }
 
     @Override
-    public BinaryExpressionNode visitShiftOperatorExpression(C99Parser.ShiftOperatorExpressionContext ctx) {
-        BinaryOperatorNode op = visitShiftOperator(ctx.shiftOperator());
-        ExpressionNode lhs = (ExpressionNode) visit(ctx.shiftExpression());
-        ExpressionNode rhs = (ExpressionNode) visit(ctx.additiveExpression());
-        return new BinaryExpressionNode(op, lhs, rhs);
+    public ExpressionNode visitShiftExpression(C99Parser.ShiftExpressionContext ctx) {
+        if (ctx.shiftOperator() != null) {
+            BinaryOperatorNode op = visitShiftOperator(ctx.shiftOperator());
+            ExpressionNode lhs = (ExpressionNode) visit(ctx.shiftExpression());
+            ExpressionNode rhs = (ExpressionNode) visit(ctx.additiveExpression());
+            return new BinaryExpressionNode(op, lhs, rhs);
+        } else if (ctx.additiveExpression() != null) {
+            return (ExpressionNode) visit(ctx.additiveExpression());
+        } else {
+            throw new RuntimeException("Unknown shift expression");
+        }
     }
 
     @Override
@@ -201,41 +220,17 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
     }
 
     @Override
-    public BinaryExpressionNode visitBitwiseAndOperatorExpression(C99Parser.BitwiseAndOperatorExpressionContext ctx) {
-        ExpressionNode lhs = (ExpressionNode) visit(ctx.andExpression());
-        ExpressionNode rhs = (ExpressionNode) visit(ctx.equalityExpression());
-        return new BinaryExpressionNode(
-            new BinaryOperatorNode(
-                getSourceLocation(ctx.andExpression()),
-                BinaryOperator.BITWISE_AND), lhs, rhs);
-    }
-
-    @Override
-    public BinaryExpressionNode visitBitwiseExclusiveOrOperatorExpression(C99Parser.BitwiseExclusiveOrOperatorExpressionContext ctx) {
-        ExpressionNode lhs = (ExpressionNode) visit(ctx.exclusiveOrExpression());
-        ExpressionNode rhs = (ExpressionNode) visit(ctx.andExpression());
-        return new BinaryExpressionNode(
-            new BinaryOperatorNode(
-                getSourceLocation(ctx.exclusiveOrExpression()),
-                BinaryOperator.BITWISE_XOR), lhs, rhs);
-    }
-
-    @Override
-    public BinaryExpressionNode visitBitwiseInclusiveOrOperatorExpression(C99Parser.BitwiseInclusiveOrOperatorExpressionContext ctx) {
-        ExpressionNode lhs = (ExpressionNode) visit(ctx.inclusiveOrExpression());
-        ExpressionNode rhs = (ExpressionNode) visit(ctx.exclusiveOrExpression());
-        return new BinaryExpressionNode(
-            new BinaryOperatorNode(
-                getSourceLocation(ctx.inclusiveOrExpression()),
-                BinaryOperator.BITWISE_OR), lhs, rhs);
-    }
-
-    @Override
-    public BinaryExpressionNode visitRelationalOperatorExpression(C99Parser.RelationalOperatorExpressionContext ctx) {
-        BinaryOperatorNode op = visitRelationalOperator(ctx.relationalOperator());
-        ExpressionNode lhs = (ExpressionNode) visit(ctx.relationalExpression());
-        ExpressionNode rhs = (ExpressionNode) visit(ctx.shiftExpression());
-        return new BinaryExpressionNode(op, lhs, rhs);
+    public ExpressionNode visitRelationalExpression(C99Parser.RelationalExpressionContext ctx) {
+        if (ctx.relationalOperator() != null) {
+            BinaryOperatorNode op = visitRelationalOperator(ctx.relationalOperator());
+            ExpressionNode lhs = (ExpressionNode) visit(ctx.relationalExpression());
+            ExpressionNode rhs = (ExpressionNode) visit(ctx.shiftExpression());
+            return new BinaryExpressionNode(op, lhs, rhs);
+        } else if (ctx.shiftExpression() != null) {
+            return (ExpressionNode) visit(ctx.shiftExpression());
+        } else {
+            throw new RuntimeException("Unknown relational expression");
+        }
     }
 
     @Override
@@ -246,11 +241,17 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
     }
 
     @Override
-    public BinaryExpressionNode visitEqualityOperatorExpression(C99Parser.EqualityOperatorExpressionContext ctx) {
-        BinaryOperatorNode op = visitEqualityOperator(ctx.equalityOperator());
-        ExpressionNode lhs = (ExpressionNode) visit(ctx.equalityExpression());
-        ExpressionNode rhs = (ExpressionNode) visit(ctx.relationalExpression());
-        return new BinaryExpressionNode(op, lhs, rhs);
+    public ExpressionNode visitEqualityExpression(C99Parser.EqualityExpressionContext ctx) {
+        if (ctx.equalityOperator() != null) {
+            BinaryOperatorNode op = visitEqualityOperator(ctx.equalityOperator());
+            ExpressionNode lhs = (ExpressionNode) visit(ctx.equalityExpression());
+            ExpressionNode rhs = (ExpressionNode) visit(ctx.relationalExpression());
+            return new BinaryExpressionNode(op, lhs, rhs);
+        } else if (ctx.relationalExpression() != null) {
+            return (ExpressionNode) visit(ctx.relationalExpression());
+        } else {
+            throw new RuntimeException("Unknown equality expression");
+        }
     }
 
     @Override
@@ -261,31 +262,87 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
     }
 
     @Override
-    public BinaryExpressionNode visitLogicalAndOperatorExpression(C99Parser.LogicalAndOperatorExpressionContext ctx) {
-        ExpressionNode lhs = (ExpressionNode) visit(ctx.logicalAndExpression());
-        ExpressionNode rhs = (ExpressionNode) visit(ctx.inclusiveOrExpression());
-        return new BinaryExpressionNode(
-            new BinaryOperatorNode(
-                getSourceLocation(ctx.logicalAndExpression()),
-                BinaryOperator.LOGICAL_AND), lhs, rhs);
+    public ExpressionNode visitAndExpression(C99Parser.AndExpressionContext ctx) {
+        if (ctx.And() != null) {
+            BinaryOperatorNode op = new BinaryOperatorNode(getSourceLocation(ctx.And()), BinaryOperator.BITWISE_AND);
+            ExpressionNode lhs = (ExpressionNode) visit(ctx.andExpression());
+            ExpressionNode rhs = (ExpressionNode) visit(ctx.equalityExpression());
+            return new BinaryExpressionNode(op, lhs, rhs);
+        } else if (ctx.equalityExpression() != null) {
+            return (ExpressionNode) visit(ctx.equalityExpression());
+        } else {
+            throw new RuntimeException("Unknown and expression");
+        }
     }
 
     @Override
-    public BinaryExpressionNode visitLogicalOrOperatorExpression(C99Parser.LogicalOrOperatorExpressionContext ctx) {
-        ExpressionNode lhs = (ExpressionNode) visit(ctx.logicalOrExpression());
-        ExpressionNode rhs = (ExpressionNode) visit(ctx.logicalAndExpression());
-        return new BinaryExpressionNode(
-            new BinaryOperatorNode(
-                getSourceLocation(ctx.logicalOrExpression()),
-                BinaryOperator.LOGICAL_OR), lhs, rhs);
+    public ExpressionNode visitExclusiveOrExpression(C99Parser.ExclusiveOrExpressionContext ctx) {
+        if (ctx.Caret() != null) {
+            BinaryOperatorNode op = new BinaryOperatorNode(getSourceLocation(ctx.Caret()), BinaryOperator.BITWISE_XOR);
+            ExpressionNode lhs = (ExpressionNode) visit(ctx.exclusiveOrExpression());
+            ExpressionNode rhs = (ExpressionNode) visit(ctx.andExpression());
+            return new BinaryExpressionNode(op, lhs, rhs);
+        } else if (ctx.andExpression() != null) {
+            return (ExpressionNode) visit(ctx.andExpression());
+        } else {
+            throw new RuntimeException("Unknown exclusive or expression");
+        }
     }
 
     @Override
-    public AssignmentNode visitAssignmentOperatorExpression(C99Parser.AssignmentOperatorExpressionContext ctx) {
-        AssignmentOperatorNode op = visitAssignmentOperator(ctx.assignmentOperator());
-        ExpressionNode lhs = (ExpressionNode) visit(ctx.unaryExpression());
-        ExpressionNode rhs = (ExpressionNode) visit(ctx.assignmentExpression());
-        return new AssignmentNode(op, lhs, rhs);
+    public ExpressionNode visitInclusiveOrExpression(C99Parser.InclusiveOrExpressionContext ctx) {
+        if (ctx.Or() != null) {
+            BinaryOperatorNode op = new BinaryOperatorNode(getSourceLocation(ctx.Or()), BinaryOperator.BITWISE_OR);
+            ExpressionNode lhs = (ExpressionNode) visit(ctx.inclusiveOrExpression());
+            ExpressionNode rhs = (ExpressionNode) visit(ctx.exclusiveOrExpression());
+            return new BinaryExpressionNode(op, lhs, rhs);
+        } else if (ctx.exclusiveOrExpression() != null) {
+            return (ExpressionNode) visit(ctx.exclusiveOrExpression());
+        } else {
+            throw new RuntimeException("Unknown inclusive or expression");
+        }
+    }
+
+    @Override
+    public ExpressionNode visitLogicalAndExpression(C99Parser.LogicalAndExpressionContext ctx) {
+        if (ctx.AndAnd() != null) {
+            BinaryOperatorNode op = new BinaryOperatorNode(getSourceLocation(ctx.AndAnd()), BinaryOperator.LOGICAL_AND);
+            ExpressionNode lhs = (ExpressionNode) visit(ctx.logicalAndExpression());
+            ExpressionNode rhs = (ExpressionNode) visit(ctx.inclusiveOrExpression());
+            return new BinaryExpressionNode(op, lhs, rhs);
+        } else if (ctx.inclusiveOrExpression() != null) {
+            return (ExpressionNode) visit(ctx.inclusiveOrExpression());
+        } else {
+            throw new RuntimeException("Unknown logical and expression");
+        }
+    }
+
+    @Override
+    public ExpressionNode visitLogicalOrExpression(C99Parser.LogicalOrExpressionContext ctx) {
+        if (ctx.OrOr() != null) {
+            BinaryOperatorNode op = new BinaryOperatorNode(getSourceLocation(ctx.OrOr()), BinaryOperator.LOGICAL_OR);
+            ExpressionNode lhs = (ExpressionNode) visit(ctx.logicalOrExpression());
+            ExpressionNode rhs = (ExpressionNode) visit(ctx.logicalAndExpression());
+            return new BinaryExpressionNode(op, lhs, rhs);
+        } else if (ctx.logicalAndExpression() != null) {
+            return (ExpressionNode) visit(ctx.logicalAndExpression());
+        } else {
+            throw new RuntimeException("Unknown logical or expression");
+        }
+    }
+
+    @Override
+    public ExpressionNode visitAssignmentExpression(C99Parser.AssignmentExpressionContext ctx) {
+        if (ctx.conditionalExpression() != null) {
+            return (ExpressionNode) visit(ctx.conditionalExpression());
+        } else if (ctx.assignmentOperator() != null) {
+            AssignmentOperatorNode op = visitAssignmentOperator(ctx.assignmentOperator());
+            ExpressionNode lhs = (ExpressionNode) visit(ctx.unaryExpression());
+            ExpressionNode rhs = (ExpressionNode) visit(ctx.assignmentExpression());
+            return new AssignmentNode(op, lhs, rhs);
+        } else {
+            throw new RuntimeException("Unknown assignment expression");
+        }
     }
 
     @Override
