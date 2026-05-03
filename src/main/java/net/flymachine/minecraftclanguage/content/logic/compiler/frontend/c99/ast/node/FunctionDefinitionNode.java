@@ -3,15 +3,12 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.as
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
-import java.util.List;
-
 public class FunctionDefinitionNode extends AstNode {
     public IdentifierNode identifier;
-    public List<BlockItemNode> body;
+    public CompoundStatementNode body;
 
-    public FunctionDefinitionNode(IdentifierNode identifier, List<BlockItemNode> body) {
-        super(body.isEmpty() ? identifier.wholeLocation
-                  : SourceLocation.concat(identifier.wholeLocation, body.get(body.size() - 1).wholeLocation));
+    public FunctionDefinitionNode(IdentifierNode identifier, CompoundStatementNode body) {
+        super(SourceLocation.concat(identifier.wholeLocation, body.wholeLocation));
         this.identifier = identifier;
         this.body = body;
     }
@@ -27,13 +24,8 @@ public class FunctionDefinitionNode extends AstNode {
         stringBuilder.append("FunctionDefinitionNode(\n");
         stringBuilder.append("  ".repeat(indentLevel + 1));
         stringBuilder.append("name=\"").append(identifier.id).append("\",\n");
-        stringBuilder.append("  ".repeat(indentLevel + 1));
-        stringBuilder.append("body=[\n");
-        for (BlockItemNode item : body) {
-            item.genFormattedString(stringBuilder, indentLevel + 2, true);
-            stringBuilder.append("  ".repeat(indentLevel + 2)).append(",\n");
-        }
-        stringBuilder.append("  ".repeat(indentLevel + 1)).append("]\n");
+        stringBuilder.append("  ".repeat(indentLevel + 1)).append("body=");
+        body.genFormattedString(stringBuilder, indentLevel + 1, false);
         stringBuilder.append("  ".repeat(indentLevel)).append(")\n");
     }
 }

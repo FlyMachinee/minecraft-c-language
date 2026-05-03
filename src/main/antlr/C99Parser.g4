@@ -207,6 +207,7 @@ initializer
 // ISO 6.8, Statements and Blocks
 statement
     : labeledStatement
+    | compoundStatement
     | expressionStatement
     | selectionStatement
     | jumpStatement

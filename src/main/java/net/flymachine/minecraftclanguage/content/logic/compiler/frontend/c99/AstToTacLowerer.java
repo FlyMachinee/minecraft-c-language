@@ -38,20 +38,22 @@ public final class AstToTacLowerer {
 
     private TacFunction lowerFunction(FunctionDefinitionNode functionDefinition) {
         List<TacInstruction> instructions = new ArrayList<>();
-        for (BlockItemNode blockItemNode : functionDefinition.body) {
-            if (blockItemNode instanceof StatementNode statementNode) {
-                lowerStatement(statementNode, instructions);
-            } else if (blockItemNode instanceof DeclarationNode declarationNode) {
-                if (declarationNode.initializer != null) {
-                    TacValue initValue = lowerExpression(declarationNode.initializer, instructions);
-                    instructions.add(new TacCopy(initValue, new TacVariable(declarationNode.variable.id)));
-                }
-            } else {
-                throw new RuntimeException("Unknown instruction: " + blockItemNode.toString());
-            }
-        }
+        lowerStatement(functionDefinition.body, instructions);
         instructions.add(new TacReturn(new TacIntConstant(0)));
         return new TacFunction(functionDefinition.identifier.id, instructions);
+    }
+
+    private void lowerBlockItem(BlockItemNode blockItem, List<TacInstruction> instructions) {
+        if (blockItem instanceof StatementNode statementNode) {
+            lowerStatement(statementNode, instructions);
+        } else if (blockItem instanceof DeclarationNode declarationNode) {
+            if (declarationNode.initializer != null) {
+                TacValue initValue = lowerExpression(declarationNode.initializer, instructions);
+                instructions.add(new TacCopy(initValue, new TacVariable(declarationNode.variable.id)));
+            }
+        } else {
+            throw new RuntimeException("Unknown instruction: " + blockItem.toString());
+        }
     }
 
     private void lowerStatement(StatementNode statement, List<TacInstruction> instructions) {
@@ -127,6 +129,10 @@ public final class AstToTacLowerer {
         } else if (statement instanceof GotoNode gotoNode) {
             // 为 goto 语句生成无条件跳转
             instructions.add(new TacJump(gotoNode.target.id));
+        } else if (statement instanceof CompoundStatementNode compoundStatementNode) {
+            for (BlockItemNode item : compoundStatementNode.blockItems) {
+                lowerBlockItem(item, instructions);
+            }
         } else if (!(statement instanceof NullStatementNode)) {
             throw new UnsupportedOperationException(
                 "Unsupported statement type: " + statement.getClass().getSimpleName());

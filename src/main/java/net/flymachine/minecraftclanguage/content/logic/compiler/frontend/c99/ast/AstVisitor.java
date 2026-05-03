@@ -30,4 +30,6 @@ public interface AstVisitor<T> {
     T visit(ConditionalExpressionNode node);
 
     T visit(GotoNode node);
+
+    T visit(CompoundStatementNode node);
 }

@@ -9,6 +9,7 @@ import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceFile;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Stack;
 
 /**
  * 将变量的名字替换为唯一的名字，并检查变量的重复定义和未定义使用
@@ -50,7 +51,41 @@ public final class VariableResolutionPass implements AstVisitor<Void> {
         this.sourceFile = sourceFile;
     }
 
-    private final Map<String, IdentifierNode> variableRenamingMap = new HashMap<>();
+    private final Stack<Map<String, IdentifierNode>> scopeStack = new Stack<>();
+
+    private void enterScope() {
+        scopeStack.push(new HashMap<>());
+    }
+
+    private void exitScope() {
+        scopeStack.pop();
+    }
+
+    private boolean definedInCurrentScope(String identifier) {
+        return scopeStack.peek().containsKey(identifier);
+    }
+
+    private boolean definedInScope(String identifier, Map<String, IdentifierNode> scope) {
+        return scope.containsKey(identifier);
+    }
+
+    private IdentifierNode definitionInCurrentScope(String identifier) {
+        return scopeStack.peek().get(identifier);
+    }
+
+    private IdentifierNode definitionOf(String identifier) {
+        for (int i = scopeStack.size() - 1; i >= 0; i--) {
+            Map<String, IdentifierNode> scope = scopeStack.get(i);
+            if (definedInScope(identifier, scope)) {
+                return scope.get(identifier);
+            }
+        }
+        return null;
+    }
+
+    private void define(String identifier, IdentifierNode definition) {
+        scopeStack.peek().put(identifier, definition);
+    }
 
     @Override
     public Void visit(ProgramNode node) {
@@ -60,9 +95,7 @@ public final class VariableResolutionPass implements AstVisitor<Void> {
 
     @Override
     public Void visit(FunctionDefinitionNode node) {
-        for (BlockItemNode blockItem : node.body) {
-            blockItem.accept(this);
-        }
+        visit(node.body);
         return null;
     }
 
@@ -88,7 +121,7 @@ public final class VariableResolutionPass implements AstVisitor<Void> {
     @Override
     public Void visit(DeclarationNode node) {
         String name = node.variable.id;
-        IdentifierNode renamed = variableRenamingMap.get(name);
+        IdentifierNode renamed = definitionInCurrentScope(name);
         if (renamed != null) {
             semanticError = true;
             String msg = "redefinition of '" + logger.formatWithColor(name, Logger.Color.WHITE) + "'";
@@ -97,7 +130,7 @@ public final class VariableResolutionPass implements AstVisitor<Void> {
             ErrorHandleUtil.logNoteWithSourceLine(logger, sourceFile, renamed.wholeLocation, msg);
         } else {
             node.variable.id = makeUniqueName(name);
-            variableRenamingMap.put(name, node.variable);
+            define(name, node.variable);
         }
         if (node.initializer != null) {
             node.initializer.accept(this);
@@ -119,7 +152,7 @@ public final class VariableResolutionPass implements AstVisitor<Void> {
     @Override
     public Void visit(IdentifierNode node) {
         String name = node.id;
-        IdentifierNode renamed = variableRenamingMap.get(name);
+        IdentifierNode renamed = definitionOf(name);
         if (renamed == null) {
             semanticError = true;
             String msg = "'" + logger.formatWithColor(name, Logger.Color.WHITE) + "' undeclared";
@@ -178,6 +211,16 @@ public final class VariableResolutionPass implements AstVisitor<Void> {
 
     @Override
     public Void visit(GotoNode node) {
+        return null;
+    }
+
+    @Override
+    public Void visit(CompoundStatementNode node) {
+        enterScope();
+        for (BlockItemNode item : node.blockItems) {
+            item.accept(this);
+        }
+        exitScope();
         return null;
     }
 }

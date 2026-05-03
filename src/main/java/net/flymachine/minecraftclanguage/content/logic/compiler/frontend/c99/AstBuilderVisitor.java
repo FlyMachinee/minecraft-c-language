@@ -49,16 +49,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
     public FunctionDefinitionNode visitFunctionDefinition(C99Parser.FunctionDefinitionContext ctx) {
         String name = ctx.declarator().directDeclarator().Identifier().getText();
         SourceLocation nameLocation = getSourceLocation(ctx.declarator().directDeclarator().Identifier());
-        List<BlockItemNode> body = new ArrayList<>();
-        var blockItemList = ctx.compoundStatement().blockItemList();
-        if (blockItemList != null) {
-            for (var blockItem : blockItemList.blockItem()) {
-                BlockItemNode item = (BlockItemNode) visit(blockItem);
-                if (item != null) {
-                    body.add(item);
-                }
-            }
-        }
+        CompoundStatementNode body = (CompoundStatementNode) visit(ctx.compoundStatement());
         return new FunctionDefinitionNode(new IdentifierNode(nameLocation, name), body);
     }
 
@@ -96,6 +87,21 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         } else {
             throw new IllegalStateException("Unknown labeled statement");
         }
+    }
+
+    @Override
+    public CompoundStatementNode visitCompoundStatement(C99Parser.CompoundStatementContext ctx) {
+        List<BlockItemNode> blockItems = new ArrayList<>();
+        if (ctx.blockItemList() != null) {
+            for (C99Parser.BlockItemContext blockItemCtx : ctx.blockItemList().blockItem()) {
+                BlockItemNode blockItem = (BlockItemNode) visit(blockItemCtx);
+                blockItems.add(blockItem);
+            }
+        }
+        return new CompoundStatementNode(
+            SourceLocation.concat(
+                getSourceLocation(ctx.LeftBrace()),
+                getSourceLocation(ctx.RightBrace())), blockItems);
     }
 
     @Override

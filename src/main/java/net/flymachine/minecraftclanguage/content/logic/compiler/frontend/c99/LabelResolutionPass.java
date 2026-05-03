@@ -61,9 +61,7 @@ public final class LabelResolutionPass implements AstVisitor<Void> {
         currentFunction = node;
         labelDefinitionMap.clear();
         pendingGotoNodes.clear();
-        for (BlockItemNode blockItem : node.body) {
-            blockItem.accept(this);
-        }
+        visit(node.body);
         if (!pendingGotoNodes.isEmpty()) {
             semanticError = true;
             for (Map.Entry<String, List<GotoNode>> entry : pendingGotoNodes.entrySet()) {
@@ -202,6 +200,14 @@ public final class LabelResolutionPass implements AstVisitor<Void> {
             pendingGotoNodes.put(target, gotoList);
         } else {
             pendingList.add(node);
+        }
+        return null;
+    }
+
+    @Override
+    public Void visit(CompoundStatementNode node) {
+        for (BlockItemNode blockItemNode : node.blockItems) {
+            blockItemNode.accept(this);
         }
         return null;
     }
