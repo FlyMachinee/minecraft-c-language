@@ -14,7 +14,7 @@ import java.util.Stack;
 /**
  * 将变量的名字替换为唯一的名字，并检查变量的重复定义和未定义使用
  */
-public final class VariableResolutionPass implements AstVisitor<Void> {
+public final class VariableResolutionPass implements AstVisitor<Void>, SemanticAnalysePass {
 
     private Logger logger;
     private SourceFile sourceFile;
@@ -220,6 +220,51 @@ public final class VariableResolutionPass implements AstVisitor<Void> {
         for (BlockItemNode item : node.blockItems) {
             item.accept(this);
         }
+        exitScope();
+        return null;
+    }
+
+    @Override
+    public Void visit(BreakNode node) {
+        return null;
+    }
+
+    @Override
+    public Void visit(ContinueNode node) {
+        return null;
+    }
+
+    @Override
+    public Void visit(WhileLoopNode node) {
+        if (node.isDoWhile) {
+            node.body.accept(this);
+            node.cond.accept(this);
+        } else {
+            node.cond.accept(this);
+            node.body.accept(this);
+        }
+        return null;
+    }
+
+    @Override
+    public Void visit(ForLoopNode node) {
+        enterScope();
+        if (node.init != null) {
+            if (node.init instanceof DeclarationNode decl) {
+                visit(decl);
+            } else if (node.init instanceof ExpressionNode expr) {
+                expr.accept(this);
+            } else {
+                throw new RuntimeException("unexpected init node in for loop: " + node.init.getClass());
+            }
+        }
+        if (node.cond != null) {
+            node.cond.accept(this);
+        }
+        if (node.step != null) {
+            node.step.accept(this);
+        }
+        node.body.accept(this);
         exitScope();
         return null;
     }

@@ -2,12 +2,17 @@ lexer grammar C99Lexer;
 
 // Keywords
 
+Break: 'break';
+Continue: 'continue';
+Do: 'do';
 Else: 'else';
+For: 'for';
 Goto: 'goto';
 If: 'if';
 Int: 'int';
 Return: 'return';
 Void: 'void';
+While: 'while';
 
 // Identifiers
 

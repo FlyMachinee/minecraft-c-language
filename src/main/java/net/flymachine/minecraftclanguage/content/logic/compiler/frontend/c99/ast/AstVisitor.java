@@ -32,4 +32,12 @@ public interface AstVisitor<T> {
     T visit(GotoNode node);
 
     T visit(CompoundStatementNode node);
+
+    T visit(BreakNode node);
+
+    T visit(ContinueNode node);
+
+    T visit(WhileLoopNode node);
+
+    T visit(ForLoopNode node);
 }

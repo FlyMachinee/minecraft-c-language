@@ -2,8 +2,8 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.as
 
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
-public abstract class ExpressionNode extends AstNode {
-    
+public abstract class ExpressionNode extends AstNode implements ForInitNode {
+
     protected ExpressionNode(SourceLocation wholeLocation) {
         super(wholeLocation);
     }

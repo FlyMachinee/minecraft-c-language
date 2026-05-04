@@ -210,6 +210,7 @@ statement
     | compoundStatement
     | expressionStatement
     | selectionStatement
+    | iterationStatement
     | jumpStatement
     ;
 
@@ -240,9 +241,19 @@ selectionStatement
     : If LeftParen expression RightParen statement (Else statement)?
     ;
 
+// ISO 6.8.5, Iteration Statements
+iterationStatement
+    : While LeftParen expression RightParen statement
+    | Do statement While LeftParen expression RightParen Semicolon
+    | For LeftParen init=expression? Semicolon cond=expression? Semicolon step=expression? RightParen statement
+    | For LeftParen declaration cond=expression? Semicolon step=expression? RightParen statement
+    ;
+
 // ISO 6.8.6, Jump Statements
 jumpStatement
     : Goto Identifier Semicolon
+    | Continue Semicolon
+    | Break Semicolon
     | Return expression Semicolon
     ;
 

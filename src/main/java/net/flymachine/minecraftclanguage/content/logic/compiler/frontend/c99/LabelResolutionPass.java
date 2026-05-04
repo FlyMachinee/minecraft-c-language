@@ -15,7 +15,7 @@ import java.util.Map;
 /**
  * 一趟扫描检查标签定义和 goto 语句的合法性，并重命名标签使之以函数名为前缀
  */
-public final class LabelResolutionPass implements AstVisitor<Void> {
+public final class LabelResolutionPass implements AstVisitor<Void>, SemanticAnalysePass {
 
     private Logger logger;
     private SourceFile sourceFile;
@@ -209,6 +209,32 @@ public final class LabelResolutionPass implements AstVisitor<Void> {
         for (BlockItemNode blockItemNode : node.blockItems) {
             blockItemNode.accept(this);
         }
+        return null;
+    }
+
+    @Override
+    public Void visit(BreakNode node) {
+        visit((StatementNode) node);
+        return null;
+    }
+
+    @Override
+    public Void visit(ContinueNode node) {
+        visit((StatementNode) node);
+        return null;
+    }
+
+    @Override
+    public Void visit(WhileLoopNode node) {
+        visit((StatementNode) node);
+        node.body.accept(this);
+        return null;
+    }
+
+    @Override
+    public Void visit(ForLoopNode node) {
+        visit((StatementNode) node);
+        node.body.accept(this);
         return null;
     }
 }

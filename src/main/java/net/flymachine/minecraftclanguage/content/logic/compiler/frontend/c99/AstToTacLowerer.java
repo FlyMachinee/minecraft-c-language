@@ -133,6 +133,92 @@ public final class AstToTacLowerer {
             for (BlockItemNode item : compoundStatementNode.blockItems) {
                 lowerBlockItem(item, instructions);
             }
+        } else if (statement instanceof BreakNode breakNode) {
+            instructions.add(new TacJump("break_" + breakNode.loopLabel));
+        } else if (statement instanceof ContinueNode continueNode) {
+            instructions.add(new TacJump("continue_" + continueNode.loopLabel));
+        } else if (statement instanceof WhileLoopNode whileLoopNode) {
+            // while (cond) body
+            // =>
+            //   goto continue_label <=====
+            // begin:
+            //   body
+            // continue_label:
+            //   if (cond) goto begin:
+            // break_label:
+
+            // do body while (cond);
+            // =>
+            // begin:
+            //   body
+            // continue_label:
+            //   if (cond) goto begin:
+            // break_label:
+
+            String labelBegin = makeLabel(whileLoopNode.isDoWhile ? "do_while_begin" : "while_begin");
+            String labelContinue = "continue_" + whileLoopNode.loopLabel;
+            String labelBreak = "break_" + whileLoopNode.loopLabel;
+
+            if (!whileLoopNode.isDoWhile) {
+                // while 循环需要在循环前生成跳转到条件判断的指令
+                instructions.add(new TacJump(labelContinue));
+            }
+            instructions.add(new TacLabel(labelBegin));
+            lowerStatement(whileLoopNode.body, instructions);
+            instructions.add(new TacLabel(labelContinue));
+            if (lowerBoolean(whileLoopNode.cond, labelBegin, false, instructions) ==
+                BooleanGenerationResult.ALWAYS_JUMP) {
+                // 始终跳转，生成无条件跳转
+                instructions.add(new TacJump(labelBegin));
+            }
+            instructions.add(new TacLabel(labelBreak));
+
+        } else if (statement instanceof ForLoopNode forLoopNode) {
+            // for (init; cond; step) body
+            // =>
+            //   init
+            //   goto cond
+            // begin:
+            //   body
+            // continue_label:
+            //   step
+            // cond:
+            //   if (cond) goto begin
+            // break_label:
+            String labelBegin = makeLabel("for_begin");
+            String labelContinue = "continue_" + forLoopNode.loopLabel;
+            String labelBreak = "break_" + forLoopNode.loopLabel;
+            String labelCond = makeLabel("for_cond");
+
+            if (forLoopNode.init != null) {
+                if (forLoopNode.init instanceof DeclarationNode decl) {
+                    lowerBlockItem(decl, instructions);
+                } else if (forLoopNode.init instanceof ExpressionNode expr) {
+                    lowerExpression(expr, instructions);
+                } else {
+                    throw new RuntimeException("unexpected init node in for loop: " + forLoopNode.init.getClass());
+                }
+            }
+            instructions.add(new TacJump(labelCond));
+            instructions.add(new TacLabel(labelBegin));
+            lowerStatement(forLoopNode.body, instructions);
+            instructions.add(new TacLabel(labelContinue));
+            if (forLoopNode.step != null) {
+                lowerExpression(forLoopNode.step, instructions);
+            }
+            instructions.add(new TacLabel(labelCond));
+            if (forLoopNode.cond != null) {
+                if (lowerBoolean(forLoopNode.cond, labelBegin, false, instructions) ==
+                    BooleanGenerationResult.ALWAYS_JUMP) {
+                    // 始终跳转，生成无条件跳转
+                    instructions.add(new TacJump(labelBegin));
+                }
+            } else {
+                // 条件缺省，视为始终为真
+                instructions.add(new TacJump(labelBegin));
+            }
+            instructions.add(new TacLabel(labelBreak));
+
         } else if (!(statement instanceof NullStatementNode)) {
             throw new UnsupportedOperationException(
                 "Unsupported statement type: " + statement.getClass().getSimpleName());

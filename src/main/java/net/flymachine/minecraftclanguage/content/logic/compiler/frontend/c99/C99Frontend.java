@@ -59,6 +59,14 @@ public final class C99Frontend {
             return null;
         }
 
+        LoopLabelingPass pass3 = new LoopLabelingPass();
+        pass3.setSourceFile(sourceFile);
+        ast.accept(pass3);
+
+        if (pass3.hasSemanticError()) {
+            return null;
+        }
+
         return new AstToTacLowerer().lower((ProgramNode) ast);
     }
 }

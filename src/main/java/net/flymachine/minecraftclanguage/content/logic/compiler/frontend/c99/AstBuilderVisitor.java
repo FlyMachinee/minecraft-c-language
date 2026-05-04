@@ -98,10 +98,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
                 blockItems.add(blockItem);
             }
         }
-        return new CompoundStatementNode(
-            SourceLocation.concat(
-                getSourceLocation(ctx.LeftBrace()),
-                getSourceLocation(ctx.RightBrace())), blockItems);
+        return new CompoundStatementNode(getSourceLocation(ctx), blockItems);
     }
 
     @Override
@@ -129,11 +126,55 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
     }
 
     @Override
+    public StatementNode visitIterationStatement(C99Parser.IterationStatementContext ctx) {
+        if (ctx.Do() != null) {
+            StatementNode body = (StatementNode) visit(ctx.statement());
+            ExpressionNode cond = (ExpressionNode) visit(ctx.expression(0));
+            return new WhileLoopNode(getSourceLocation(ctx), cond, body, true);
+        } else if (ctx.While() != null) {
+            ExpressionNode cond = (ExpressionNode) visit(ctx.expression(0));
+            StatementNode body = (StatementNode) visit(ctx.statement());
+            return new WhileLoopNode(getSourceLocation(ctx), cond, body);
+        } else if (ctx.For() != null) {
+            ForInitNode init = null;
+            ExpressionNode cond = null;
+            ExpressionNode step = null;
+            StatementNode body = (StatementNode) visit(ctx.statement());
+            if (ctx.declaration() != null) {
+                init = visitDeclaration(ctx.declaration());
+                if (ctx.cond != null) {
+                    cond = (ExpressionNode) visit(ctx.cond);
+                }
+                if (ctx.step != null) {
+                    step = (ExpressionNode) visit(ctx.step);
+                }
+            } else {
+                if (ctx.init != null) {
+                    init = (ExpressionNode) visit(ctx.init);
+                }
+                if (ctx.cond != null) {
+                    cond = (ExpressionNode) visit(ctx.cond);
+                }
+                if (ctx.step != null) {
+                    step = (ExpressionNode) visit(ctx.step);
+                }
+            }
+            return new ForLoopNode(getSourceLocation(ctx), init, cond, step, body);
+        } else {
+            throw new IllegalStateException("Unknown iteration statement");
+        }
+    }
+
+    @Override
     public StatementNode visitJumpStatement(C99Parser.JumpStatementContext ctx) {
         if (ctx.Goto() != null) {
             String identifier = ctx.Identifier().getText();
             SourceLocation identifierLocation = getSourceLocation(ctx.Identifier());
             return new GotoNode(getSourceLocation(ctx.Goto()), new IdentifierNode(identifierLocation, identifier));
+        } else if (ctx.Continue() != null) {
+            return new ContinueNode(getSourceLocation(ctx.Continue()));
+        } else if (ctx.Break() != null) {
+            return new BreakNode(getSourceLocation(ctx.Break()));
         } else if (ctx.Return() != null) {
             ExpressionNode expression = (ExpressionNode) visit(ctx.expression());
             return new ReturnNode(getSourceLocation(ctx.Return()), expression);
