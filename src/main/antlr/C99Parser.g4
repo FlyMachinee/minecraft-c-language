@@ -217,6 +217,8 @@ statement
 // ISO 6.8.1, Labeled Statements
 labeledStatement
     : Identifier Colon statement
+    | Case IntegerConstant Colon statement
+    | Default Colon statement
     ;
 
 // ISO 6.8.2, Compound Statements
@@ -239,6 +241,7 @@ expressionStatement
 // ISO 6.8.4, Selection Statements
 selectionStatement
     : If LeftParen expression RightParen statement (Else statement)?
+    | Switch LeftParen expression RightParen statement
     ;
 
 // ISO 6.8.5, Iteration Statements

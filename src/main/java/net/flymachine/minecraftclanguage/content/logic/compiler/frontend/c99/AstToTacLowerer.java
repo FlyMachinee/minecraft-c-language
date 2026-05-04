@@ -58,10 +58,21 @@ public final class AstToTacLowerer {
 
     private void lowerStatement(StatementNode statement, List<TacInstruction> instructions) {
         // 为活跃的 goto 标签生成标签
-        for (StatementNode.GotoLabelInfo info : statement.gotoLabels) {
+        for (int i = statement.gotoLabels.size() - 1; i >= 0; i--) {
+            StatementNode.GotoLabelInfo info = statement.gotoLabels.get(i);
             if (info.active) {
                 instructions.add(new TacLabel(info.label.id));
             }
+        }
+
+        // case 和 default
+        for (int i = statement.caseLabels.size() - 1; i >= 0; i--) {
+            StatementNode.CaseLabelInfo info = statement.caseLabels.get(i);
+            instructions.add(new TacLabel("case_" + info.caseIndex + "_" + info.switchLabel));
+        }
+        if (!statement.defaultLabels.isEmpty()) {
+            StatementNode.DefaultLabelInfo info = statement.defaultLabels.get(0);
+            instructions.add(new TacLabel("default_" + info.switchLabel));
         }
 
         if (statement instanceof ReturnNode returnNode) {
@@ -82,7 +93,7 @@ public final class AstToTacLowerer {
                 String labelElse = makeLabel("else");
                 switch (lowerBoolean(ifStatementNode.cond, labelElse, true, instructions)) {
                     case ALWAYS_JUMP -> {
-                        if (!ifStatementNode.thenStmt.containsActiveGotoLabel()) {
+                        if (!ifStatementNode.thenStmt.containsActiveLabel()) {
                             // 当 then 子语句没有活跃的 goto 标签，将其优化
                             instructions.add(new TacLabel(labelElse));
                             lowerStatement(ifStatementNode.elseStmt, instructions);
@@ -92,7 +103,7 @@ public final class AstToTacLowerer {
                         instructions.add(new TacJump(labelElse));
                     }
                     case NEVER_JUMP -> {
-                        if (!ifStatementNode.elseStmt.containsActiveGotoLabel()) {
+                        if (!ifStatementNode.elseStmt.containsActiveLabel()) {
                             // 当 else 子语句没有活跃的 goto 标签，将其优化
                             lowerStatement(ifStatementNode.thenStmt, instructions);
                             instructions.add(new TacLabel(labelElse));
@@ -115,7 +126,7 @@ public final class AstToTacLowerer {
                 String labelEndIf = makeLabel("endif");
                 if (lowerBoolean(ifStatementNode.cond, labelEndIf, true, instructions) ==
                     BooleanGenerationResult.ALWAYS_JUMP) {
-                    if (!ifStatementNode.thenStmt.containsActiveGotoLabel()) {
+                    if (!ifStatementNode.thenStmt.containsActiveLabel()) {
                         // 当 then 子语句没有活跃的 goto 标签，将其优化
                         instructions.add(new TacLabel(labelEndIf));
                         return;
@@ -134,7 +145,7 @@ public final class AstToTacLowerer {
                 lowerBlockItem(item, instructions);
             }
         } else if (statement instanceof BreakNode breakNode) {
-            instructions.add(new TacJump("break_" + breakNode.loopLabel));
+            instructions.add(new TacJump("break_" + breakNode.loopOrSwitchLabel));
         } else if (statement instanceof ContinueNode continueNode) {
             instructions.add(new TacJump("continue_" + continueNode.loopLabel));
         } else if (statement instanceof WhileLoopNode whileLoopNode) {
@@ -217,6 +228,54 @@ public final class AstToTacLowerer {
                 // 条件缺省，视为始终为真
                 instructions.add(new TacJump(labelBegin));
             }
+            instructions.add(new TacLabel(labelBreak));
+
+        } else if (statement instanceof SwitchStatementNode switchNode) {
+            // switch (exp) body   {case: [0, 1, 2, ...], default=yes/no}
+            // =>
+            //   tmp = exp
+            //   if (tmp == 0) goto case0
+            //   if (tmp == 1) goto case1
+            //   goto default (if default=yes)
+            //   goto break (if default=no)
+            //   body
+            // break:
+            String labelBreak = "break_" + switchNode.switchLabel;
+            String defaultLabel = "default_" + switchNode.switchLabel;
+
+            TacValue res = lowerExpression(switchNode.exp, instructions);
+            if (res instanceof TacIntConstant intConstant) {
+                // 常量，进行优化
+                int value = intConstant.value;
+                if (switchNode.caseValues.containsKey(value)) {
+                    // 匹配到 case 标签
+                    instructions.add(new TacJump("case_" + value + "_" + switchNode.switchLabel));
+                } else if (switchNode.defaultLabel != null) {
+                    // 没有匹配到 case 标签但有 default 标签
+                    instructions.add(new TacJump(defaultLabel));
+                } else {
+                    // 没有匹配到 case 标签且没有 default 标签，直接跳转到 break
+
+                    // 如果此时 body 没有可能跳入的 goto 标签，则可以优化掉 body 和 break 标签
+                    if (!switchNode.body.containsActiveLabel()) {
+                        return;
+                    }
+                    instructions.add(new TacJump(labelBreak));
+                }
+            } else {
+                // 非常量，生成比较指令
+                for (SwitchStatementNode.CaseLabelInfo caseInfo : switchNode.caseValues.values()) {
+                    String caseLabel = "case_" + caseInfo.caseIndex + "_" + switchNode.switchLabel;
+                    instructions.add(new TacJumpIfComparison(
+                        Comparison.EQUAL, res, new TacIntConstant(caseInfo.caseIndex), caseLabel));
+                }
+                if (switchNode.defaultLabel != null) {
+                    instructions.add(new TacJump(defaultLabel));
+                } else {
+                    instructions.add(new TacJump(labelBreak));
+                }
+            }
+            lowerStatement(switchNode.body, instructions);
             instructions.add(new TacLabel(labelBreak));
 
         } else if (!(statement instanceof NullStatementNode)) {

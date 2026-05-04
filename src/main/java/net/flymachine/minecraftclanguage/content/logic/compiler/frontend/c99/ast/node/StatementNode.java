@@ -8,25 +8,40 @@ import java.util.StringJoiner;
 
 public abstract class StatementNode extends BlockItemNode {
     public List<GotoLabelInfo> gotoLabels = new ArrayList<>();
+    public List<DefaultLabelInfo> defaultLabels = new ArrayList<>();
+    public List<CaseLabelInfo> caseLabels = new ArrayList<>();
 
     protected StatementNode(SourceLocation wholeLocation) {
         super(wholeLocation);
     }
 
-    public void genFormatedStringForGotoLabels(StringBuilder stringBuilder) {
+    public boolean isLabeled() {
+        return !gotoLabels.isEmpty() || !defaultLabels.isEmpty() || !caseLabels.isEmpty();
+    }
+
+    public void genFormatedStringForLabels(StringBuilder stringBuilder) {
         StringJoiner stringJoiner = new StringJoiner(", ", "labels=[", "]");
         for (GotoLabelInfo info : gotoLabels) {
             stringJoiner.add(info.label.id);
+        }
+        for (DefaultLabelInfo info : defaultLabels) {
+            stringJoiner.add("default@" + info.switchLabel);
+        }
+        for (CaseLabelInfo info : caseLabels) {
+            stringJoiner.add("case " + info.caseIndex + "@" + info.switchLabel);
         }
         stringBuilder.append(stringJoiner);
     }
 
     /**
-     * 计算该语句及其子语句是否包含活跃的 goto 标签
+     * 计算该语句及其子语句是否包含活跃的标签
      *
-     * @return 如果包含活跃的 goto 标签，则返回 {@code true}；否则返回 {@code false}
+     * @return 如果包含活跃的标签，则返回 {@code true}；否则返回 {@code false}
      */
-    public boolean containsActiveGotoLabel() {
+    public boolean containsActiveLabel() {
+        if (!defaultLabels.isEmpty() || !caseLabels.isEmpty()) {
+            return true;
+        }
         for (GotoLabelInfo info : gotoLabels) {
             if (info.active) {
                 return true;
@@ -51,6 +66,28 @@ public abstract class StatementNode extends BlockItemNode {
         public GotoLabelInfo(IdentifierNode label) {
             this.label = label;
             this.active = false;
+        }
+    }
+
+    public static class DefaultLabelInfo {
+        public SourceLocation location;
+        public String switchLabel;
+
+        public DefaultLabelInfo(SourceLocation location) {
+            this.location = location;
+        }
+    }
+
+    public static class CaseLabelInfo {
+        public SourceLocation caseLocation;
+        public SourceLocation indexLocation;
+        public int caseIndex;
+        public String switchLabel;
+
+        public CaseLabelInfo(SourceLocation caseLocation, SourceLocation indexLocation, int caseIndex) {
+            this.caseLocation = caseLocation;
+            this.indexLocation = indexLocation;
+            this.caseIndex = caseIndex;
         }
     }
 }

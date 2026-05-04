@@ -19,9 +19,9 @@ public class NullStatementNode extends StatementNode {
         if (indentFirstLine) {
             stringBuilder.append("  ".repeat(indentLevel));
         }
-        if (!gotoLabels.isEmpty()) {
+        if (isLabeled()) {
             stringBuilder.append("NullStatementNode(");
-            genFormatedStringForGotoLabels(stringBuilder);
+            genFormatedStringForLabels(stringBuilder);
             stringBuilder.append(")\n");
         } else {
             stringBuilder.append("NullStatementNode()\n");

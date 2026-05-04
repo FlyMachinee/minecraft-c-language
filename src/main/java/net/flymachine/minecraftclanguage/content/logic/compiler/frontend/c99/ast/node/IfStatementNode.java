@@ -24,9 +24,9 @@ public final class IfStatementNode extends StatementNode {
     }
 
     @Override
-    public boolean containsActiveGotoLabel() {
-        return super.containsActiveGotoLabel() || thenStmt.containsActiveGotoLabel() ||
-               (elseStmt != null && elseStmt.containsActiveGotoLabel());
+    public boolean containsActiveLabel() {
+        return super.containsActiveLabel() || thenStmt.containsActiveLabel() ||
+               (elseStmt != null && elseStmt.containsActiveLabel());
     }
 
     @Override
@@ -38,9 +38,9 @@ public final class IfStatementNode extends StatementNode {
     public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) { stringBuilder.append("  ".repeat(indentLevel)); }
         stringBuilder.append("IfStatementNode(\n");
-        if (!gotoLabels.isEmpty()) {
+        if (isLabeled()) {
             stringBuilder.append("  ".repeat(indentLevel + 1));
-            genFormatedStringForGotoLabels(stringBuilder);
+            genFormatedStringForLabels(stringBuilder);
             stringBuilder.append(",\n");
         }
         stringBuilder.append("  ".repeat(indentLevel + 1)).append("cond=");

@@ -9,6 +9,10 @@ import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceFile;
 
 import java.util.Stack;
 
+/**
+ * 为每个循环语句生成一个唯一的标签，并将 break 和 continue 语句与最近的循环/switch关联起来
+ * 要求先进行 {@link LabelResolutionPass}
+ */
 public final class LoopLabelingPass implements AstVisitor<Void>, SemanticAnalysePass {
 
     private Logger logger;
@@ -19,35 +23,60 @@ public final class LoopLabelingPass implements AstVisitor<Void>, SemanticAnalyse
         this.logger = new ConsoleLogger();
     }
 
-    private final Stack<String> loopLabelStack = new Stack<>();
+    // private final Stack<String> loopLabelStack = new Stack<>();
+    private final Stack<String> breakContextStack = new Stack<>();
+    private final Stack<String> continueContextStack = new Stack<>();
     private int forLoopCounter = 0;
     private int whileLoopCounter = 0;
     private int doWhileLoopCounter = 0;
 
     private String enterForLoop() {
         String loopLabel = "for_loop_" + forLoopCounter++;
-        return loopLabelStack.push(loopLabel);
+        breakContextStack.push(loopLabel);
+        continueContextStack.push(loopLabel);
+        return loopLabel;
     }
 
     private String enterWhileLoop() {
         String loopLabel = "while_loop_" + whileLoopCounter++;
-        return loopLabelStack.push(loopLabel);
+        breakContextStack.push(loopLabel);
+        continueContextStack.push(loopLabel);
+        return loopLabel;
     }
 
     private String enterDoWhileLoop() {
         String loopLabel = "do_while_loop_" + doWhileLoopCounter++;
-        return loopLabelStack.push(loopLabel);
+        breakContextStack.push(loopLabel);
+        continueContextStack.push(loopLabel);
+        return loopLabel;
     }
 
     private void exitLoop() {
-        loopLabelStack.pop();
+        breakContextStack.pop();
+        continueContextStack.pop();
     }
 
-    private String getCurrentLoopLabel() {
-        if (loopLabelStack.empty()) {
+    private void enterSwitch(SwitchStatementNode node) {
+        breakContextStack.push(node.switchLabel);
+    }
+
+    private void exitSwitch(SwitchStatementNode node) {
+        breakContextStack.pop();
+    }
+
+    private String getCurrentBreakContextLabel() {
+        if (breakContextStack.empty()) {
             return null;
         } else {
-            return loopLabelStack.peek();
+            return breakContextStack.peek();
+        }
+    }
+
+    private String getCurrentContinueContextLabel() {
+        if (continueContextStack.empty()) {
+            return null;
+        } else {
+            return continueContextStack.peek();
         }
     }
 
@@ -137,9 +166,9 @@ public final class LoopLabelingPass implements AstVisitor<Void>, SemanticAnalyse
 
     @Override
     public Void visit(BreakNode node) {
-        String currentLoopLabel = getCurrentLoopLabel();
+        String currentLoopLabel = getCurrentBreakContextLabel();
         if (currentLoopLabel != null) {
-            node.loopLabel = currentLoopLabel;
+            node.loopOrSwitchLabel = currentLoopLabel;
         } else {
             semanticError = true;
             String msg = "break statement not within loop or switch";
@@ -150,7 +179,7 @@ public final class LoopLabelingPass implements AstVisitor<Void>, SemanticAnalyse
 
     @Override
     public Void visit(ContinueNode node) {
-        String currentLoopLabel = getCurrentLoopLabel();
+        String currentLoopLabel = getCurrentContinueContextLabel();
         if (currentLoopLabel != null) {
             node.loopLabel = currentLoopLabel;
         } else {
@@ -178,6 +207,14 @@ public final class LoopLabelingPass implements AstVisitor<Void>, SemanticAnalyse
         node.loopLabel = enterForLoop();
         node.body.accept(this);
         exitLoop();
+        return null;
+    }
+
+    @Override
+    public Void visit(SwitchStatementNode node) {
+        enterSwitch(node);
+        node.body.accept(this);
+        exitSwitch(node);
         return null;
     }
 

@@ -3,7 +3,9 @@ lexer grammar C99Lexer;
 // Keywords
 
 Break: 'break';
+Case: 'case';
 Continue: 'continue';
+Default: 'default';
 Do: 'do';
 Else: 'else';
 For: 'for';
@@ -11,6 +13,7 @@ Goto: 'goto';
 If: 'if';
 Int: 'int';
 Return: 'return';
+Switch: 'switch';
 Void: 'void';
 While: 'while';
 

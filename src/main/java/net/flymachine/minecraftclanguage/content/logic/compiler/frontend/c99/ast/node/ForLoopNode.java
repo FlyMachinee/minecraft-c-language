@@ -22,11 +22,11 @@ public final class ForLoopNode extends StatementNode {
     }
 
     @Override
-    public boolean containsActiveGotoLabel() {
-        if (super.containsActiveGotoLabel()) {
+    public boolean containsActiveLabel() {
+        if (super.containsActiveLabel()) {
             return true;
         }
-        return body.containsActiveGotoLabel();
+        return body.containsActiveLabel();
     }
 
     @Override

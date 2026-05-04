@@ -40,4 +40,6 @@ public interface AstVisitor<T> {
     T visit(WhileLoopNode node);
 
     T visit(ForLoopNode node);
+
+    T visit(SwitchStatementNode node);
 }

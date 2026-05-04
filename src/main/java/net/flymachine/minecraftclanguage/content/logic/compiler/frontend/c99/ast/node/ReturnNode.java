@@ -22,9 +22,9 @@ public class ReturnNode extends StatementNode {
     public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) { stringBuilder.append("  ".repeat(indentLevel)); }
         stringBuilder.append("ReturnNode(\n");
-        if (!gotoLabels.isEmpty()) {
+        if (isLabeled()) {
             stringBuilder.append("  ".repeat(indentLevel + 1));
-            genFormatedStringForGotoLabels(stringBuilder);
+            genFormatedStringForLabels(stringBuilder);
             stringBuilder.append(",\n");
         }
         stringBuilder.append("  ".repeat(indentLevel + 1)).append("exp=");

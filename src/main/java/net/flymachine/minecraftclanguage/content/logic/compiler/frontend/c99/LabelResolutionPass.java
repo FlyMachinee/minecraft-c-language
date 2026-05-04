@@ -7,13 +7,11 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.ErrorHandleUtil;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceFile;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * 一趟扫描检查标签定义和 goto 语句的合法性，并重命名标签使之以函数名为前缀
+ * 为switch语句分配唯一标签，将case和default标签与最近的switch进行关联
  */
 public final class LabelResolutionPass implements AstVisitor<Void>, SemanticAnalysePass {
 
@@ -50,6 +48,26 @@ public final class LabelResolutionPass implements AstVisitor<Void>, SemanticAnal
 
     private FunctionDefinitionNode currentFunction;
 
+    private int switchCounter = 0;
+    private final Stack<SwitchStatementNode> switchStack = new Stack<>();
+
+    private void enterSwitch(SwitchStatementNode node) {
+        node.switchLabel = "switch_" + switchCounter++;
+        switchStack.push(node);
+    }
+
+    private void exitSwitch() {
+        switchStack.pop();
+    }
+
+    private SwitchStatementNode getCurrentSwitchLabel() {
+        if (switchStack.empty()) {
+            return null;
+        } else {
+            return switchStack.peek();
+        }
+    }
+
     @Override
     public Void visit(ProgramNode node) {
         visit(node.functionDefinition);
@@ -83,6 +101,16 @@ public final class LabelResolutionPass implements AstVisitor<Void>, SemanticAnal
         for (int i = labels.size() - 1; i >= 0; i--) {
             defineLabel(labels.get(i));
         }
+
+        List<StatementNode.CaseLabelInfo> caseLabels = node.caseLabels;
+        for (int i = caseLabels.size() - 1; i >= 0; i--) {
+            defineCaseLabel(caseLabels.get(i));
+        }
+
+        List<StatementNode.DefaultLabelInfo> defaultLabels = node.defaultLabels;
+        for (int i = defaultLabels.size() - 1; i >= 0; i--) {
+            defineDefaultLabel(defaultLabels.get(i));
+        }
     }
 
     private void defineLabel(StatementNode.GotoLabelInfo gotoLabelInfo) {
@@ -107,6 +135,58 @@ public final class LabelResolutionPass implements AstVisitor<Void>, SemanticAnal
                 for (GotoNode gotoNode : pendingList) {
                     gotoNode.target.id = gotoLabelInfo.label.id;
                 }
+            }
+        }
+    }
+
+    private void defineCaseLabel(StatementNode.CaseLabelInfo caseLabelInfo) {
+        SwitchStatementNode switchNode = getCurrentSwitchLabel();
+        if (switchNode == null) {
+            // 当前没有在switch语句内
+            semanticError = true;
+            String msg = "case label not within a switch statement";
+            ErrorHandleUtil.logErrorWithSourceLine(logger, sourceFile, caseLabelInfo.caseLocation, msg);
+        } else {
+            // 在switch中，查询当前的case数值是否已定义
+            StatementNode.CaseLabelInfo definition = switchNode.caseValues.get(caseLabelInfo.caseIndex);
+            if (definition != null) {
+                // 已定义
+                semanticError = true;
+                String msg = "duplicate case value";
+                ErrorHandleUtil.logErrorWithSourceLine(logger, sourceFile, caseLabelInfo.caseLocation, msg);
+                msg = "previously used here";
+                ErrorHandleUtil.logNoteWithSourceLine(logger, sourceFile, definition.caseLocation, msg);
+            } else {
+                // 无定义，进行定义
+                switchNode.caseValues.put(caseLabelInfo.caseIndex, caseLabelInfo);
+                // 关联当前case标签与switch语句
+                caseLabelInfo.switchLabel = switchNode.switchLabel;
+            }
+        }
+    }
+
+    private void defineDefaultLabel(StatementNode.DefaultLabelInfo defaultLabelInfo) {
+        SwitchStatementNode switchNode = getCurrentSwitchLabel();
+        if (switchNode == null) {
+            // 当前没有在switch语句内
+            semanticError = true;
+            String msg =
+                "'" + logger.formatWithColor("default", Logger.Color.WHITE) + "' label not within a switch statement";
+            ErrorHandleUtil.logErrorWithSourceLine(logger, sourceFile, defaultLabelInfo.location, msg);
+        } else {
+            // 在switch中，查询当前的default是否已定义
+            if (switchNode.defaultLabel != null) {
+                // 已经定义
+                semanticError = true;
+                String msg = "multiple default labels in one switch";
+                ErrorHandleUtil.logErrorWithSourceLine(logger, sourceFile, defaultLabelInfo.location, msg);
+                msg = "this is the first default label";
+                ErrorHandleUtil.logNoteWithSourceLine(logger, sourceFile, switchNode.defaultLabel.location, msg);
+            } else {
+                // 无定义，进行定义
+                switchNode.defaultLabel = defaultLabelInfo;
+                // 关联当前default标签与switch语句
+                defaultLabelInfo.switchLabel = switchNode.switchLabel;
             }
         }
     }
@@ -206,6 +286,7 @@ public final class LabelResolutionPass implements AstVisitor<Void>, SemanticAnal
 
     @Override
     public Void visit(CompoundStatementNode node) {
+        visit((StatementNode) node);
         for (BlockItemNode blockItemNode : node.blockItems) {
             blockItemNode.accept(this);
         }
@@ -235,6 +316,15 @@ public final class LabelResolutionPass implements AstVisitor<Void>, SemanticAnal
     public Void visit(ForLoopNode node) {
         visit((StatementNode) node);
         node.body.accept(this);
+        return null;
+    }
+
+    @Override
+    public Void visit(SwitchStatementNode node) {
+        visit((StatementNode) node);
+        enterSwitch(node);
+        node.body.accept(this);
+        exitSwitch();
         return null;
     }
 }

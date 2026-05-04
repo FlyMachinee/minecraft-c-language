@@ -268,4 +268,11 @@ public final class VariableResolutionPass implements AstVisitor<Void>, SemanticA
         exitScope();
         return null;
     }
+
+    @Override
+    public Void visit(SwitchStatementNode node) {
+        node.exp.accept(this);
+        node.body.accept(this);
+        return null;
+    }
 }

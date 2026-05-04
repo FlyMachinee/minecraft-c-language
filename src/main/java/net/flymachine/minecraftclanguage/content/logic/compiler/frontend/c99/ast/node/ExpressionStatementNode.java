@@ -21,9 +21,9 @@ public class ExpressionStatementNode extends StatementNode {
             stringBuilder.append("  ".repeat(indentLevel));
         }
         stringBuilder.append("ExpressionStatementNode(\n");
-        if (!gotoLabels.isEmpty()) {
+        if (isLabeled()) {
             stringBuilder.append("  ".repeat(indentLevel + 1));
-            genFormatedStringForGotoLabels(stringBuilder);
+            genFormatedStringForLabels(stringBuilder);
             stringBuilder.append(",\n");
         }
         stringBuilder.append("  ".repeat(indentLevel + 1)).append("exp=");

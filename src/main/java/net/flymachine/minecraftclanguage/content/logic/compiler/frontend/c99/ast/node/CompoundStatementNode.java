@@ -14,12 +14,12 @@ public final class CompoundStatementNode extends StatementNode {
     }
 
     @Override
-    public boolean containsActiveGotoLabel() {
-        if (super.containsActiveGotoLabel()) {
+    public boolean containsActiveLabel() {
+        if (super.containsActiveLabel()) {
             return true;
         }
         for (BlockItemNode blockItem : blockItems) {
-            if (blockItem instanceof StatementNode stmtNode && stmtNode.containsActiveGotoLabel()) {
+            if (blockItem instanceof StatementNode stmtNode && stmtNode.containsActiveLabel()) {
                 return true;
             }
         }
@@ -35,9 +35,9 @@ public final class CompoundStatementNode extends StatementNode {
     public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) { stringBuilder.append("  ".repeat(indentLevel)); }
         stringBuilder.append("CompoundStatementNode(\n");
-        if (!gotoLabels.isEmpty()) {
+        if (isLabeled()) {
             stringBuilder.append("  ".repeat(indentLevel + 1));
-            genFormatedStringForGotoLabels(stringBuilder);
+            genFormatedStringForLabels(stringBuilder);
             stringBuilder.append(",\n");
         }
         stringBuilder.append("  ".repeat(indentLevel + 1));

@@ -12,10 +12,13 @@
 
 - 标签语句
   * goto 标签语句
+  * case 标签语句
+  * default 标签语句
 - 复合语句
 - 选择语句
   * if 语句
   * if else 语句
+  * switch 语句
 - 循环语句
   * while 语句
   * do while 语句

@@ -84,6 +84,16 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
             SourceLocation labelLocation = getSourceLocation(ctx.Identifier());
             statement.gotoLabels.add(new StatementNode.GotoLabelInfo(new IdentifierNode(labelLocation, label)));
             return statement;
+        } else if (ctx.Case() != null) {
+            int caseValue = Integer.parseInt(ctx.IntegerConstant().getText());
+            SourceLocation caseLocation = getSourceLocation(ctx.Case());
+            SourceLocation indexLocation = getSourceLocation(ctx.IntegerConstant());
+            statement.caseLabels.add(new StatementNode.CaseLabelInfo(caseLocation, indexLocation, caseValue));
+            return statement;
+        } else if (ctx.Default() != null) {
+            SourceLocation defaultLocation = getSourceLocation(ctx.Default());
+            statement.defaultLabels.add(new StatementNode.DefaultLabelInfo(defaultLocation));
+            return statement;
         } else {
             throw new IllegalStateException("Unknown labeled statement");
         }
@@ -121,8 +131,13 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
             } else {
                 return new IfStatementNode(cond, thenStmt);
             }
+        } else if (ctx.Switch() != null) {
+            ExpressionNode exp = (ExpressionNode) visit(ctx.expression());
+            StatementNode body = (StatementNode) visit(ctx.statement(0));
+            return new SwitchStatementNode(exp, body);
+        } else {
+            throw new IllegalStateException("Unknown selection statement");
         }
-        return null;
     }
 
     @Override
@@ -142,22 +157,16 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
             StatementNode body = (StatementNode) visit(ctx.statement());
             if (ctx.declaration() != null) {
                 init = visitDeclaration(ctx.declaration());
-                if (ctx.cond != null) {
-                    cond = (ExpressionNode) visit(ctx.cond);
-                }
-                if (ctx.step != null) {
-                    step = (ExpressionNode) visit(ctx.step);
-                }
             } else {
                 if (ctx.init != null) {
                     init = (ExpressionNode) visit(ctx.init);
                 }
-                if (ctx.cond != null) {
-                    cond = (ExpressionNode) visit(ctx.cond);
-                }
-                if (ctx.step != null) {
-                    step = (ExpressionNode) visit(ctx.step);
-                }
+            }
+            if (ctx.cond != null) {
+                cond = (ExpressionNode) visit(ctx.cond);
+            }
+            if (ctx.step != null) {
+                step = (ExpressionNode) visit(ctx.step);
             }
             return new ForLoopNode(getSourceLocation(ctx), init, cond, step, body);
         } else {

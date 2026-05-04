@@ -4,7 +4,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
 public final class BreakNode extends StatementNode {
-    public String loopLabel;
+    public String loopOrSwitchLabel;
 
     public BreakNode(SourceLocation wholeLocation) {
         super(wholeLocation);
@@ -18,8 +18,8 @@ public final class BreakNode extends StatementNode {
     @Override
     public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) { stringBuilder.append("  ".repeat(indentLevel)); }
-        if (loopLabel != null) {
-            stringBuilder.append("BreakNode(loop=").append(loopLabel).append(")\n");
+        if (loopOrSwitchLabel != null) {
+            stringBuilder.append("BreakNode(loop/switch=").append(loopOrSwitchLabel).append(")\n");
         } else {
             stringBuilder.append("BreakNode()\n");
         }
