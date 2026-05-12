@@ -26,52 +26,53 @@ import java.util.List;
 
 public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
 
-    public HighLevelAsmToAsmLowerer(int stackOffset) {
-        if (!BitMath.isSi12(stackOffset)) {
-            throw new IllegalArgumentException("Stack offset must be a signed 12-bit integer, but got: " + stackOffset);
-        }
-        this.stackOffset = stackOffset;
-    }
+    public HighLevelAsmToAsmLowerer() { }
 
-    private final int stackOffset;
     private final List<LA64AsmStatement> target = new ArrayList<>();
 
     public List<LA64AsmStatement> lower(HighLevelProgram highLevelProgram) {
-        lowerFunction(highLevelProgram.functionDefinition);
+        for (HighLevelFunction func : highLevelProgram.functionDefinitions) {
+            lowerFunction(func);
+        }
         return target;
     }
 
+    private HighLevelFunction functionContext;
+
     private void lowerFunction(HighLevelFunction function) {
+        functionContext = function;
+
         target.add(new LA64AsmDirective("global", List.of(new LA64DirectiveSymArg(function.name))));
         target.add(new LA64AsmLabel(function.name));
-        generatePrologue();
+        generatePrologue(function);
 
         for (HighLevelInstruction instruction : function.instructions) {
             instruction.accept(this);
         }
     }
 
-    private void generatePrologue() {
+    private void generatePrologue(HighLevelFunction function) {
+        int size = function.getStackFrameSize();
         // 申请栈空间
         target.add(new LA64AsmInstruction(
             "addi.d",
             List.of(
                 GeneralPurposeRegister.SP,
                 GeneralPurposeRegister.SP,
-                new LA64AsmImmOperand(stackOffset))));
+                new LA64AsmImmOperand(-size))));
         // 保存 ra 与 fp
         target.add(new LA64AsmInstruction(
             "st.d",
             List.of(
                 GeneralPurposeRegister.RA,
                 GeneralPurposeRegister.SP,
-                new LA64AsmImmOperand(-stackOffset - 8))));
+                new LA64AsmImmOperand(size - 8))));
         target.add(new LA64AsmInstruction(
             "st.d",
             List.of(
                 GeneralPurposeRegister.FP,
                 GeneralPurposeRegister.SP,
-                new LA64AsmImmOperand(-stackOffset - 16))
+                new LA64AsmImmOperand(size - 16))
         ));
         // 设置新的 fp
         target.add(new LA64AsmInstruction(
@@ -79,24 +80,25 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
             List.of(
                 GeneralPurposeRegister.FP,
                 GeneralPurposeRegister.SP,
-                new LA64AsmImmOperand(-stackOffset))
+                new LA64AsmImmOperand(size))
         ));
     }
 
-    private void generateEpilogue() {
+    private void generateEpilogue(HighLevelFunction function) {
+        int size = function.getStackFrameSize();
         // 恢复 ra 与 fp
         target.add(new LA64AsmInstruction(
             "ld.d",
             List.of(
                 GeneralPurposeRegister.RA,
                 GeneralPurposeRegister.SP,
-                new LA64AsmImmOperand(-stackOffset - 8))));
+                new LA64AsmImmOperand(size - 8))));
         target.add(new LA64AsmInstruction(
             "ld.d",
             List.of(
                 GeneralPurposeRegister.FP,
                 GeneralPurposeRegister.SP,
-                new LA64AsmImmOperand(-stackOffset - 16))
+                new LA64AsmImmOperand(size - 16))
         ));
         // 释放栈空间
         target.add(new LA64AsmInstruction(
@@ -104,7 +106,7 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
             List.of(
                 GeneralPurposeRegister.SP,
                 GeneralPurposeRegister.SP,
-                new LA64AsmImmOperand(-stackOffset))));
+                new LA64AsmImmOperand(size))));
         // 返回
         target.add(new LA64AsmInstruction("ret", null));
     }
@@ -162,7 +164,7 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
 
     @Override
     public Void visitRet(Ret inst) {
-        generateEpilogue();
+        generateEpilogue(functionContext);
         return null;
     }
 
@@ -455,6 +457,11 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
         return null;
     }
 
+    @Override
+    public Void visitCall(Call inst) {
+        target.add(new LA64AsmInstruction("bl", List.of(new LA64AsmSymOperand(inst.identifier))));
+        return null;
+    }
 
     private static void testUnaryHighLevelOperand(HighLevelOperand src, HighLevelOperand dst) {
         if (dst instanceof Immediate) {
@@ -516,17 +523,13 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
     }
 
     private static LA64AsmInstruction createLoad(GeneralPurposeRegister dst, Stack src) {
-        return new LA64AsmInstruction(
-            "ld.w",
-            List.of(dst, GeneralPurposeRegister.FP, new LA64AsmImmOperand(src.offset()))
-        );
+        GeneralPurposeRegister regRef = src.fpRelative() ? GeneralPurposeRegister.FP : GeneralPurposeRegister.SP;
+        return new LA64AsmInstruction("ld.w", List.of(dst, regRef, new LA64AsmImmOperand(src.offset())));
     }
 
     private static LA64AsmInstruction createStore(GeneralPurposeRegister val, Stack dst) {
-        return new LA64AsmInstruction(
-            "st.w",
-            List.of(val, GeneralPurposeRegister.FP, new LA64AsmImmOperand(dst.offset()))
-        );
+        GeneralPurposeRegister regRef = dst.fpRelative() ? GeneralPurposeRegister.FP : GeneralPurposeRegister.SP;
+        return new LA64AsmInstruction("st.w", List.of(val, regRef, new LA64AsmImmOperand(dst.offset())));
     }
 
 }

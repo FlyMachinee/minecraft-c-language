@@ -3,6 +3,7 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.AssignmentOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.BinaryOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.UnaryOperator;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.BasicType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.antlr.C99Parser;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.antlr.C99ParserBaseVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.*;
@@ -41,38 +42,160 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
 
     @Override
     public ProgramNode visitTranslationUnit(C99Parser.TranslationUnitContext ctx) {
-        FunctionDefinitionNode functionDefinition = (FunctionDefinitionNode) visit(ctx.externalDeclaration());
-        return new ProgramNode(functionDefinition);
+        List<ExternalDeclarationNode> externalDeclarations = new ArrayList<>();
+        for (C99Parser.ExternalDeclarationContext externalDeclarationContext : ctx.externalDeclaration()) {
+            externalDeclarations.add((ExternalDeclarationNode) visit(externalDeclarationContext));
+        }
+        return new ProgramNode(getSourceLocation(ctx), externalDeclarations);
     }
 
     @Override
     public FunctionDefinitionNode visitFunctionDefinition(C99Parser.FunctionDefinitionContext ctx) {
-        String name = ctx.declarator().directDeclarator().Identifier().getText();
-        SourceLocation nameLocation = getSourceLocation(ctx.declarator().directDeclarator().Identifier());
+        TypeNode baseType = parseDeclarationSpecifiers(ctx.declarationSpecifiers());
+        DeclarationLikeResult res = parseFromDeclarator(baseType, ctx.declarator());
         CompoundStatementNode body = (CompoundStatementNode) visit(ctx.compoundStatement());
-        return new FunctionDefinitionNode(new IdentifierNode(nameLocation, name), body);
+        return new FunctionDefinitionNode(getSourceLocation(ctx), res.id, res.t, body);
+    }
+
+    private record DeclarationLikeResult(TypeNode t, IdentifierNode id) { }
+
+    private TypeNode parseDeclarationSpecifiers(C99Parser.DeclarationSpecifiersContext ctx) {
+        var typeSpecifier = ctx.typeSpecifier();
+
+        if (typeSpecifier.Void() != null) {
+            return new BasicTypeNode(getSourceLocation(typeSpecifier.Void()), BasicType.VOID);
+        }
+
+        if (typeSpecifier.Int() != null) {
+            return new BasicTypeNode(getSourceLocation(typeSpecifier.Int()), BasicType.INT);
+        }
+
+        throw new RuntimeException("Unknown type specifier: " + typeSpecifier.getText());
+    }
+
+    private DeclarationLikeResult parseFromDeclarator(TypeNode baseType, C99Parser.DeclaratorContext ctx) {
+        var directDeclarator = ctx.directDeclarator();
+        return parseFromDirectDeclarator(baseType, directDeclarator);
+    }
+
+    private DeclarationLikeResult parseFromDirectDeclarator(TypeNode baseType, C99Parser.DirectDeclaratorContext ctx) {
+        // directDeclarator -> Identifier
+        if (ctx.Identifier() != null) {
+            String name = ctx.Identifier().getText();
+            SourceLocation nameLocation = getSourceLocation(ctx.Identifier());
+            return new DeclarationLikeResult(baseType, new IdentifierNode(nameLocation, name));
+        }
+
+        // directDeclarator -> LeftParen declarator RightParen
+        if (ctx.declarator() != null) {
+            return parseFromDeclarator(baseType, ctx.declarator());
+        }
+
+        // directDeclarator -> directDeclarator LeftParen parameterTypeList RightParen
+        if (ctx.directDeclarator() != null) {
+            // 递归处理左侧
+            DeclarationLikeResult inner = parseFromDirectDeclarator(baseType, ctx.directDeclarator());
+            TypeNode t = inner.t;
+            IdentifierNode id = inner.id;
+
+            if (ctx.parameterTypeList() != null) {
+                // directDeclarator -> directDeclarator LeftParen parameterTypeList RightParen
+                // 构造函数类型
+                FunctionTypeNode funcType = parseFromParameterTypeList(t, ctx.parameterTypeList(), ctx.RightParen());
+                return new DeclarationLikeResult(funcType, id);
+            }
+        }
+
+        throw new RuntimeException("Unknown direct declarator: " + ctx.getText());
+    }
+
+    private TypeNode parseFromAbstractDeclarator(TypeNode baseType, C99Parser.AbstractDeclaratorContext ctx) {
+        var directAbstractDeclarator = ctx.directAbstractDeclarator();
+        return parseFromDirectAbstractDeclarator(baseType, directAbstractDeclarator);
+    }
+
+    private TypeNode parseFromDirectAbstractDeclarator(
+        TypeNode baseType,
+        C99Parser.DirectAbstractDeclaratorContext ctx) {
+        // directAbstractDeclarator -> LeftParen abstractDeclarator RightParen
+        if (ctx.abstractDeclarator() != null) {
+            return parseFromAbstractDeclarator(baseType, ctx.abstractDeclarator());
+        }
+
+        // directAbstractDeclarator -> directAbstractDeclarator LeftParen parameterTypeList? RightParen
+        if (ctx.directAbstractDeclarator() != null) {
+            baseType = parseFromDirectAbstractDeclarator(baseType, ctx.directAbstractDeclarator());
+        }
+
+        if (ctx.LeftParen() != null) {
+            // directAbstractDeclarator -> directAbstractDeclarator LeftParen parameterTypeList? RightParen
+            // directAbstractDeclarator -> LeftParen parameterTypeList? RightParen
+
+            // 构造函数类型
+            if (ctx.parameterTypeList() != null) {
+                return parseFromParameterTypeList(baseType, ctx.parameterTypeList(), ctx.RightParen());
+            } else {
+                // 无参数函数类型
+                return new FunctionTypeNode(
+                    SourceLocation.concat(baseType.getWholeLocation(), getSourceLocation(ctx.RightParen())),
+                    baseType, new ArrayList<>(), new ArrayList<>());
+            }
+        }
+
+        throw new RuntimeException("Unknown direct declarator: " + ctx.getText());
+    }
+
+    private FunctionTypeNode parseFromParameterTypeList(
+        TypeNode returnType, C99Parser.ParameterTypeListContext ctx, TerminalNode rightParen) {
+        // 构造函数类型
+        List<TypeNode> parameterTypes = new ArrayList<>();
+        List<IdentifierNode> parameters = new ArrayList<>();
+
+        // parameterTypeList
+        // -> parameterList
+        // -> parameterDeclaration (Comma parameterDeclaration)*
+        var paramDeclList = ctx.parameterList().parameterDeclaration();
+        for (C99Parser.ParameterDeclarationContext paramCtx : paramDeclList) {
+            // parameterDeclaration -> declarationSpecifiers declarator?
+            TypeNode paramBaseType = parseDeclarationSpecifiers(paramCtx.declarationSpecifiers());
+            if (paramCtx.declarator() == null) {
+                // 没有参数名
+                parameterTypes.add(paramBaseType);
+                parameters.add(null);
+            } else {
+                DeclarationLikeResult paramRes = parseFromDeclarator(paramBaseType, paramCtx.declarator());
+                parameterTypes.add(paramRes.t);
+                parameters.add(paramRes.id);
+            }
+        }
+        return new FunctionTypeNode(
+            SourceLocation.concat(returnType.getWholeLocation(), getSourceLocation(rightParen)),
+            returnType, parameterTypes, parameters);
+
     }
 
     @Override
     public DeclarationNode visitDeclaration(C99Parser.DeclarationContext ctx) {
+        // declaration -> declarationSpecifiers initDeclaratorList? Semicolon
         var list = ctx.initDeclaratorList();
         if (list != null) {
-            return (DeclarationNode) visit(list);
+            // initDeclaratorList
+            // -> initDeclarator
+            // -> declarator (Assign initializer)?
+            var initDeclarator = list.initDeclarator();
+            TypeNode baseType = parseDeclarationSpecifiers(ctx.declarationSpecifiers());
+            DeclarationLikeResult res = parseFromDeclarator(baseType, initDeclarator.declarator());
+
+            IdentifierNode id = res.id;
+            TypeNode t = res.t;
+            if (initDeclarator.initializer() != null) {
+                ExpressionNode init = (ExpressionNode) visit(initDeclarator.initializer());
+                return new DeclarationNode(getSourceLocation(ctx), t, id, init);
+            } else {
+                return new DeclarationNode(getSourceLocation(ctx), t, id);
+            }
         } else {
             return null;
-        }
-    }
-
-    @Override
-    public DeclarationNode visitInitDeclarator(C99Parser.InitDeclaratorContext ctx) {
-        String name = ctx.declarator().directDeclarator().Identifier().getText();
-        SourceLocation nameLocation = getSourceLocation(ctx.declarator().directDeclarator().Identifier());
-        var initializer = ctx.initializer();
-        if (initializer != null) {
-            ExpressionNode initValue = (ExpressionNode) visit(initializer);
-            return new DeclarationNode(new IdentifierNode(nameLocation, name), initValue);
-        } else {
-            return new DeclarationNode(new IdentifierNode(nameLocation, name));
         }
     }
 
@@ -104,8 +227,14 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         List<BlockItemNode> blockItems = new ArrayList<>();
         if (ctx.blockItemList() != null) {
             for (C99Parser.BlockItemContext blockItemCtx : ctx.blockItemList().blockItem()) {
-                BlockItemNode blockItem = (BlockItemNode) visit(blockItemCtx);
-                blockItems.add(blockItem);
+                AstNode blockItem = visit(blockItemCtx);
+                if (blockItem instanceof DeclarationNode) {
+                    blockItems.add(new DeclarationBlockItemNode((DeclarationNode) blockItem));
+                } else if (blockItem instanceof StatementNode) {
+                    blockItems.add(new StatementBlockItemNode((StatementNode) blockItem));
+                } else {
+                    throw new IllegalStateException("Unknown block item");
+                }
             }
         }
         return new CompoundStatementNode(getSourceLocation(ctx), blockItems);
@@ -156,10 +285,13 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
             ExpressionNode step = null;
             StatementNode body = (StatementNode) visit(ctx.statement());
             if (ctx.declaration() != null) {
-                init = visitDeclaration(ctx.declaration());
+                DeclarationNode decl = visitDeclaration(ctx.declaration());
+                if (decl != null) {
+                    init = new ForInitDeclarationNode(decl);
+                }
             } else {
                 if (ctx.init != null) {
-                    init = (ExpressionNode) visit(ctx.init);
+                    init = new ForInitExpressionNode((ExpressionNode) visit(ctx.init));
                 }
             }
             if (ctx.cond != null) {
@@ -211,15 +343,31 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
     public ExpressionNode visitPostfixExpression(C99Parser.PostfixExpressionContext ctx) {
         if (ctx.primaryExpression() != null) {
             return (ExpressionNode) visit(ctx.primaryExpression());
-        } else if (ctx.PlusPlus() != null) {
+        }
+
+        if (ctx.PlusPlus() != null) {
             ExpressionNode operand = (ExpressionNode) visit(ctx.postfixExpression());
             return new IncrementDecrementNode(getSourceLocation(ctx.PlusPlus()), true, false, operand);
-        } else if (ctx.MinusMinus() != null) {
+        }
+
+        if (ctx.MinusMinus() != null) {
             ExpressionNode operand = (ExpressionNode) visit(ctx.postfixExpression());
             return new IncrementDecrementNode(getSourceLocation(ctx.MinusMinus()), false, false, operand);
-        } else {
-            throw new IllegalStateException("Unknown postfix expression");
         }
+
+        if (ctx.LeftParen() != null) {
+            ExpressionNode function = (ExpressionNode) visit(ctx.postfixExpression());
+            List<ExpressionNode> arguments = new ArrayList<>();
+            if (ctx.argumentExpressionList() != null) {
+                var argExpList = ctx.argumentExpressionList();
+                for (C99Parser.AssignmentExpressionContext argCtx : argExpList.assignmentExpression()) {
+                    arguments.add((ExpressionNode) visit(argCtx));
+                }
+            }
+            return new FunctionCallNode(getSourceLocation(ctx), function, arguments);
+        }
+
+        throw new IllegalStateException("Unknown postfix expression");
     }
 
     @Override

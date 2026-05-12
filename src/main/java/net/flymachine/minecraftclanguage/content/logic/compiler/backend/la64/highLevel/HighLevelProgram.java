@@ -1,9 +1,11 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel;
 
-public class HighLevelProgram {
-    public HighLevelFunction functionDefinition;
+import java.util.List;
 
-    public HighLevelProgram(HighLevelFunction functionDefinition) {
-        this.functionDefinition = functionDefinition;
+public class HighLevelProgram {
+    public List<HighLevelFunction> functionDefinitions;
+
+    public HighLevelProgram(List<HighLevelFunction> functionDefinitions) {
+        this.functionDefinitions = functionDefinitions;
     }
 }

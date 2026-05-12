@@ -641,6 +641,21 @@ public final class LA64InstructionSet {
                 long target = cpu.getPc() + offset;
                 cpu.setPc(target);
             }));
+        add(LA64InstructionInfo.formatOffs26(
+            "bl",
+            0b0101_01,
+            (emulator, operands) -> {
+                // bl offs26
+                /*
+                    GR[1] = PC + 4
+                    PC = PC + SignExtend({offs26, 2'b0}, GRLEN)
+                 */
+                LA64CpuState cpu = emulator.getCpuState();
+                cpu.setGr(1, cpu.getPc() + 4);
+                long offset = ((long) operands[0].value()) << 2;
+                long target = cpu.getPc() + offset;
+                cpu.setPc(target);
+            }));
         add(LA64InstructionInfo.format2GPROffs16(
             "beq",
             0b0101_10,

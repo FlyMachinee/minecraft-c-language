@@ -59,6 +59,7 @@ Not: '!';
 Tilde: '~';
 Question: '?';
 Colon: ':';
+Comma: ',';
 Assign: '=';
 StarAssign: '*=';
 DivideAssign: '/=';

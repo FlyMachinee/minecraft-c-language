@@ -43,27 +43,35 @@ public final class C99Frontend {
 
         AstNode ast = new AstBuilderVisitor().visit(tree);
 
-        VariableResolutionPass pass1 = new VariableResolutionPass();
-        pass1.setSourceFile(sourceFile);
-        ast.accept(pass1);
+        IdentifierResolutionPass identifierResolutionPass = new IdentifierResolutionPass();
+        identifierResolutionPass.setSourceFile(sourceFile);
+        ast.accept(identifierResolutionPass);
 
-        if (pass1.hasSemanticError()) {
+        if (identifierResolutionPass.hasSemanticError()) {
             return null;
         }
 
-        LabelResolutionPass pass2 = new LabelResolutionPass();
-        pass2.setSourceFile(sourceFile);
-        ast.accept(pass2);
+        TypeCheckingPass typeCheckingPass = new TypeCheckingPass();
+        typeCheckingPass.setSourceFile(sourceFile);
+        ast.accept(typeCheckingPass);
 
-        if (pass2.hasSemanticError()) {
+        if (typeCheckingPass.hasSemanticError()) {
             return null;
         }
 
-        LoopLabelingPass pass3 = new LoopLabelingPass();
-        pass3.setSourceFile(sourceFile);
-        ast.accept(pass3);
+        LabelResolutionPass labelResolutionPass = new LabelResolutionPass();
+        labelResolutionPass.setSourceFile(sourceFile);
+        ast.accept(labelResolutionPass);
 
-        if (pass3.hasSemanticError()) {
+        if (labelResolutionPass.hasSemanticError()) {
+            return null;
+        }
+
+        LoopLabelingPass loopLabelingPass = new LoopLabelingPass();
+        loopLabelingPass.setSourceFile(sourceFile);
+        ast.accept(loopLabelingPass);
+
+        if (loopLabelingPass.hasSemanticError()) {
             return null;
         }
 

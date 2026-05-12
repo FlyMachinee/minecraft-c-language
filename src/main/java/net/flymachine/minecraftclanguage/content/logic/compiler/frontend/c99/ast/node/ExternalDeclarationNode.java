@@ -1,3 +1,3 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node;
 
-public interface BlockItemNode extends AstInterface { }
+public interface ExternalDeclarationNode extends AstInterface { }

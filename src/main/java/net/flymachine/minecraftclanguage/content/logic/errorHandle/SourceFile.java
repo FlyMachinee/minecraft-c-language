@@ -30,4 +30,14 @@ public class SourceFile {
         }
         return lines[line - 1].replace("\r", "");
     }
+
+    public String getByLocation(SourceLocation location) {
+        if (location == null) {
+            return null;
+        }
+        String line = getLine(location.line());
+        int from = Math.min(location.column(), line.length());
+        int len = Math.min(location.length(), line.length() - from);
+        return line.substring(from, from + len);
+    }
 }

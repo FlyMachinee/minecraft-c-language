@@ -12,8 +12,8 @@ public final class LA64Backend {
 
     public List<LA64AsmStatement> compile(TacProgram program) {
         HighLevelProgram highLevelProgram = new TacToHighLevelAsmLowerer().lower(program);
-        ReplacePseudoRegisterPass pass1 = new ReplacePseudoRegisterPass();
-        int stackOffset = pass1.runOnProgram(highLevelProgram);
-        return new HighLevelAsmToAsmLowerer(stackOffset).lower(highLevelProgram);
+        ReplacePseudoRegisterPass replacePseudoRegisterPass = new ReplacePseudoRegisterPass();
+        replacePseudoRegisterPass.runOnProgram(highLevelProgram);
+        return new HighLevelAsmToAsmLowerer().lower(highLevelProgram);
     }
 }

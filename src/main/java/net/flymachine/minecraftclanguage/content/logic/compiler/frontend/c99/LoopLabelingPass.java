@@ -1,11 +1,8 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99;
 
 import net.flymachine.minecraftclanguage.content.logger.ConsoleLogger;
-import net.flymachine.minecraftclanguage.content.logger.Logger;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.*;
-import net.flymachine.minecraftclanguage.content.logic.errorHandle.ErrorHandleUtil;
-import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceFile;
 
 import java.util.Stack;
 
@@ -13,14 +10,10 @@ import java.util.Stack;
  * 为每个循环语句生成一个唯一的标签，并将 break 和 continue 语句与最近的循环/switch关联起来
  * 要求先进行 {@link LabelResolutionPass}
  */
-public final class LoopLabelingPass implements AstVisitor<Void>, SemanticAnalysePass {
-
-    private Logger logger;
-    private SourceFile sourceFile;
-    private boolean semanticError = false;
+public final class LoopLabelingPass extends SemanticAnalysePass implements AstVisitor<Void> {
 
     public LoopLabelingPass() {
-        this.logger = new ConsoleLogger();
+        super(new ConsoleLogger());
     }
 
     // private final Stack<String> loopLabelStack = new Stack<>();
@@ -82,7 +75,9 @@ public final class LoopLabelingPass implements AstVisitor<Void>, SemanticAnalyse
 
     @Override
     public Void visit(ProgramNode node) {
-        visit(node.functionDefinition);
+        for (ExternalDeclarationNode externalDeclaration : node.declarations) {
+            externalDeclaration.accept(this);
+        }
         return null;
     }
 
@@ -170,9 +165,9 @@ public final class LoopLabelingPass implements AstVisitor<Void>, SemanticAnalyse
         if (currentLoopLabel != null) {
             node.loopOrSwitchLabel = currentLoopLabel;
         } else {
-            semanticError = true;
+            error();
             String msg = "break statement not within loop or switch";
-            ErrorHandleUtil.logErrorWithSourceLine(logger, sourceFile, node.wholeLocation, msg);
+            logErrorWithSourceLine(node.wholeLocation, msg);
         }
         return null;
     }
@@ -183,9 +178,9 @@ public final class LoopLabelingPass implements AstVisitor<Void>, SemanticAnalyse
         if (currentLoopLabel != null) {
             node.loopLabel = currentLoopLabel;
         } else {
-            semanticError = true;
+            error();
             String msg = "continue statement not within a loop";
-            ErrorHandleUtil.logErrorWithSourceLine(logger, sourceFile, node.wholeLocation, msg);
+            logErrorWithSourceLine(node.wholeLocation, msg);
         }
         return null;
     }
@@ -219,27 +214,7 @@ public final class LoopLabelingPass implements AstVisitor<Void>, SemanticAnalyse
     }
 
     @Override
-    public boolean hasSemanticError() {
-        return semanticError;
-    }
-
-    @Override
-    public Logger getLogger() {
-        return logger;
-    }
-
-    @Override
-    public void setLogger(Logger logger) {
-        this.logger = logger;
-    }
-
-    @Override
-    public SourceFile getSourceFile() {
-        return sourceFile;
-    }
-
-    @Override
-    public void setSourceFile(SourceFile sourceFile) {
-        this.sourceFile = sourceFile;
+    public Void visit(FunctionCallNode node) {
+        return null;
     }
 }

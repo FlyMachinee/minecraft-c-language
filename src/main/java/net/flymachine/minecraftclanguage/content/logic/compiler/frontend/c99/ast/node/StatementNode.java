@@ -6,7 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.StringJoiner;
 
-public abstract class StatementNode extends BlockItemNode {
+public abstract class StatementNode extends AstNode {
     public List<GotoLabelInfo> gotoLabels = new ArrayList<>();
     public List<DefaultLabelInfo> defaultLabels = new ArrayList<>();
     public List<CaseLabelInfo> caseLabels = new ArrayList<>();

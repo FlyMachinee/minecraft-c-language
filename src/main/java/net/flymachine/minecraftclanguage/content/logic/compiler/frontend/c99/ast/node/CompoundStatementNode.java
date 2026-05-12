@@ -19,7 +19,7 @@ public final class CompoundStatementNode extends StatementNode {
             return true;
         }
         for (BlockItemNode blockItem : blockItems) {
-            if (blockItem instanceof StatementNode stmtNode && stmtNode.containsActiveLabel()) {
+            if (blockItem instanceof StatementBlockItemNode stmtItem && stmtItem.statement.containsActiveLabel()) {
                 return true;
             }
         }

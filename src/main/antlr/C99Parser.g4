@@ -21,8 +21,12 @@ primaryExpression
 // ISO 6.5.2, Postfix Operators
 postfixExpression
     : primaryExpression
+    | postfixExpression LeftParen argumentExpressionList? RightParen
     | postfixExpression PlusPlus
     | postfixExpression MinusMinus
+    ;
+argumentExpressionList
+    : assignmentExpression (Comma assignmentExpression)*
     ;
 
 // ISO 6.5.3, Unary Operators
@@ -183,20 +187,33 @@ typeSpecifier
     ;
 
 // ISO 6.7.5, Declarators
-// Rewrote
 declarator:
     directDeclarator
     ;
 directDeclarator
-    : (
-        Identifier
-        | LeftParen declarator RightParen
-    ) (
-        LeftParen parameterTypeList RightParen
-    )*
+    : Identifier
+    | LeftParen declarator RightParen
+    | directDeclarator LeftParen parameterTypeList RightParen
     ;
 parameterTypeList
-    : Void
+    : parameterList
+    ;
+parameterList
+    : parameterDeclaration (Comma parameterDeclaration)*
+    ;
+parameterDeclaration
+    : declarationSpecifiers declarator
+    | declarationSpecifiers abstractDeclarator?
+    ;
+
+// ISO 6.7.6, Type Names
+abstractDeclarator
+    : directAbstractDeclarator
+    ;
+directAbstractDeclarator
+    : LeftParen abstractDeclarator RightParen
+    | LeftParen parameterTypeList? RightParen
+    | directAbstractDeclarator LeftParen parameterTypeList? RightParen
     ;
 
 // ISO 6.7.8, Initialization
@@ -261,14 +278,15 @@ jumpStatement
     ;
 
 // ISO 6.9, External Definitions
-translationUnit:
-    externalDeclaration
+translationUnit
+    : externalDeclaration+
     ;
 externalDeclaration
     : functionDefinition
+    | declaration
     ;
 
-// ISO 6.9.1, HighLevelFunction Definitions
+// ISO 6.9.1, Function Definitions
 functionDefinition
     : declarationSpecifiers declarator compoundStatement
     ;

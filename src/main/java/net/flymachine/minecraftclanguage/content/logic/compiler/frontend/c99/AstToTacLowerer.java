@@ -16,8 +16,13 @@ public final class AstToTacLowerer {
     public AstToTacLowerer() { }
 
     public TacProgram lower(ProgramNode program) {
-        TacFunction functionDefinition = lowerFunction(program.functionDefinition);
-        return new TacProgram(functionDefinition);
+        List<TacFunction> functions = new ArrayList<>();
+        for (ExternalDeclarationNode externalDeclaration : program.declarations) {
+            if (externalDeclaration instanceof FunctionDefinitionNode funcDef) {
+                functions.add(lowerFunction(funcDef));
+            }
+        }
+        return new TacProgram(functions);
     }
 
     private int tempVarCounter = 0;
@@ -40,19 +45,30 @@ public final class AstToTacLowerer {
         List<TacInstruction> instructions = new ArrayList<>();
         lowerStatement(functionDefinition.body, instructions);
         instructions.add(new TacReturn(new TacIntConstant(0)));
-        return new TacFunction(functionDefinition.identifier.id, instructions);
+        FunctionTypeNode functionType = (FunctionTypeNode) functionDefinition.functionType;
+        if (functionType.hasNoParameters()) {
+            return new TacFunction(functionDefinition.identifier.id, new ArrayList<>(), instructions);
+        } else {
+            List<String> parameters = functionType.parameters.stream().map(param -> param.id).toList();
+            return new TacFunction(functionDefinition.identifier.id, parameters, instructions);
+        }
     }
 
     private void lowerBlockItem(BlockItemNode blockItem, List<TacInstruction> instructions) {
-        if (blockItem instanceof StatementNode statementNode) {
-            lowerStatement(statementNode, instructions);
-        } else if (blockItem instanceof DeclarationNode declarationNode) {
-            if (declarationNode.initializer != null) {
-                TacValue initValue = lowerExpression(declarationNode.initializer, instructions);
-                instructions.add(new TacCopy(initValue, new TacVariable(declarationNode.variable.id)));
-            }
+        if (blockItem instanceof StatementBlockItemNode statementNode) {
+            lowerStatement(statementNode.statement, instructions);
+        } else if (blockItem instanceof DeclarationBlockItemNode declarationNode) {
+            DeclarationNode decl = declarationNode.declaration;
+            lowerDeclaration(decl, instructions);
         } else {
             throw new RuntimeException("Unknown instruction: " + blockItem.toString());
+        }
+    }
+
+    private void lowerDeclaration(DeclarationNode declaration, List<TacInstruction> instructions) {
+        if (declaration.initializer != null) {
+            TacValue initValue = lowerExpression(declaration.initializer, instructions);
+            instructions.add(new TacCopy(initValue, new TacVariable(declaration.identifier.id)));
         }
     }
 
@@ -202,10 +218,10 @@ public final class AstToTacLowerer {
             String labelCond = makeLabel("for_cond");
 
             if (forLoopNode.init != null) {
-                if (forLoopNode.init instanceof DeclarationNode decl) {
-                    lowerBlockItem(decl, instructions);
-                } else if (forLoopNode.init instanceof ExpressionNode expr) {
-                    lowerExpression(expr, instructions);
+                if (forLoopNode.init instanceof ForInitDeclarationNode decl) {
+                    lowerDeclaration(decl.declaration, instructions);
+                } else if (forLoopNode.init instanceof ForInitExpressionNode expr) {
+                    lowerExpression(expr.expression, instructions);
                 } else {
                     throw new RuntimeException("unexpected init node in for loop: " + forLoopNode.init.getClass());
                 }
@@ -536,6 +552,24 @@ public final class AstToTacLowerer {
             TacValue elseValue = lowerExpression(conditionalExpressionNode.elseExpr, instructions);
             instructions.add(new TacCopy(elseValue, dst));
             instructions.add(new TacLabel(labelCondEnd));
+            return dst;
+        } else if (expression instanceof FunctionCallNode functionCallNode) {
+            // 函数调用
+            // func(arg0, arg1, ...)
+            // =>
+            // res0 = <eval arg0>
+            // res1 = <eval arg1>
+            // ...
+            // dst = invoke(func, [res0, res1,...])
+            // yield dst
+
+            IdentifierNode funcId = (IdentifierNode) functionCallNode.function;
+            List<TacValue> args = new ArrayList<>();
+            for (ExpressionNode arg : functionCallNode.arguments) {
+                args.add(lowerExpression(arg, instructions));
+            }
+            TacVariable dst = new TacVariable(makeTempVar());
+            instructions.add(new TacFunctionCall(funcId.id, args, dst));
             return dst;
         }
         throw new UnsupportedOperationException(

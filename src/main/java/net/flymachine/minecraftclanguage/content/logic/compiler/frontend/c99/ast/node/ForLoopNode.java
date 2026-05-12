@@ -43,13 +43,7 @@ public final class ForLoopNode extends StatementNode {
         }
         if (init != null) {
             stringBuilder.append("  ".repeat(indentLevel + 1)).append("init=");
-            if (init instanceof DeclarationNode decl) {
-                decl.genFormattedString(stringBuilder, indentLevel + 1, false);
-            } else if (init instanceof ExpressionNode expr) {
-                expr.genFormattedString(stringBuilder, indentLevel + 1, false);
-            } else {
-                throw new RuntimeException("Unknown init type: " + init.getClass().getName());
-            }
+            init.genFormattedString(stringBuilder, indentLevel + 1, false);
         }
         if (cond != null) {
             stringBuilder.append("  ".repeat(indentLevel + 1)).append("cond=");

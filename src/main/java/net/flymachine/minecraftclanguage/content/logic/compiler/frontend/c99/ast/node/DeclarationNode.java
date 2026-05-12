@@ -4,19 +4,25 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 import org.jetbrains.annotations.Nullable;
 
-public final class DeclarationNode extends BlockItemNode implements ForInitNode {
-    public IdentifierNode variable;
+public final class DeclarationNode extends AstNode implements ExternalDeclarationNode {
+    public TypeNode type;
+    public IdentifierNode identifier;
     public @Nullable ExpressionNode initializer;
 
-    public DeclarationNode(IdentifierNode variable, ExpressionNode initializer) {
-        super(SourceLocation.concat(variable.wholeLocation, initializer.wholeLocation));
-        this.variable = variable;
+    public DeclarationNode(
+        SourceLocation wholeLocation, TypeNode type, IdentifierNode identifier,
+        @Nullable ExpressionNode initializer) {
+
+        super(wholeLocation);
+        this.type = type;
+        this.identifier = identifier;
         this.initializer = initializer;
     }
 
-    public DeclarationNode(IdentifierNode variable) {
-        super(variable.wholeLocation);
-        this.variable = variable;
+    public DeclarationNode(SourceLocation wholeLocation, TypeNode type, IdentifierNode identifier) {
+        super(wholeLocation);
+        this.type = type;
+        this.identifier = identifier;
         this.initializer = null;
     }
 
@@ -29,7 +35,10 @@ public final class DeclarationNode extends BlockItemNode implements ForInitNode 
     public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) { stringBuilder.append("  ".repeat(indentLevel)); }
         stringBuilder.append("DeclarationNode(\n");
-        stringBuilder.append("  ".repeat(indentLevel + 1)).append("id=\"").append(variable.id).append("\",\n");
+        stringBuilder.append("  ".repeat(indentLevel + 1)).append("type=");
+        type.genFormattedString(stringBuilder);
+        stringBuilder.append(",\n");
+        stringBuilder.append("  ".repeat(indentLevel + 1)).append("id=\"").append(identifier.id).append("\",\n");
         stringBuilder.append("  ".repeat(indentLevel + 1)).append("init=");
         if (initializer != null) {
             initializer.genFormattedString(stringBuilder, indentLevel + 1, false);

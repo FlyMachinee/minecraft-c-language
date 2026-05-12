@@ -3,13 +3,18 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.as
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
-public class FunctionDefinitionNode extends AstNode {
+public final class FunctionDefinitionNode extends AstNode implements ExternalDeclarationNode {
     public IdentifierNode identifier;
+    public TypeNode functionType;
     public CompoundStatementNode body;
 
-    public FunctionDefinitionNode(IdentifierNode identifier, CompoundStatementNode body) {
-        super(SourceLocation.concat(identifier.wholeLocation, body.wholeLocation));
+    public FunctionDefinitionNode(
+        SourceLocation wholeLocation, IdentifierNode identifier,
+        TypeNode functionType, CompoundStatementNode body) {
+
+        super(wholeLocation);
         this.identifier = identifier;
+        this.functionType = functionType;
         this.body = body;
     }
 
@@ -24,6 +29,9 @@ public class FunctionDefinitionNode extends AstNode {
         stringBuilder.append("FunctionDefinitionNode(\n");
         stringBuilder.append("  ".repeat(indentLevel + 1));
         stringBuilder.append("name=\"").append(identifier.id).append("\",\n");
+        stringBuilder.append("  ".repeat(indentLevel + 1)).append("type=");
+        functionType.genFormattedString(stringBuilder);
+        stringBuilder.append(",\n");
         stringBuilder.append("  ".repeat(indentLevel + 1)).append("body=");
         body.genFormattedString(stringBuilder, indentLevel + 1, false);
         stringBuilder.append("  ".repeat(indentLevel)).append(")\n");

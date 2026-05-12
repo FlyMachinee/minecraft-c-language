@@ -11,4 +11,8 @@ public interface Logger {
         RESET, BLACK, RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN, WHITE,
         LIGHT_BLACK, LIGHT_RED, LIGHT_GREEN, LIGHT_YELLOW, LIGHT_BLUE, LIGHT_MAGENTA, LIGHT_CYAN, LIGHT_WHITE
     }
+
+    default String white(String text) {
+        return formatWithColor(text, Color.WHITE);
+    }
 }

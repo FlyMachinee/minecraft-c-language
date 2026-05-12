@@ -20,4 +20,6 @@ public interface HighLevelVisitor<T> {
     T visitBranchIfNotZero(BranchIfNotZero inst);
 
     T visitBranchIfComparison(BranchIfComparison inst);
+
+    T visitCall(Call inst);
 }

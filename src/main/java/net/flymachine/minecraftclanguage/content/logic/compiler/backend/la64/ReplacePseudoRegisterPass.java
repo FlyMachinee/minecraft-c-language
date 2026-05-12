@@ -14,23 +14,26 @@ public final class ReplacePseudoRegisterPass implements HighLevelVisitor<Void> {
 
     public ReplacePseudoRegisterPass() { }
 
-    // 指向当前的栈顶元素
-    // 已经包含了 ra（-8）与 fp（-16）两个寄存器
-    private int stackOffset = -16;
+    // 指向当前已使用的元素
+    // 相对于 $fp 寻址
+    private int stackOffset;
 
     // 记录每个伪寄存器对应栈上内存偏移量
     // TODO: 暂时将所有伪寄存器都放在栈上
     private final Map<String, Integer> registers = new HashMap<>();
 
-    public int runOnProgram(HighLevelProgram program) {
-        return runOnFunction(program.functionDefinition);
+    public void runOnProgram(HighLevelProgram program) {
+        for (HighLevelFunction func : program.functionDefinitions) {
+            runOnFunction(func);
+        }
     }
 
-    public int runOnFunction(HighLevelFunction function) {
+    public void runOnFunction(HighLevelFunction function) {
+        stackOffset = -function.savedRegisters * 8;
         for (HighLevelInstruction inst : function.instructions) {
             inst.accept(this);
         }
-        return stackOffset;
+        function.variableSize = -stackOffset - function.savedRegisters * 8;
     }
 
     @Override
@@ -93,6 +96,11 @@ public final class ReplacePseudoRegisterPass implements HighLevelVisitor<Void> {
     public Void visitBranchIfComparison(BranchIfComparison inst) {
         inst.lhs = replacePseudo(inst.lhs);
         inst.rhs = replacePseudo(inst.rhs);
+        return null;
+    }
+
+    @Override
+    public Void visitCall(Call inst) {
         return null;
     }
 
