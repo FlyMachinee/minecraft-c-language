@@ -18,26 +18,23 @@ public final class LA64Emulator {
 
     private static final long INITIAL_SP = 0x00007ffffffffff0L;
 
+    private int ppn = 0;
+
     // 目前，当从 0 地址取指时，停止执行并返回 a0
     private boolean stopFlag = false;
 
     public LA64Emulator() {
-        mmu.addPageTableEntry(
-            LA64CpuState.INITIAL_PC / SimpleRam.PAGE_SIZE,
-            new LA64MemoryManagementUnit.LA64PageTableEntry(
-                0,
-                true));
-        mmu.addPageTableEntry(
-            INITIAL_SP / SimpleRam.PAGE_SIZE,
-            new LA64MemoryManagementUnit.LA64PageTableEntry(
-                1,
-                true
-            ));
+        reset();
     }
 
     public void reset() {
         cpuState.reset();
         cpuState.setGr(GeneralPurposeRegister.SP.getNumber(), INITIAL_SP);
+        mmu.clearPageTable();
+        ppn = 0;
+        mmu.addPageTableEntry(
+            INITIAL_SP / SimpleRam.PAGE_SIZE,
+            new LA64MemoryManagementUnit.LA64PageTableEntry(ppn++, true));
         stopFlag = false;
     }
 
@@ -49,7 +46,13 @@ public final class LA64Emulator {
 
     public void loadExecutable(LA64Executable executable) {
         byte[] textSeg = executable.text();
-        ram.dmaToMemory(LA64CpuState.INITIAL_PC, textSeg, 0, textSeg.length);
+        mmu.addPageTableEntry(
+            executable.textVA() / SimpleRam.PAGE_SIZE,
+            new LA64MemoryManagementUnit.LA64PageTableEntry(ppn++, true));
+        long textPA =
+            mmu.translateVirtualAddress(executable.textVA(), LA64MemoryManagementUnit.LA64MemoryAccessType.FETCH);
+        ram.dmaToMemory(textPA, textSeg, 0, textSeg.length);
+        cpuState.setPc(executable.textVA() + executable.entryOffset());
     }
 
     public long start() {

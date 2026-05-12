@@ -13,6 +13,10 @@ public class LA64MemoryManagementUnit {
 
     private final Long2ObjectMap<LA64PageTableEntry> pageTable = new Long2ObjectOpenHashMap<>();
 
+    public void clearPageTable() {
+        pageTable.clear();
+    }
+
     public void addPageTableEntry(long virtualPageNumber, LA64PageTableEntry entry) {
         pageTable.put(virtualPageNumber, entry);
     }

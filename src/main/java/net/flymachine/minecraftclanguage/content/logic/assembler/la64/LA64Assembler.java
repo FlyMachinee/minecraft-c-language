@@ -9,15 +9,16 @@ import net.flymachine.minecraftclanguage.content.logic.architecture.la64.registe
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.register.LA64Register;
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.register.LA64RegisterResolver;
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.util.BitMath;
-import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.LA64AsmDirective;
-import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.LA64AsmInstruction;
-import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.LA64AsmLabel;
-import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.LA64AsmStatement;
+import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.*;
 import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.operand.LA64AsmImmOperand;
 import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.operand.LA64AsmOperand;
 import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.operand.LA64AsmSymOperand;
+import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.operand.LA64DirectiveSymArg;
 import net.flymachine.minecraftclanguage.content.logic.memory.Segment;
+import net.flymachine.minecraftclanguage.content.logic.object.SymbolEntry;
 import net.flymachine.minecraftclanguage.content.logic.object.la64.LA64Object;
+import net.flymachine.minecraftclanguage.content.logic.object.la64.RelocationEntry;
+import net.flymachine.minecraftclanguage.content.logic.object.la64.RelocationType;
 
 import java.io.ByteArrayOutputStream;
 import java.util.*;
@@ -27,10 +28,10 @@ public final class LA64Assembler {
 
     public LA64Assembler() { }
 
-    public LA64Object assemble(List<LA64AsmStatement> statements) {
+    public LA64Object assemble(LA64Assembly assembly) {
         symbolTable.clear();
-        collectSymbol(statements);
-        return generateObject(statements);
+        collectSymbol(assembly);
+        return generateObject(assembly);
     }
 
     private static class SymbolLocation {
@@ -44,8 +45,9 @@ public final class LA64Assembler {
     }
 
     private final Map<String, SymbolLocation> symbolTable = new HashMap<>();
+    private final Set<String> globalSymbols = new HashSet<>();
 
-    private void collectSymbol(List<LA64AsmStatement> statements) {
+    private void collectSymbol(LA64Assembly assembly) {
         // 默认目标为 text 段
         Segment currentSegment = Segment.TEXT;
 
@@ -56,12 +58,24 @@ public final class LA64Assembler {
         // 用于查询寄存器名
         LA64RegisterResolver resolver = LA64RegisterResolver.getInstance();
 
-        for (LA64AsmStatement statement : statements) {
+        for (LA64AsmStatement statement : assembly.statements()) {
 
             // 伪指令处理
             if (statement instanceof LA64AsmDirective directive) {
                 switch (directive.name()) {
-                    case "global" -> { }
+                    case "global" -> {
+                        if (!(directive.args().get(0) instanceof LA64DirectiveSymArg symArg)) {
+                            throw new IllegalArgumentException(
+                                "Expected symbol argument for global directive, but got: " + directive.args().get(0));
+                        } else {
+                            String symbolName = symArg.symbol();
+                            if (symbolName.startsWith(".L")) {
+                                throw new IllegalArgumentException(
+                                    "Local labels cannot be declared global: " + symbolName);
+                            }
+                            globalSymbols.add(symbolName);
+                        }
+                    }
                     default -> throw new UnsupportedOperationException("Unsupported directive: " + directive.name());
                 }
                 continue;
@@ -115,7 +129,7 @@ public final class LA64Assembler {
         }
     }
 
-    private LA64Object generateObject(List<LA64AsmStatement> statements) {
+    private LA64Object generateObject(LA64Assembly assembly) {
 
         // 默认目标为 text 段
         Segment currentSegment = Segment.TEXT;
@@ -128,7 +142,27 @@ public final class LA64Assembler {
         EnumMap<Segment, ByteArrayOutputStream> segmentContents = new EnumMap<>(Segment.class);
         segmentContents.put(Segment.TEXT, new ByteArrayOutputStream());
 
-        for (LA64AsmStatement statement : statements) {
+        // 符号表等
+        List<SymbolEntry> symbolList = new ArrayList<>();
+        List<RelocationEntry> relocList = new ArrayList<>();
+        List<String> symbolNames = new ArrayList<>();
+        for (Map.Entry<String, SymbolLocation> entry : symbolTable.entrySet()) {
+            String symbolName = entry.getKey();
+            if (symbolName.startsWith(".L")) {
+                continue;
+            }
+
+            SymbolLocation loc = entry.getValue();
+            int symbolNameIndex = symbolNames.size();
+            symbolNames.add(symbolName);
+            symbolList.add(new SymbolEntry(
+                symbolNameIndex,
+                loc.segment,
+                loc.offset,
+                globalSymbols.contains(symbolName)));
+        }
+
+        for (LA64AsmStatement statement : assembly.statements()) {
 
             // 伪指令处理
             if (statement instanceof LA64AsmDirective directive) {
@@ -192,20 +226,37 @@ public final class LA64Assembler {
                                 } else if (asmOp instanceof LA64AsmSymOperand sym) {
                                     SymbolLocation loc = symbolTable.get(sym.symbol());
                                     if (loc == null) {
-                                        throw new IllegalArgumentException("Undefined symbol: " + sym.symbol());
-                                    }
-                                    if (loc.segment != currentSegment) {
-                                        throw new IllegalArgumentException(
-                                            "Current cannot support cross-segment symbol references");
-                                    }
-                                    value = loc.offset - offset;
-                                    if ((value & 0b11) != 0) {
-                                        throw new IllegalArgumentException("Offset not aligned: " + value);
-                                    }
-                                    value >>= 2;
-                                    if (!type.representable(value)) {
-                                        throw new IllegalArgumentException(
-                                            "Symbol offset out of range for operand type " + type + ": " + value);
+                                        // 未定义符号
+                                        if (sym.symbol().startsWith(".L")) {
+                                            throw new IllegalArgumentException(
+                                                "Undefined local symbol: " + sym.symbol());
+                                        }
+
+                                        // 非局部符号，添加至重定位表
+                                        int symbolNameIndex = symbolNames.indexOf(sym.symbol());
+                                        if (symbolNameIndex == -1) {
+                                            symbolNameIndex = symbolNames.size();
+                                            symbolNames.add(sym.symbol());
+                                        }
+                                        relocList.add(new RelocationEntry(
+                                            offset,
+                                            symbolNameIndex,
+                                            getRelocationType(info.mnemonic())));
+                                        value = 0;
+                                    } else {
+                                        if (loc.segment != currentSegment) {
+                                            throw new IllegalArgumentException(
+                                                "Current cannot support cross-segment symbol references");
+                                        }
+                                        value = loc.offset - offset;
+                                        if ((value & 0b11) != 0) {
+                                            throw new IllegalArgumentException("Offset not aligned: " + value);
+                                        }
+                                        value >>= 2;
+                                        if (!type.representable(value)) {
+                                            throw new IllegalArgumentException(
+                                                "Symbol offset out of range for operand type " + type + ": " + value);
+                                        }
                                     }
                                 } else {
                                     throw new IllegalArgumentException(
@@ -225,7 +276,19 @@ public final class LA64Assembler {
             }
         }
 
-        return new LA64Object(segmentContents.get(Segment.TEXT).toByteArray());
+        String newName = assembly.fileName().replaceAll("\\.[^.]+$", "") + ".o";
+        return new LA64Object(
+            newName, segmentContents.get(Segment.TEXT).toByteArray(), symbolList, relocList, symbolNames);
+    }
+
+    private static RelocationType getRelocationType(String mnemonic) {
+        return switch (mnemonic) {
+            case "beqz", "bnez" -> RelocationType.OFFS21_PC_REL;
+            case "b", "bl" -> RelocationType.OFFS26_PC_REL;
+            case "jirl", "beq", "bne", "blt", "bge" -> RelocationType.OFFS16_PC_REL;
+            default ->
+                throw new IllegalArgumentException("Unsupported instruction mnemonic for relocation: " + mnemonic);
+        };
     }
 
     private static void checkOpType(LA64OperandType type, LA64AsmOperand asmOp) {
