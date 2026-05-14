@@ -2,7 +2,8 @@
 
 ## C
 
-- 单 main 函数
+- 多函数，参数数量任意
+- 多文件
 
 ### 类型
 
@@ -111,10 +112,12 @@
   * sltui
   * addi.w
   * addi.d
+  * lu52i.d
   * andi
   * ori
   * xori
   * lu12i.w
+  * lu32i.d
 
 - 移位类运算
   * sll.w

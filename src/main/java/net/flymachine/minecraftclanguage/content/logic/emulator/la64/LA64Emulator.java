@@ -7,16 +7,18 @@ import net.flymachine.minecraftclanguage.content.logic.architecture.la64.registe
 import net.flymachine.minecraftclanguage.content.logic.cpu.la64.LA64CpuState;
 import net.flymachine.minecraftclanguage.content.logic.cpu.la64.LA64MemoryManagementUnit;
 import net.flymachine.minecraftclanguage.content.logic.cpu.la64.exception.LA64RuntimeException;
+import net.flymachine.minecraftclanguage.content.logic.device.la64.Teletypewriter;
 import net.flymachine.minecraftclanguage.content.logic.executable.la64.LA64Executable;
+import net.flymachine.minecraftclanguage.content.logic.memory.MemoryCrossbar;
+import net.flymachine.minecraftclanguage.content.logic.memory.MemoryLikeDevice;
 import net.flymachine.minecraftclanguage.content.logic.memory.SimpleRam;
 
 public final class LA64Emulator {
 
     private final LA64CpuState cpuState = new LA64CpuState();
     private final SimpleRam ram = new SimpleRam(256 * SimpleRam.PAGE_SIZE); // 1 MB
+    private final MemoryCrossbar memoryCrossbar = new MemoryCrossbar(ram);
     private final LA64MemoryManagementUnit mmu = new LA64MemoryManagementUnit();
-
-    private static final long INITIAL_SP = 0x00007ffffffffff0L;
 
     private int ppn = 0;
 
@@ -25,16 +27,17 @@ public final class LA64Emulator {
 
     public LA64Emulator() {
         reset();
+        Teletypewriter tty = new Teletypewriter();
+        memoryCrossbar.amountDevice(
+            Teletypewriter.BASE_ADDRESS, Teletypewriter.BASE_ADDRESS + SimpleRam.PAGE_SIZE - 1, tty);
     }
 
     public void reset() {
         cpuState.reset();
-        cpuState.setGr(GeneralPurposeRegister.SP.getNumber(), INITIAL_SP);
         mmu.clearPageTable();
         ppn = 0;
-        mmu.addPageTableEntry(
-            INITIAL_SP / SimpleRam.PAGE_SIZE,
-            new LA64MemoryManagementUnit.LA64PageTableEntry(ppn++, true));
+        long ttyPageNumber = Teletypewriter.BASE_ADDRESS / SimpleRam.PAGE_SIZE;
+        mmu.addPageTableEntry(ttyPageNumber, new LA64MemoryManagementUnit.LA64PageTableEntry(ttyPageNumber, true));
         stopFlag = false;
     }
 
@@ -46,12 +49,27 @@ public final class LA64Emulator {
 
     public void loadExecutable(LA64Executable executable) {
         byte[] textSeg = executable.text();
-        mmu.addPageTableEntry(
-            executable.textVA() / SimpleRam.PAGE_SIZE,
-            new LA64MemoryManagementUnit.LA64PageTableEntry(ppn++, true));
-        long textPA =
-            mmu.translateVirtualAddress(executable.textVA(), LA64MemoryManagementUnit.LA64MemoryAccessType.FETCH);
-        ram.dmaToMemory(textPA, textSeg, 0, textSeg.length);
+        long textVA = executable.textVA();
+        long textVPN = textVA / SimpleRam.PAGE_SIZE;
+        long testPageCount = (textSeg.length + SimpleRam.PAGE_SIZE - 1) / SimpleRam.PAGE_SIZE;
+        for (int i = 0; i < testPageCount; ++i) {
+            mmu.addPageTableEntry(
+                textVPN + i,
+                new LA64MemoryManagementUnit.LA64PageTableEntry(ppn++, true));
+            long textPA = mmu.translateVirtualAddress(
+                textVA + (long) i * SimpleRam.PAGE_SIZE,
+                LA64MemoryManagementUnit.LA64MemoryAccessType.FETCH);
+            int offset = i * SimpleRam.PAGE_SIZE;
+            int length = Math.min(SimpleRam.PAGE_SIZE, textSeg.length - offset);
+            ram.dmaToMemory(textPA, textSeg, offset, length);
+        }
+
+        long stackVPN = executable.stackTopVA() / SimpleRam.PAGE_SIZE;
+        for (int i = 0; i < executable.stackPageCount(); ++i) {
+            mmu.addPageTableEntry(
+                stackVPN - i,
+                new LA64MemoryManagementUnit.LA64PageTableEntry(ppn++, true));
+        }
         cpuState.setPc(executable.textVA() + executable.entryOffset());
     }
 
@@ -110,8 +128,8 @@ public final class LA64Emulator {
             return emulator.mmu;
         }
 
-        public SimpleRam getRam() {
-            return emulator.ram;
+        public MemoryLikeDevice getMemory() {
+            return emulator.memoryCrossbar;
         }
     }
 

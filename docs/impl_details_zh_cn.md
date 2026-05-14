@@ -11,6 +11,15 @@ graph TD
         direction TD
         Lexer(词法分析)
         Parser(语法分析)
+        
+        subgraph SemanticAnalysis [语义分析]
+            direction TD
+            IdentifierResolution(标识符解析)
+            TypeChecking(类型检查)
+            LabelResolution(标签解析)
+            LoopLabeling(循环标记)
+        end
+        
         TacGen(中间代码生成)
 
         subgraph AsmGen [汇编代码生成]
@@ -36,7 +45,11 @@ graph TD
     Start(输入源代码)
     --> |program.c| Lexer
     --> |tokens| Parser
-    --> |AST| TacGen
+    --> |AST| IdentifierResolution
+    --> |Annotated AST| TypeChecking
+    --> |Annotated AST| LabelResolution
+    --> |Annotated AST| LoopLabeling
+    --> |Annotated AST| TacGen
     --> |TAC| TacToHighLevelAsm
     --> |HL Asm| ReplacePseudoRegister
     --> |HL Asm| HighLevelAsmToAsm

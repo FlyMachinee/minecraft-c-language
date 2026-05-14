@@ -30,11 +30,13 @@ public final class LA64Linker {
         long virtualAddress;
         int objectIndex;
         int offsetInObject;
+        boolean isAbsolute; // 表示该符号的地址是否为绝对地址
 
-        public GlobalSymbol(long virtualAddress, int objectIndex, int offsetInObject) {
+        public GlobalSymbol(long virtualAddress, int objectIndex, int offsetInObject, boolean isAbsolute) {
             this.virtualAddress = virtualAddress;
             this.objectIndex = objectIndex;
             this.offsetInObject = offsetInObject;
+            this.isAbsolute = isAbsolute;
         }
     }
 
@@ -77,14 +79,14 @@ public final class LA64Linker {
                     if (sym.segment() != Segment.TEXT) {
                         throw new RuntimeException("Only TEXT segment supported currently");
                     }
-                    // 该符号的绝对虚拟地址
-                    // 最终 text 段起始地址 + 该目标文件 text 段偏移 + 该符号在目标文件 text 段的偏移
-                    long finalAddr = options.textVA() + base + sym.offset();
-                    globalSymbols.put(symName, new GlobalSymbol(finalAddr, i, sym.offset()));
+                    // 该符号的相对虚拟地址，相对于 text 段起始
+                    // = 该目标文件 text 段偏移 + 该符号在目标文件 text 段的偏移
+                    long finalAddr = base + sym.offset();
+                    globalSymbols.put(symName, new GlobalSymbol(finalAddr, i, sym.offset(), false));
                 }
             }
         }
-
+        globalSymbols.put("__stack_top", new GlobalSymbol(options.stackTopVA(), -1, -1, true));
 
         // 重定位
         for (int i = 0; i < objects.length; i++) {
@@ -125,22 +127,29 @@ public final class LA64Linker {
         if (entryAddr == -1) {
             throw new RuntimeException("Entry symbol not found: " + options.entrySymbol());
         }
-        int entryOffset = (int) (entryAddr - options.textVA());
+        int entryOffset = (int) (entryAddr);
 
         String outFileName = objects.length == 1 ? objects[0].fileName().replace(".o", ".exe") : "a.exe";
-        return new LA64Executable(outFileName, mergedText, options.textVA(), entryOffset);
+        return new LA64Executable(
+            outFileName, mergedText, options.textVA(), entryOffset, options.stackTopVA(), options.stackPageCount());
     }
 
     private int getRelocatedValue(RelocationEntry relocationEntry, int base, GlobalSymbol target) {
-        // 需要被修补的指令的绝对地址
-        // = 最终 text 段起始地址 + 该目标文件 text 段偏移 + 该重定位项指令在目标文件 text 段的偏移
-        long instrAddr = options.textVA() + base + relocationEntry.textOffset();
+        // 需要被修补的指令的相对地址，相对于 text 段起始
+        // = 该目标文件 text 段偏移 + 该重定位项指令在目标文件 text 段的偏移
+        long instrAddr = base + relocationEntry.textOffset();
 
-        // 重定位符号的绝对地址
+        // 重定位符号的地址
         long targetAddr = target.virtualAddress;
         return switch (relocationEntry.relocationType()) {
-            case OFFS21_PC_REL, OFFS16_PC_REL, OFFS26_PC_REL -> {
+            case R_LARCH_B21, R_LARCH_B16, R_LARCH_B26 -> {
                 // PC相对偏移 = (目标地址 - 指令地址) / 4
+                // 不能是绝对符号
+                if (target.isAbsolute) {
+                    throw new RuntimeException(
+                        "Cannot apply PC-relative relocation to an absolute symbol: " + target.virtualAddress);
+                }
+
                 long diff = targetAddr - instrAddr;
                 if ((diff & 0b11) != 0) {
                     throw new RuntimeException("Unaligned target address for PC-relative relocation: " + targetAddr);
@@ -151,15 +160,35 @@ public final class LA64Linker {
                 }
                 int intDiff = (int) diff;
                 boolean inRange = switch (relocationEntry.relocationType()) {
-                    case OFFS16_PC_REL -> !BitMath.isOffs16(intDiff);
-                    case OFFS21_PC_REL -> !BitMath.isOffs21(intDiff);
-                    case OFFS26_PC_REL -> BitMath.isOffs26(intDiff);
+                    case R_LARCH_B16 -> !BitMath.isOffs16(intDiff);
+                    case R_LARCH_B21 -> !BitMath.isOffs21(intDiff);
+                    case R_LARCH_B26 -> BitMath.isOffs26(intDiff);
+                    default -> false; // 不可能
                 };
                 if (!inRange) {
                     throw new RuntimeException(
                         "Relocation offset out of range for type " + relocationEntry.relocationType() + ": " + intDiff);
                 }
                 yield intDiff;
+            }
+
+            // lu12i.w   rd, %abs_hi20(sym)       # R_LARCH_ABS_HI20        si20
+            // ori       rd, rd, %abs_lo12(sym)   # R_LARCH_ABS_LO12        ui12
+            // lu32i.d   rd, %abs64_lo20(sym)     # R_LARCH_ABS64_LO20      si20
+            // lu52i.d   rd, rd, %abs64_hi12(sym) # R_LARCH_ABS64_HI12      si12
+            case R_LARCH_ABS_HI20, R_LARCH_ABS_LO12, R_LARCH_ABS64_LO20, R_LARCH_ABS64_HI12 -> {
+                // 只能应用于绝对符号
+                if (!target.isAbsolute) {
+                    throw new RuntimeException(
+                        "Cannot apply absolute relocation to a non-absolute symbol: " + target.virtualAddress);
+                }
+                yield switch (relocationEntry.relocationType()) {
+                    case R_LARCH_ABS_HI20 -> (int) ((targetAddr >> 12) & 0xFFFFF);
+                    case R_LARCH_ABS_LO12 -> (int) (targetAddr & 0xFFF);
+                    case R_LARCH_ABS64_LO20 -> (int) ((targetAddr >> 32) & 0xFFFFF);
+                    case R_LARCH_ABS64_HI12 -> (int) ((targetAddr >> 52) & 0xFFF);
+                    default -> 0; // 不可能
+                };
             }
         };
     }
@@ -174,23 +203,35 @@ public final class LA64Linker {
         int mask = 0;
         int finalValue = 0;
         switch (type) {
-            case OFFS16_PC_REL -> {
+            case R_LARCH_B16 -> {
                 // 15:0 =>
                 // 25:10
                 mask = 0xFFFF << 10;
                 finalValue = value << 10;
             }
-            case OFFS21_PC_REL -> {
+            case R_LARCH_B21 -> {
                 // 15:0 + 20:16 =>
                 // 25:10 + 4:0
                 mask = (0xFFFF << 10) | 0x1F;
                 finalValue = ((value & 0xFFFF) << 10) | ((value >> 16) & 0x1F);
             }
-            case OFFS26_PC_REL -> {
+            case R_LARCH_B26 -> {
                 // 15:0 + 25:16 =>
                 // 25:10 + 9:0
                 mask = 0x03FFFFFF;
                 finalValue = ((value & 0xFFFF) << 10) | ((value >> 16) & 0x3FF);
+            }
+            case R_LARCH_ABS_HI20, R_LARCH_ABS64_LO20 -> {
+                // 19:0 =>
+                // 24:5
+                mask = 0xFFFFF << 5;
+                finalValue = value << 5;
+            }
+            case R_LARCH_ABS_LO12, R_LARCH_ABS64_HI12 -> {
+                // 11:0 =>
+                // 21:10
+                mask = 0xFFF << 10;
+                finalValue = value << 10;
             }
         }
 

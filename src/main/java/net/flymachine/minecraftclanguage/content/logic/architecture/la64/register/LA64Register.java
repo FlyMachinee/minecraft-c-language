@@ -1,8 +1,11 @@
 package net.flymachine.minecraftclanguage.content.logic.architecture.la64.register;
 
+import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.operand.LA64AsmOperand;
+import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.HighLevelOperand;
+
 import java.util.List;
 
-public interface LA64Register {
+public interface LA64Register extends HighLevelOperand, LA64AsmOperand {
     /**
      * @return 寄存器类型（通用或浮点）
      */

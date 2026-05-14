@@ -30,6 +30,7 @@ public final class LA64Assembler {
 
     public LA64Object assemble(LA64Assembly assembly) {
         symbolTable.clear();
+        globalSymbols.clear();
         collectSymbol(assembly);
         return generateObject(assembly);
     }
@@ -111,8 +112,10 @@ public final class LA64Assembler {
                 // 先判断是否是宏指令，如果不是再视为普通指令处理
                 int offsetIncrease = switch (instruction.mnemonic()) {
                     case "li.w" -> getExpandLiWSize(ops);
+                    case "li.d" -> getExpandLiDSize(ops);
                     case "ret", "sgt", "ble", "bgt", "move" -> 4;
                     case "sle", "sge", "seq", "sne" -> 8;
+                    case "la.abs" -> 16;
                     default -> {
                         if (!LA64InstructionSet.isMnemonic(instruction.mnemonic())) {
                             throw new IllegalArgumentException(
@@ -129,6 +132,19 @@ public final class LA64Assembler {
         }
     }
 
+    private List<SymbolEntry> symbolList;
+    private List<RelocationEntry> relocList;
+    private List<String> symbolNames;
+
+    private int getSymbolNameIndexOrAdd(String symbolName) {
+        int index = symbolNames.indexOf(symbolName);
+        if (index == -1) {
+            index = symbolNames.size();
+            symbolNames.add(symbolName);
+        }
+        return index;
+    }
+
     private LA64Object generateObject(LA64Assembly assembly) {
 
         // 默认目标为 text 段
@@ -143,9 +159,9 @@ public final class LA64Assembler {
         segmentContents.put(Segment.TEXT, new ByteArrayOutputStream());
 
         // 符号表等
-        List<SymbolEntry> symbolList = new ArrayList<>();
-        List<RelocationEntry> relocList = new ArrayList<>();
-        List<String> symbolNames = new ArrayList<>();
+        symbolList = new ArrayList<>();
+        relocList = new ArrayList<>();
+        symbolNames = new ArrayList<>();
         for (Map.Entry<String, SymbolLocation> entry : symbolTable.entrySet()) {
             String symbolName = entry.getKey();
             if (symbolName.startsWith(".L")) {
@@ -192,6 +208,7 @@ public final class LA64Assembler {
                 // 先判断是否是宏指令，如果不是再视为普通指令处理
                 int offsetIncrease = switch (instruction.mnemonic()) {
                     case "li.w" -> expandLiW(ops, out);
+                    case "li.d" -> expandLiD(ops, out);
                     case "ret" -> expandRet(out);
                     case "move" -> expandMove(ops, out);
                     case "bgt" -> expandBgt(currentSegment, ops, offset, out);
@@ -201,6 +218,7 @@ public final class LA64Assembler {
                     case "sge" -> expandSge(ops, out);
                     case "seq" -> expandSeq(ops, out);
                     case "sne" -> expandSne(ops, out);
+                    case "la.abs" -> expandLaAbs(ops, out, offset);
                     default -> {
                         Optional<LA64InstructionInfo>
                             optionalInfo = LA64InstructionSet.getByMnemonic(instruction.mnemonic());
@@ -224,40 +242,8 @@ public final class LA64Assembler {
                                 } else if (asmOp instanceof LA64AsmImmOperand imm) {
                                     value = (int) imm.value();
                                 } else if (asmOp instanceof LA64AsmSymOperand sym) {
-                                    SymbolLocation loc = symbolTable.get(sym.symbol());
-                                    if (loc == null) {
-                                        // 未定义符号
-                                        if (sym.symbol().startsWith(".L")) {
-                                            throw new IllegalArgumentException(
-                                                "Undefined local symbol: " + sym.symbol());
-                                        }
-
-                                        // 非局部符号，添加至重定位表
-                                        int symbolNameIndex = symbolNames.indexOf(sym.symbol());
-                                        if (symbolNameIndex == -1) {
-                                            symbolNameIndex = symbolNames.size();
-                                            symbolNames.add(sym.symbol());
-                                        }
-                                        relocList.add(new RelocationEntry(
-                                            offset,
-                                            symbolNameIndex,
-                                            getRelocationType(info.mnemonic())));
-                                        value = 0;
-                                    } else {
-                                        if (loc.segment != currentSegment) {
-                                            throw new IllegalArgumentException(
-                                                "Current cannot support cross-segment symbol references");
-                                        }
-                                        value = loc.offset - offset;
-                                        if ((value & 0b11) != 0) {
-                                            throw new IllegalArgumentException("Offset not aligned: " + value);
-                                        }
-                                        value >>= 2;
-                                        if (!type.representable(value)) {
-                                            throw new IllegalArgumentException(
-                                                "Symbol offset out of range for operand type " + type + ": " + value);
-                                        }
-                                    }
+                                    value = getPcRelOffset(
+                                        sym, currentSegment, offset, info, type);
                                 } else {
                                     throw new IllegalArgumentException(
                                         "Unsupported operand type: " + asmOp.getClass().getName());
@@ -283,9 +269,9 @@ public final class LA64Assembler {
 
     private static RelocationType getRelocationType(String mnemonic) {
         return switch (mnemonic) {
-            case "beqz", "bnez" -> RelocationType.OFFS21_PC_REL;
-            case "b", "bl" -> RelocationType.OFFS26_PC_REL;
-            case "jirl", "beq", "bne", "blt", "bge" -> RelocationType.OFFS16_PC_REL;
+            case "beqz", "bnez" -> RelocationType.R_LARCH_B21;
+            case "b", "bl" -> RelocationType.R_LARCH_B26;
+            case "jirl", "beq", "bne", "blt", "bge" -> RelocationType.R_LARCH_B16;
             default ->
                 throw new IllegalArgumentException("Unsupported instruction mnemonic for relocation: " + mnemonic);
         };
@@ -325,14 +311,24 @@ public final class LA64Assembler {
             // ori rd, rd, lower12
             int lower12 = value & 0xFFF;
             int upper20 = value >>> 12;
-            writeIntLittleEndian(
-                out, LA64Encoder.encode(
-                    LA64InstructionSet.getByMnemonic("lu12i.w").orElseThrow(), new LA64Operand[]{
-                        LA64Operand.reg(dst), // rd
-                        LA64Operand.si20(upper20) // upper20
-                    }));
+            writeFormat1RSi20(out, "lu12i.w", dst, upper20);
             writeFormat2RUi12(out, "ori", dst, dst, lower12);
             return 8;
+        }
+    }
+
+    private int expandLiD(List<LA64AsmOperand> ops, ByteArrayOutputStream out) {
+        // TODO: 检查操作数类型
+        // li.w dst, imm64
+        LA64Register dst = ((LA64Register) ops.get(0));
+        long value = ((LA64AsmImmOperand) ops.get(1)).value();
+
+        if (value >= Integer.MIN_VALUE && value <= Integer.MAX_VALUE) {
+            // imm64 -> imm32
+            return expandLiW(ops, out);
+        } else {
+            // 暂时不支持
+            throw new IllegalArgumentException("Imm64 value out of range for expansion: " + value);
         }
     }
 
@@ -347,6 +343,20 @@ public final class LA64Assembler {
             // lu12i.w rd, upper20
             // ori rd, rd, lower12
             return 8;
+        }
+    }
+
+    private int getExpandLiDSize(List<LA64AsmOperand> ops) {
+        // TODO: 检查操作数类型
+        // li.d dst, imm64
+        long value = ((LA64AsmImmOperand) ops.get(1)).value();
+
+        if (value >= Integer.MIN_VALUE && value <= Integer.MAX_VALUE) {
+            // imm64 -> imm32
+            return getExpandLiWSize(ops);
+        } else {
+            // 暂时不支持
+            throw new IllegalArgumentException("Imm64 value out of range for expansion: " + value);
         }
     }
 
@@ -464,23 +474,85 @@ public final class LA64Assembler {
         return 8;
     }
 
-    private int getPcOffs16Offset(LA64AsmSymOperand symbol, Segment currentSegment, int currentOffset) {
+    private int expandLaAbs(List<LA64AsmOperand> ops, ByteArrayOutputStream out, int offset) {
+        // la.abs rd, sym
+        // =>
+        // lu12i.w   rd, %abs_hi20(sym)       # R_LARCH_ABS_HI20        si20
+        // ori       rd, rd, %abs_lo12(sym)   # R_LARCH_ABS_LO12        ui12
+        // lu32i.d   rd, %abs64_lo20(sym)     # R_LARCH_ABS64_LO20      si20
+        // lu52i.d   rd, rd, %abs64_hi12(sym) # R_LARCH_ABS64_HI12      si12
+
+        LA64Register rd = ((LA64Register) ops.get(0));
+        LA64AsmSymOperand sym = ((LA64AsmSymOperand) ops.get(1));
+
+        int symbolNameIndex = getSymbolNameIndexOrAdd(sym.symbol());
+
+        writeFormat1RSi20(out, "lu12i.w", rd, 0);
+        writeFormat2RUi12(out, "ori", rd, rd, 0);
+        writeFormat1RSi20(out, "lu32i.d", rd, 0);
+        writeFormat2RSi12(out, "lu52i.d", rd, rd, 0);
+
+        relocList.add(new RelocationEntry(
+            offset,
+            symbolNameIndex,
+            RelocationType.R_LARCH_ABS_HI20));
+        relocList.add(new RelocationEntry(
+            offset + 4,
+            symbolNameIndex,
+            RelocationType.R_LARCH_ABS_LO12));
+        relocList.add(new RelocationEntry(
+            offset + 8,
+            symbolNameIndex,
+            RelocationType.R_LARCH_ABS64_LO20));
+        relocList.add(new RelocationEntry(
+            offset + 12,
+            symbolNameIndex,
+            RelocationType.R_LARCH_ABS64_HI12));
+        return 16;
+    }
+
+    private int getPcRelOffset(
+        LA64AsmSymOperand symbol, Segment currentSegment, int currentOffset, LA64InstructionInfo info,
+        LA64OperandType type) {
+
         SymbolLocation loc = symbolTable.get(symbol.symbol());
+
         if (loc == null) {
-            throw new IllegalArgumentException("Undefined symbol: " + symbol.symbol());
+            // 未定义符号
+            if (symbol.symbol().startsWith(".L")) {
+                throw new IllegalArgumentException(
+                    "Undefined local symbol: " + symbol.symbol());
+            }
+
+            // 非局部符号，添加至重定位表
+            int symbolNameIndex = getSymbolNameIndexOrAdd(symbol.symbol());
+            relocList.add(new RelocationEntry(
+                currentOffset,
+                symbolNameIndex,
+                getRelocationType(info.mnemonic())));
+            return 0;
+        } else {
+            if (loc.segment != currentSegment) {
+                throw new IllegalArgumentException(
+                    "Current cannot support cross-segment symbol references");
+            }
+            int value = loc.offset - currentOffset;
+            if ((value & 0b11) != 0) {
+                throw new IllegalArgumentException("Offset not aligned: " + value);
+            }
+            value >>= 2;
+            if (!type.representable(value)) {
+                throw new IllegalArgumentException(
+                    "Symbol offset out of range for operand type " + type + ": " + value);
+            }
+            return value;
         }
-        if (loc.segment != currentSegment) {
-            throw new IllegalArgumentException("Current cannot support cross-segment symbol references");
-        }
-        int offset = loc.offset - currentOffset;
-        if ((offset & 0b11) != 0) {
-            throw new IllegalArgumentException("Offset not aligned: " + offset);
-        }
-        offset >>= 2;
-        if (!BitMath.isOffs16(offset)) {
-            throw new IllegalArgumentException("Offset out of range for offs16: " + offset);
-        }
-        return offset;
+    }
+
+    private int getPcOffs16Offset(LA64AsmSymOperand symbol, Segment currentSegment, int currentOffset) {
+        return getPcRelOffset(
+            symbol, currentSegment, currentOffset,
+            LA64InstructionSet.getByMnemonic("blt").orElseThrow(), LA64OperandType.OFFS16);
     }
 
     private static void writeFormat3R(
@@ -554,6 +626,22 @@ public final class LA64Assembler {
                     LA64Operand.reg(rd),
                     LA64Operand.reg(rj),
                     LA64Operand.offs16(offs16)}));
+    }
+
+    private static void writeFormat1RSi20(ByteArrayOutputStream out, String mnemonic, LA64Register rd, int si20) {
+        if (!BitMath.isSi20(si20)) {
+            throw new IllegalArgumentException("Immediate value out of range for si20: " + si20);
+        }
+        Optional<LA64InstructionInfo> optionalInfo = LA64InstructionSet.getByMnemonic(mnemonic);
+        if (optionalInfo.isEmpty()) {
+            throw new IllegalArgumentException("Unsupported instruction mnemonic: " + mnemonic);
+        }
+        LA64InstructionInfo info = optionalInfo.get();
+        writeIntLittleEndian(
+            out, LA64Encoder.encode(
+                info, new LA64Operand[]{
+                    LA64Operand.reg(rd),
+                    LA64Operand.si20(si20)}));
     }
 
     private static void writeIntLittleEndian(ByteArrayOutputStream out, int value) {

@@ -414,6 +414,18 @@ public final class LA64InstructionSet {
                  */
                 BINARY_DOUBLE_WORD_SI12_EXECUTOR.execute(emulator, operands, Long::sum);
             }));
+        add(LA64InstructionInfo.format2GprSi12(
+            "lu52i.d",
+            0b0000_0011_00,
+            (emulator, operands) -> {
+                // lu52i.d rd, rj, si12
+                /*
+                    GR[rd] = {si12, GR[rj][51:0]}
+                 */
+                BINARY_DOUBLE_WORD_SI12_EXECUTOR.execute(
+                    emulator, operands,
+                    (rj, si12) -> ((si12 & 0xFFFL) << 52) | (rj & 0xFFFFFFFFFFFFFL));
+            }));
         add(LA64InstructionInfo.format2GprUi12(
             "andi",
             0b0000_0011_01,
@@ -473,6 +485,36 @@ public final class LA64InstructionSet {
                 cpu.setGr(operands[0].value(), ((long) operands[1].value()) << 12);
                 cpu.pcNext();
             }));
+        add(new LA64InstructionInfo(
+            "lu32i.d",
+            0b0001_011,
+            7,
+            LA64InstructionFormat.MISCELLANEOUS,
+            new LA64OperandType[]{LA64OperandType.GPR, LA64OperandType.SI20},
+            (info, ops) -> {
+                // rd, si20
+                int rd = ops[0].value();
+                int si20 = ops[1].value();
+                return (info.opcode() << 25) | ((si20 & 0xFFFFF) << 5) | rd;
+            },
+            (machineCode) -> {
+                // rd, si20
+                int rd = BitMath.getRd(machineCode);
+                int si20 = BitMath.extractSignedBits(machineCode, 5, 20);
+                return new LA64Operand[]{
+                    LA64Operand.gpr(rd), LA64Operand.si20(si20)
+                };
+            },
+            (emulator, operands) -> {
+                // lu32i.d rd, si20
+                /*
+                    GR[rd] = {SignExtend(si20, 32), GR[rd][31:0]}
+                 */
+                LA64CpuState cpu = emulator.getCpuState();
+                int lower32 = cpu.getGrWord(operands[0].value());
+                cpu.setGr(operands[0].value(), ((long) operands[1].value()) << 32 | (lower32 & 0xFFFFFFFFL));
+                cpu.pcNext();
+            }));
         add(LA64InstructionInfo.format2GprSi12(
             "ld.w",
             0b0010_1000_10,
@@ -486,7 +528,7 @@ public final class LA64InstructionSet {
                     GR[rd] = SignExtend(word, GRLEN)
                  */
                 LA64CpuState cpu = emulator.getCpuState();
-                MemoryLikeDevice ram = emulator.getRam();
+                MemoryLikeDevice memory = emulator.getMemory();
                 LA64MemoryManagementUnit mmu = emulator.getMemoryManagementUnit();
 
                 long rjValue = cpu.getGr(operands[1].value());
@@ -496,7 +538,7 @@ public final class LA64InstructionSet {
                     throw new LA64RuntimeException(LA64Exception.ALE);
                 }
                 long paddr = mmu.translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.LOAD);
-                int word = ram.loadWord(paddr);
+                int word = memory.loadWord(paddr);
                 cpu.setGr(operands[0].value(), word);
                 cpu.pcNext();
             }));
@@ -512,7 +554,7 @@ public final class LA64InstructionSet {
                     GR[rd] = MemoryLoad(paddr, DOUBLEWORD)
                  */
                 LA64CpuState cpu = emulator.getCpuState();
-                MemoryLikeDevice ram = emulator.getRam();
+                MemoryLikeDevice memory = emulator.getMemory();
                 LA64MemoryManagementUnit mmu = emulator.getMemoryManagementUnit();
 
                 long rjValue = cpu.getGr(operands[1].value());
@@ -522,7 +564,7 @@ public final class LA64InstructionSet {
                     throw new LA64RuntimeException(LA64Exception.ALE);
                 }
                 long paddr = mmu.translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.LOAD);
-                cpu.setGr(operands[0].value(), ram.loadDoubleWord(paddr));
+                cpu.setGr(operands[0].value(), memory.loadDoubleWord(paddr));
                 cpu.pcNext();
             }));
         add(LA64InstructionInfo.format2GprSi12(
@@ -537,7 +579,7 @@ public final class LA64InstructionSet {
                     MemoryStore(GR[rd][31:0], paddr, WORD)
                  */
                 LA64CpuState cpu = emulator.getCpuState();
-                MemoryLikeDevice ram = emulator.getRam();
+                MemoryLikeDevice memory = emulator.getMemory();
                 LA64MemoryManagementUnit mmu = emulator.getMemoryManagementUnit();
 
                 long rjValue = cpu.getGr(operands[1].value());
@@ -547,7 +589,7 @@ public final class LA64InstructionSet {
                     throw new LA64RuntimeException(LA64Exception.ALE);
                 }
                 long paddr = mmu.translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.STORE);
-                ram.storeWord(paddr, cpu.getGrWord(operands[0].value()));
+                memory.storeWord(paddr, cpu.getGrWord(operands[0].value()));
                 cpu.pcNext();
             }));
         add(LA64InstructionInfo.format2GprSi12(
@@ -562,7 +604,7 @@ public final class LA64InstructionSet {
                     MemoryStore(GR[rd][63:0], paddr, DOUBLEWORD)
                  */
                 LA64CpuState cpu = emulator.getCpuState();
-                MemoryLikeDevice ram = emulator.getRam();
+                MemoryLikeDevice memory = emulator.getMemory();
                 LA64MemoryManagementUnit mmu = emulator.getMemoryManagementUnit();
 
                 long rjValue = cpu.getGr(operands[1].value());
@@ -572,7 +614,7 @@ public final class LA64InstructionSet {
                     throw new LA64RuntimeException(LA64Exception.ALE);
                 }
                 long paddr = mmu.translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.STORE);
-                ram.storeDoubleWord(paddr, cpu.getGr(operands[0].value()));
+                memory.storeDoubleWord(paddr, cpu.getGr(operands[0].value()));
                 cpu.pcNext();
             }));
         add(LA64InstructionInfo.format1GPROffs21(
