@@ -1,24 +1,85 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99;
 
+import net.flymachine.minecraftclanguage.content.logger.ConsoleLogger;
+import net.flymachine.minecraftclanguage.content.logger.Logger;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.AssignmentOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.BinaryOperator;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.StorageClassSpecifier;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.UnaryOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.BasicType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.antlr.C99Parser;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.antlr.C99ParserBaseVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.*;
+import net.flymachine.minecraftclanguage.content.logic.errorHandle.ErrorHandleUtil;
+import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceFile;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.Token;
 import org.antlr.v4.runtime.tree.TerminalNode;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * 将生成的语法树转换为自定义 AST
+ * 检查部分语义错误
  */
 public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
+
+    // 从 SemanticAnalysePass 复制而来，因为 Java 不支持多继承，不知道怎么改才能更好
+    private Logger logger;
+    private SourceFile sourceFile;
+    private boolean semanticError = false;
+
+    public AstBuilderVisitor(Logger logger, SourceFile sourceFile) {
+        this.logger = logger;
+        this.sourceFile = sourceFile;
+    }
+
+    public AstBuilderVisitor(Logger logger) {
+        this.logger = logger;
+    }
+
+    public AstBuilderVisitor() {
+        this.logger = new ConsoleLogger();
+    }
+
+    public boolean hasSemanticError() {
+        return semanticError;
+    }
+
+    public void setSemanticError(boolean semanticError) {
+        this.semanticError = semanticError;
+    }
+
+    private void error() {
+        semanticError = true;
+    }
+
+    public Logger getLogger() {
+        return logger;
+    }
+
+    public void setLogger(Logger logger) {
+        this.logger = logger;
+    }
+
+    public SourceFile getSourceFile() {
+        return sourceFile;
+    }
+
+    public void setSourceFile(SourceFile sourceFile) {
+        this.sourceFile = sourceFile;
+    }
+
+    private void logErrorWithSourceLine(SourceLocation sourceLocation, String message) {
+        ErrorHandleUtil.logErrorWithSourceLine(getLogger(), getSourceFile(), sourceLocation, message);
+    }
+
+    private void logNoteWithSourceLine(SourceLocation sourceLocation, String message) {
+        ErrorHandleUtil.logNoteWithSourceLine(getLogger(), getSourceFile(), sourceLocation, message);
+    }
 
     private static SourceLocation getSourceLocation(ParserRuleContext ctx) {
         Token startToken = ctx.getStart();
@@ -51,26 +112,67 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
 
     @Override
     public FunctionDefinitionNode visitFunctionDefinition(C99Parser.FunctionDefinitionContext ctx) {
-        TypeNode baseType = parseDeclarationSpecifiers(ctx.declarationSpecifiers());
+        TypeAndSpecifiers typeAndSpecifiers = parseDeclarationSpecifiers(ctx.declarationSpecifiers());
+        TypeNode baseType = typeAndSpecifiers.t;
+        boolean isBaseTypeError = baseType == null;
+        if (isBaseTypeError) {
+            // 返回值无类型
+            baseType = new BasicTypeNode(null, BasicType.INT);
+        }
         DeclarationLikeResult res = parseFromDeclarator(baseType, ctx.declarator());
+        if (isBaseTypeError) {
+            error();
+            String msg =
+                "type defaults to '" + logger.white("int") + "' in declaration of '" + logger.white(res.id.id) + "'";
+            logErrorWithSourceLine(res.id.wholeLocation, msg);
+        }
         CompoundStatementNode body = (CompoundStatementNode) visit(ctx.compoundStatement());
-        return new FunctionDefinitionNode(getSourceLocation(ctx), res.id, res.t, body);
+        return new FunctionDefinitionNode(getSourceLocation(ctx), res.id, res.t, typeAndSpecifiers.storageClass, body);
     }
 
     private record DeclarationLikeResult(TypeNode t, IdentifierNode id) { }
 
-    private TypeNode parseDeclarationSpecifiers(C99Parser.DeclarationSpecifiersContext ctx) {
-        var typeSpecifier = ctx.typeSpecifier();
+    private record TypeAndSpecifiers(TypeNode t, @Nullable StorageClassSpecifierNode storageClass) { }
 
-        if (typeSpecifier.Void() != null) {
-            return new BasicTypeNode(getSourceLocation(typeSpecifier.Void()), BasicType.VOID);
+    private TypeAndSpecifiers parseDeclarationSpecifiers(C99Parser.DeclarationSpecifiersContext ctx) {
+        // declarationSpecifiers // rewrote
+        //     : declarationSpecifier+
+        //     ;
+        // declarationSpecifier // added
+        //     : storageClassSpecifier
+        //     | typeSpecifier
+        //     ;
+        boolean reportedMultipleTypeSpecifiers = false;
+        StorageClassSpecifierNode storageClassNode = null;
+        boolean reportedMultipleTypes = false;
+        BasicTypeNode basicTypeNode = null;
+
+        for (var specifierCtx : ctx.declarationSpecifier()) {
+            if (specifierCtx.typeSpecifier() != null) {
+                if (basicTypeNode == null) {
+                    BasicType basicType = BasicType.fromString(specifierCtx.typeSpecifier().getText());
+                    basicTypeNode = new BasicTypeNode(getSourceLocation(specifierCtx.typeSpecifier()), basicType);
+                } else if (!reportedMultipleTypeSpecifiers) {
+                    error();
+                    String msg = "two or more data types in declaration specifiers";
+                    logErrorWithSourceLine(getSourceLocation(specifierCtx.typeSpecifier()), msg);
+                    reportedMultipleTypeSpecifiers = true;
+                }
+            } else if (specifierCtx.storageClassSpecifier() != null) {
+                if (storageClassNode == null) {
+                    StorageClassSpecifier storageClass =
+                        StorageClassSpecifier.fromString(specifierCtx.storageClassSpecifier().getText());
+                    storageClassNode = new StorageClassSpecifierNode(
+                        getSourceLocation(specifierCtx.storageClassSpecifier()), storageClass);
+                } else if (!reportedMultipleTypes) {
+                    error();
+                    String msg = "multiple storage classes in declaration specifiers";
+                    logErrorWithSourceLine(getSourceLocation(specifierCtx.storageClassSpecifier()), msg);
+                    reportedMultipleTypes = true;
+                }
+            }
         }
-
-        if (typeSpecifier.Int() != null) {
-            return new BasicTypeNode(getSourceLocation(typeSpecifier.Int()), BasicType.INT);
-        }
-
-        throw new RuntimeException("Unknown type specifier: " + typeSpecifier.getText());
+        return new TypeAndSpecifiers(basicTypeNode, storageClassNode);
     }
 
     private DeclarationLikeResult parseFromDeclarator(TypeNode baseType, C99Parser.DeclaratorContext ctx) {
@@ -157,13 +259,50 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         var paramDeclList = ctx.parameterList().parameterDeclaration();
         for (C99Parser.ParameterDeclarationContext paramCtx : paramDeclList) {
             // parameterDeclaration -> declarationSpecifiers declarator?
-            TypeNode paramBaseType = parseDeclarationSpecifiers(paramCtx.declarationSpecifiers());
+            // TypeNode paramBaseType = parseDeclarationSpecifiers(paramCtx.declarationSpecifiers());
+            TypeAndSpecifiers paramTypeAndSpecifiers = parseDeclarationSpecifiers(paramCtx.declarationSpecifiers());
+            TypeNode paramBaseType = paramTypeAndSpecifiers.t;
+            StorageClassSpecifierNode paramStorageClass = paramTypeAndSpecifiers.storageClass;
+
             if (paramCtx.declarator() == null) {
                 // 没有参数名
+                if (paramBaseType == null) {
+                    // 没有类型
+                    error();
+                    String msg = "type defaults to '" + logger.white("int") + "' in type name";
+                    assert paramStorageClass != null; // 没有类型，那么一定有存储类型
+                    logErrorWithSourceLine(paramStorageClass.wholeLocation, msg);
+                    paramBaseType = new BasicTypeNode(null, BasicType.INT);
+                }
+                if (paramStorageClass != null && paramStorageClass.storageClass != StorageClassSpecifier.REGISTER) {
+                    // 有非 register 的存储类型
+                    error();
+                    String msg = "storage class specified for unnamed parameter";
+                    logErrorWithSourceLine(paramStorageClass.wholeLocation, msg);
+                }
                 parameterTypes.add(paramBaseType);
                 parameters.add(null);
             } else {
+                // 具名参数
+                boolean baseTypeError = paramBaseType == null;
+                if (paramBaseType == null) {
+                    // 没有类型
+                    paramBaseType = new BasicTypeNode(null, BasicType.INT);
+                }
                 DeclarationLikeResult paramRes = parseFromDeclarator(paramBaseType, paramCtx.declarator());
+                if (baseTypeError) {
+                    error();
+                    String msg = "type defaults to '" + logger.white("int") + "' in declaration of '" +
+                                 logger.white(paramRes.id.id) + "'";
+                    logErrorWithSourceLine(paramRes.id.wholeLocation, msg);
+                }
+                if (paramStorageClass != null && paramStorageClass.storageClass != StorageClassSpecifier.REGISTER) {
+                    // 有非 register 的存储类型
+                    error();
+                    String msg = "storage class specified for parameter '" + logger.white(paramRes.id.id) + "'";
+                    logErrorWithSourceLine(paramStorageClass.wholeLocation, msg);
+                }
+
                 parameterTypes.add(paramRes.t);
                 parameters.add(paramRes.id);
             }
@@ -183,16 +322,30 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
             // -> initDeclarator
             // -> declarator (Assign initializer)?
             var initDeclarator = list.initDeclarator();
-            TypeNode baseType = parseDeclarationSpecifiers(ctx.declarationSpecifiers());
+            TypeAndSpecifiers typeAndSpecifiers = parseDeclarationSpecifiers(ctx.declarationSpecifiers());
+            TypeNode baseType = typeAndSpecifiers.t;
+            boolean isBaseTypeError = baseType == null;
+            if (isBaseTypeError) {
+                // 没有类型
+                baseType = new BasicTypeNode(null, BasicType.INT);
+            }
             DeclarationLikeResult res = parseFromDeclarator(baseType, initDeclarator.declarator());
+
+            if (isBaseTypeError) {
+                error();
+                String msg =
+                    "type defaults to '" + logger.white("int") + "' in declaration of '" + logger.white(res.id.id) +
+                    "'";
+                logErrorWithSourceLine(res.id.wholeLocation, msg);
+            }
 
             IdentifierNode id = res.id;
             TypeNode t = res.t;
             if (initDeclarator.initializer() != null) {
                 ExpressionNode init = (ExpressionNode) visit(initDeclarator.initializer());
-                return new DeclarationNode(getSourceLocation(ctx), t, id, init);
+                return new DeclarationNode(getSourceLocation(ctx), typeAndSpecifiers.storageClass, t, id, init);
             } else {
-                return new DeclarationNode(getSourceLocation(ctx), t, id);
+                return new DeclarationNode(getSourceLocation(ctx), typeAndSpecifiers.storageClass, t, id);
             }
         } else {
             return null;

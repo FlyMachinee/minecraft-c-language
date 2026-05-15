@@ -3,9 +3,9 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.hi
 import java.util.List;
 
 public class HighLevelProgram {
-    public List<HighLevelFunction> functionDefinitions;
+    public List<HighLevelTopLevel> topLevels;
 
-    public HighLevelProgram(List<HighLevelFunction> functionDefinitions) {
-        this.functionDefinitions = functionDefinitions;
+    public HighLevelProgram(List<HighLevelTopLevel> topLevels) {
+        this.topLevels = topLevels;
     }
 }

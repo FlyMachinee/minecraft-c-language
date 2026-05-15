@@ -20,8 +20,9 @@ import java.util.List;
  * 注：sp/fp只会在函数的序言中设置，在整个函数中再也不会变化
  */
 
-public class HighLevelFunction {
+public class HighLevelFunction implements HighLevelTopLevel {
     public String name;
+    public boolean global;
     public List<HighLevelInstruction> instructions;
 
     /**
@@ -51,8 +52,9 @@ public class HighLevelFunction {
      */
     public int maxCallStackArgSize = 0;
 
-    public HighLevelFunction(String name, List<HighLevelInstruction> instructions) {
+    public HighLevelFunction(String name, boolean global, List<HighLevelInstruction> instructions) {
         this.name = name;
+        this.global = global;
         this.instructions = instructions;
     }
 

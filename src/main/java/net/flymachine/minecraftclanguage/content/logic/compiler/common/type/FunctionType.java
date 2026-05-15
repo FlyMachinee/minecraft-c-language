@@ -14,6 +14,9 @@ public record FunctionType(Type returnType, List<Type> parameterTypes) implement
         if (!returnType.isCompatible(o.returnType)) {
             return false;
         }
+        if (hasNoParameters() && o.hasNoParameters()) {
+            return true;
+        }
         if (parameterTypes.size() != o.parameterTypes.size()) {
             return false;
         }

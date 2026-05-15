@@ -170,14 +170,24 @@ expression:
 declaration
     : declarationSpecifiers initDeclaratorList? Semicolon
     ;
-declarationSpecifiers
-    : typeSpecifier declarationSpecifiers?
+declarationSpecifiers // rewrote
+    : declarationSpecifier+
+    ;
+declarationSpecifier // added
+    : storageClassSpecifier
+    | typeSpecifier
     ;
 initDeclaratorList
     : initDeclarator
     ;
 initDeclarator
     : declarator (Assign initializer)?
+    ;
+
+// ISO 6.7.1, Storage-Class Specifiers
+storageClassSpecifier
+    : Static
+    | Extern
     ;
 
 // ISO 6.7.2, Type Specifiers

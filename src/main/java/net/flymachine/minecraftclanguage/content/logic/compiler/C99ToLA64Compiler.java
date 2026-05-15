@@ -1,5 +1,6 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler;
 
+import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.LA64AsmStatement;
 import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.LA64Assembly;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.LA64Backend;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.C99Frontend;
@@ -9,6 +10,7 @@ import org.antlr.v4.runtime.CharStream;
 import org.antlr.v4.runtime.CharStreams;
 
 import javax.annotation.Nullable;
+import java.util.List;
 
 public final class C99ToLA64Compiler {
 
@@ -27,13 +29,15 @@ public final class C99ToLA64Compiler {
      * @return 编译后的 LA64 汇编指令列表，如果遇到错误则返回 {@code null}
      */
     public @Nullable LA64Assembly compile(CharStream charStream) {
-        TacProgram tacProgram = new C99Frontend().compile(charStream);
-        if (tacProgram == null) {
+        C99Frontend.Result frontendResult = new C99Frontend().compile(charStream);
+        if (frontendResult == null) {
             return null;
         }
-        TacProgram optimizedTacProgram = new TacOptimizer().optimize(tacProgram);
+        TacProgram optimizedTacProgram = new TacOptimizer().optimize(frontendResult.tacProgram());
         String newName = charStream.getSourceName().replaceAll("\\.[^.]+$", "") + ".s";
-        return new LA64Assembly(new LA64Backend().compile(optimizedTacProgram), newName);
+        List<LA64AsmStatement> asm = new LA64Backend().compile(
+            new C99Frontend.Result(frontendResult.symbolTable(), optimizedTacProgram));
+        return new LA64Assembly(asm, newName);
     }
 
 }

@@ -2,13 +2,15 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.ir;
 
 import java.util.List;
 
-public class TacFunction implements TacDataStructure {
+public class TacFunction implements TacTopLevel {
     public String name;
+    public boolean global;
     public List<String> params;
     public List<TacInstruction> instructions;
 
-    public TacFunction(String name, List<String> params, List<TacInstruction> instructions) {
+    public TacFunction(String name, boolean global, List<String> params, List<TacInstruction> instructions) {
         this.name = name;
+        this.global = global;
         this.params = params;
         this.instructions = instructions;
     }
@@ -20,6 +22,7 @@ public class TacFunction implements TacDataStructure {
         }
         stringBuilder.append("TacFunction(\n");
         stringBuilder.append("  ".repeat(indentLevel + 1)).append("name=\"").append(name).append("\",\n");
+        stringBuilder.append("  ".repeat(indentLevel + 1)).append("global=").append(global).append(",\n");
         stringBuilder.append("  ".repeat(indentLevel + 1)).append("params=").append(params).append(",\n");
         stringBuilder.append("  ".repeat(indentLevel + 1)).append("instructions=[\n");
         for (TacInstruction instruction : instructions) {

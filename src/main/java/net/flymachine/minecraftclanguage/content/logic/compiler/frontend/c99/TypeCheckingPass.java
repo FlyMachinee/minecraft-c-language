@@ -1,33 +1,25 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99;
 
 import net.flymachine.minecraftclanguage.content.logger.ConsoleLogger;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.StorageClassSpecifier;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.BasicType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.*;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
+import org.jetbrains.annotations.Nullable;
 
-import java.util.HashMap;
-import java.util.Map;
-
-public class TypeCheckingPass extends SemanticAnalysePass implements AstVisitor<Void> {
+public final class TypeCheckingPass extends SemanticAnalysePass implements AstVisitor<Void> {
 
     public TypeCheckingPass() {
         super(new ConsoleLogger());
     }
 
-    private final Map<String, SymbolTableEntry> symbolTable = new HashMap<>();
+    private final SymbolTable symbolTable = new SymbolTable();
+    private boolean isFileScope = true;
 
-    public static class SymbolTableEntry {
-        IdentifierNode id;
-        TypeNode type;
-        boolean defined;
-
-        public SymbolTableEntry(IdentifierNode id, TypeNode type, boolean defined) {
-            this.id = id;
-            this.type = type;
-            this.defined = defined;
-        }
+    public SymbolTable getSymbolTable() {
+        return symbolTable;
     }
 
     @Override
@@ -40,39 +32,7 @@ public class TypeCheckingPass extends SemanticAnalysePass implements AstVisitor<
 
     @Override
     public Void visit(FunctionDefinitionNode node) {
-        // 函数不会被重命名，所以以下 id 信息是正确的
-        SymbolTableEntry entry = symbolTable.get(node.identifier.id);
-        if (entry != null) {
-            if (entry.defined) {
-                // 重定义函数
-                error();
-                String msg = "redefinition of '" + getLogger().white(node.identifier.id) + "'";
-                logErrorWithSourceLine(node.identifier.wholeLocation, msg);
-                msg = "previous definition of '" + getLogger().white(node.identifier.id) +
-                      "' with type '" + getLogger().white(entry.type.getType().toString()) + "'";
-                logNoteWithSourceLine(entry.id.wholeLocation, msg);
-            } else {
-                // 第一次定义
-                if (!entry.type.getType().isCompatible(node.functionType.getType())) {
-                    // 类型不兼容
-                    error();
-                    String msg =
-                        "conflicting types for '" + getLogger().white(node.identifier.id) + "'; have '" +
-                        getLogger().white(node.functionType.getType().toString()) + "'";
-                    logErrorWithSourceLine(node.identifier.wholeLocation, msg);
-                    msg = "previous declaration of '" + getLogger().white(node.identifier.id) +
-                          "' with type '" + getLogger().white(entry.type.getType().toString()) + "'";
-                    logNoteWithSourceLine(entry.id.wholeLocation, msg);
-                } else {
-                    // 更新表项
-                    symbolTable.put(node.identifier.id, new SymbolTableEntry(node.identifier, node.functionType, true));
-                }
-            }
-        } else {
-            // 第一次定义
-            symbolTable.put(node.identifier.id, new SymbolTableEntry(node.identifier, node.functionType, true));
-        }
-        // 检查参数
+
         if (!(node.functionType instanceof FunctionTypeNode funcType)) {
             // 不是函数类型
             error();
@@ -80,16 +40,7 @@ public class TypeCheckingPass extends SemanticAnalysePass implements AstVisitor<
                          getLogger().white(node.functionType.getType().toString()) + "'";
             logErrorWithSourceLine(node.identifier.wholeLocation, msg);
         } else {
-            // 检查返回值，只能是 int
-            if (!(funcType.returnType instanceof BasicTypeNode returnType) ||
-                returnType.getType().getKind() != BasicType.Kind.INT) {
-                // 返回值类型不合法
-                error();
-                String msg = "function '" + getLogger().white(node.identifier.id) +
-                             "' has invalid return type '" +
-                             getLogger().white(funcType.returnType.getType().toString()) + "'";
-                logErrorWithSourceLine(node.identifier.wholeLocation, msg);
-            }
+            visitFunctionDeclaration(node.identifier, funcType, node.storageClass, true);
 
             // 检查参数类型
             // 到了这里，要么所有参数都具名且不重复，要么只有单独的void参数
@@ -106,12 +57,14 @@ public class TypeCheckingPass extends SemanticAnalysePass implements AstVisitor<
                             getLogger().white(type.getType().toString()) + "'";
                         logErrorWithSourceLine(id.wholeLocation, msg);
                     }
-                    symbolTable.put(id.id, new SymbolTableEntry(id, type, false));
+                    symbolTable.put(id.id, new SymbolTable.Entry(id, type, SymbolTable.Entry.LocalAttr.INSTANCE));
                 }
             }
         }
         // 检查函数体
+        isFileScope = false;
         visit(node.body);
+        isFileScope = true;
         return null;
     }
 
@@ -136,9 +89,6 @@ public class TypeCheckingPass extends SemanticAnalysePass implements AstVisitor<
 
     @Override
     public Void visit(DeclarationNode node) {
-        // 到了这里，对于变量，不可能出现重定义，defined 为 true
-        // 而对于函数，函数的声明不是定义，defined 为 false
-
         if (!node.type.getType().isComplete()) {
             // 不完整类型
             error();
@@ -148,36 +98,8 @@ public class TypeCheckingPass extends SemanticAnalysePass implements AstVisitor<
                 getLogger().white(node.type.getType().toString()) + "'";
             logErrorWithSourceLine(node.identifier.wholeLocation, msg);
         } else if (node.type instanceof FunctionTypeNode funcType) {
-            // 函数类型
-            // 检查返回类型，返回类型目前只能是 int
-            if (!(funcType.returnType instanceof BasicTypeNode returnType) ||
-                returnType.getType().getKind() != BasicType.Kind.INT) {
-                // 返回值类型不合法
-                error();
-                String msg = "function '" + getLogger().white(node.identifier.id) +
-                             "' has invalid return type '" +
-                             getLogger().white(funcType.returnType.getType().toString()) + "'";
-                logErrorWithSourceLine(node.identifier.wholeLocation, msg);
-            }
-            // 如果已经声明/定义，检查类型是否匹配
-            SymbolTableEntry entry = symbolTable.get(node.identifier.id);
-            if (entry != null) {
-                if (!entry.type.getType().isCompatible(node.type.getType())) {
-                    // 类型不匹配
-                    error();
-                    String msg =
-                        "conflicting types for '" + getLogger().white(node.identifier.id) + "'; have '" +
-                        getLogger().white(node.type.getType().toString()) + "'";
-                    logErrorWithSourceLine(node.identifier.wholeLocation, msg);
-                    msg =
-                        "previous " + (entry.defined ? "definition" : "declaration") + " of '" +
-                        getLogger().white(node.identifier.id) +
-                        "' with type '" + getLogger().white(entry.type.getType().toString()) + "'";
-                    logNoteWithSourceLine(entry.id.wholeLocation, msg);
-                }
-            } else {
-                symbolTable.put(node.identifier.id, new SymbolTableEntry(node.identifier, node.type, false));
-            }
+            // 函数声明
+            visitFunctionDeclaration(node.identifier, funcType, node.storageClass, false);
 
             if (node.initializer != null) {
                 // 函数类型不能使用赋值初始化
@@ -186,15 +108,244 @@ public class TypeCheckingPass extends SemanticAnalysePass implements AstVisitor<
                 logErrorWithSourceLine(node.initializer.wholeLocation, msg);
             }
         } else {
-            // 普通变量，直接定义即可
-            symbolTable.put(node.identifier.id, new SymbolTableEntry(node.identifier, node.type, true));
-        }
-
-        // 检查初始化表达式
-        if (node.initializer != null) {
-            node.initializer.accept(this);
+            // 变量声明
+            if (isFileScope) {
+                visitFileScopeVariableDeclaration(node.identifier, node.type, node.storageClass, node.initializer);
+            } else {
+                visitBlockScopeVariableDeclaration(node.identifier, node.type, node.storageClass, node.initializer);
+            }
         }
         return null;
+    }
+
+    private void panicWithPreviousRef(
+        String msg, IdentifierNode id, SymbolTable.Entry previous, boolean defined) {
+        logErrorWithSourceLine(id.wholeLocation, msg);
+        msg = "previous " + (defined ? "definition" : "declaration") + " of '" +
+              getLogger().white(id.id) + "' with type '" +
+              getLogger().white(previous.type.getType().toString()) + "'";
+        logNoteWithSourceLine(previous.id.wholeLocation, msg);
+    }
+
+    public void visitFunctionDeclaration(
+        IdentifierNode id, FunctionTypeNode funcType, @Nullable StorageClassSpecifierNode storageClass,
+        boolean isDefinition) {
+
+        // 检查返回类型
+        // 目前只能是 int
+        if (!(funcType.returnType instanceof BasicTypeNode returnType) ||
+            returnType.getType().getKind() != BasicType.Kind.INT) {
+            // 返回值类型不合法
+            error();
+            String msg = "function '" + getLogger().white(id.id) + "' has invalid return type '" +
+                         getLogger().white(funcType.returnType.getType().toString()) + "'";
+            logErrorWithSourceLine(id.wholeLocation, msg);
+        }
+
+        // 如果已经声明/定义，检查类型是否匹配
+        SymbolTable.Entry previous = symbolTable.get(id.id);
+        if (previous != null) {
+            boolean alreadyDefined = previous.attr.isDefinition();
+            if (!previous.type.getType().isCompatible(funcType.getType())) {
+                // 类型不匹配
+                panicConflictType(id, funcType, previous, alreadyDefined);
+                return;
+            }
+            // 类型匹配，一定是函数的属性
+            SymbolTable.Entry.FuncAttr funcAttr = (SymbolTable.Entry.FuncAttr) previous.attr;
+
+            if (alreadyDefined && isDefinition) {
+                // 重定义函数
+                error();
+                String msg = "redefinition of '" + getLogger().white(id.id) + "'";
+                panicWithPreviousRef(msg, id, previous, true);
+                return;
+            }
+            if (funcAttr.isGlobal() && storageClass != null &&
+                storageClass.storageClass.equals(StorageClassSpecifier.STATIC)) {
+                // 之前是全局的（External linkage），现在是静态的（Internal linkage），链接冲突
+                error();
+                String msg = "static declaration of '" + getLogger().white(id.id) + "' follows non-static declaration";
+                panicWithPreviousRef(msg, id, previous, alreadyDefined);
+                return;
+            }
+            // 链接不冲突，不需要修改 global
+            if (!alreadyDefined) {
+                // 先前未定义，更新声明/定义行
+                previous.id = id;
+            }
+            funcAttr.defined = alreadyDefined || isDefinition;
+        } else {
+            // 第一次
+            boolean global = storageClass == null || !storageClass.storageClass.equals(StorageClassSpecifier.STATIC);
+            SymbolTable.Entry.IdentifierAttr attr = new SymbolTable.Entry.FuncAttr(isDefinition, global);
+            symbolTable.put(id.id, new SymbolTable.Entry(id, funcType, attr));
+        }
+    }
+
+    public void visitFileScopeVariableDeclaration(
+        IdentifierNode id, TypeNode type, @Nullable StorageClassSpecifierNode storageClass,
+        @Nullable ExpressionNode init) {
+
+        // 获取初始化类型
+        SymbolTable.Entry.StaticAttr.InitialValue initialValue;
+        if (init == null) {
+            // 无初始化
+            if (storageClass != null && storageClass.storageClass.equals(StorageClassSpecifier.EXTERN)) {
+                // 来自其他编译单元，外部定义，未定义
+                initialValue = SymbolTable.Entry.StaticAttr.NoInitializer.INSTANCE;
+            } else {
+                // 本编译单元内定义，试探性定义
+                initialValue = SymbolTable.Entry.StaticAttr.Tentative.INSTANCE;
+            }
+        } else if (init instanceof IntConstantNode intConstant) {
+            // 整数常量初始化
+            initialValue = new SymbolTable.Entry.StaticAttr.Initial(intConstant.value);
+        } else {
+            // 其他类型的初始化表达式不合法
+            error();
+            String msg = "initializer element is not constant";
+            logErrorWithSourceLine(init.wholeLocation, msg);
+            // 给一个 dummy 类型以继续后续检查
+            initialValue = SymbolTable.Entry.StaticAttr.NoInitializer.INSTANCE;
+        }
+
+        boolean global = storageClass == null || !storageClass.storageClass.equals(StorageClassSpecifier.STATIC);
+
+        SymbolTable.Entry previous = symbolTable.get(id.id);
+        if (previous != null) {
+            // 先前有声明/定义
+            boolean alreadyDefined = previous.attr.isDefinition();
+            if (!previous.type.getType().isCompatible(type.getType())) {
+                // 类型不匹配
+                panicConflictType(id, type, previous, alreadyDefined);
+                return;
+            }
+            // 类型匹配，且在全局作用域，一定是全局变量
+            SymbolTable.Entry.StaticAttr prevAttr = (SymbolTable.Entry.StaticAttr) previous.attr;
+
+            if (storageClass != null && storageClass.storageClass.equals(StorageClassSpecifier.EXTERN)) {
+                // 当前为 extern，链接属性跟随先前定义/声明的属性
+                global = prevAttr.isGlobal();
+            } else if (prevAttr.isGlobal() != global) {
+                // 链接属性不同，冲突
+                error();
+                String msg;
+                if (global) {
+                    // 当前 global（External Linkage），先前非 global（Internal Linkage）
+                    msg = "non-static declaration of '" + getLogger().white(id.id) + "' follows static declaration";
+                } else {
+                    // 当前非 global（Internal Linkage），先前 global（External Linkage）
+                    msg = "static declaration of '" + getLogger().white(id.id) + "' follows non-static declaration";
+                }
+                panicWithPreviousRef(msg, id, previous, alreadyDefined);
+                return;
+            }
+
+            if (prevAttr.initialValue instanceof SymbolTable.Entry.StaticAttr.Initial prevInit) {
+                if (initialValue instanceof SymbolTable.Entry.StaticAttr.Initial) {
+                    // 定义了两次，且都有初始化，冲突
+                    error();
+                    String msg = "redefinition of '" + getLogger().white(id.id) + "'";
+                    panicWithPreviousRef(msg, id, previous, true);
+                } else {
+                    // 当前无定义，先前有初始化，使用先前的初始化信息
+                    initialValue = prevInit;
+                }
+            } else if (!(initialValue instanceof SymbolTable.Entry.StaticAttr.Initial) &&
+                       prevAttr.initialValue instanceof SymbolTable.Entry.StaticAttr.Tentative) {
+                // 当前无初始化（NoInitializer 或 Tentative），先前为 Tentative，则为 Tentative
+                initialValue = SymbolTable.Entry.StaticAttr.Tentative.INSTANCE;
+            }
+            // 其他情况使用当前的初始化信息
+
+            if (!alreadyDefined) {
+                // 先前未定义，更新声明/定义行
+                previous.id = id;
+            }
+            // 更新定义属性
+            prevAttr.initialValue = initialValue;
+            prevAttr.global = global;
+        } else {
+            // 第一次
+            SymbolTable.Entry.IdentifierAttr attr = new SymbolTable.Entry.StaticAttr(initialValue, global);
+            symbolTable.put(id.id, new SymbolTable.Entry(id, type, attr));
+        }
+    }
+
+    public void visitBlockScopeVariableDeclaration(
+        IdentifierNode id, TypeNode type, @Nullable StorageClassSpecifierNode storageClass,
+        @Nullable ExpressionNode init) {
+
+        if (storageClass == null) {
+            // 无存储类说明符，不可能重复定义
+            SymbolTable.Entry.LocalAttr attr = SymbolTable.Entry.LocalAttr.INSTANCE;
+            symbolTable.put(id.id, new SymbolTable.Entry(id, type, attr));
+            if (init != null) {
+                init.accept(this);
+            }
+        } else if (storageClass.storageClass.equals(StorageClassSpecifier.EXTERN)) {
+            // 块作用域的 extern 声明不允许有初始化
+            if (init != null) {
+                error();
+                String msg =
+                    "'" + getLogger().white(id.id) + "' has both '" + getLogger().white("extern") + "' and initializer";
+                logErrorWithSourceLine(init.wholeLocation, msg);
+                // 这里不 return，继续处理下面的检查与定义
+            }
+            SymbolTable.Entry previous = symbolTable.get(id.id);
+            if (previous != null) {
+                // 先前有声明/定义
+                boolean alreadyDefined = previous.attr.isDefinition();
+                if (!previous.type.getType().isCompatible(type.getType())) {
+                    // 类型不匹配
+                    panicConflictType(id, type, previous, alreadyDefined);
+                }
+                if (!alreadyDefined) {
+                    // 更新声明/定义行
+                    previous.id = id;
+                }
+            } else {
+                // 第一次
+                SymbolTable.Entry.IdentifierAttr attr = new SymbolTable.Entry.StaticAttr(
+                    SymbolTable.Entry.StaticAttr.NoInitializer.INSTANCE, true);
+                symbolTable.put(id.id, new SymbolTable.Entry(id, type, attr));
+            }
+        } else {
+            // static
+            SymbolTable.Entry.StaticAttr.InitialValue initialValue;
+            if (init == null) {
+                // 块作用域 static 无初始化器，初始化为 0
+                initialValue = SymbolTable.Entry.StaticAttr.Initial.ZERO;
+            } else if (init instanceof IntConstantNode intConstant) {
+                // 整数常量初始化
+                initialValue = new SymbolTable.Entry.StaticAttr.Initial(intConstant.value);
+            } else {
+                // 其他类型的初始化表达式不合法
+                error();
+                String msg = "initializer element is not constant";
+                logErrorWithSourceLine(init.wholeLocation, msg);
+                // 这里不 return，继续处理下面的定义，防止后续引用无定义
+                // 设置一个 dummy 值
+                initialValue = SymbolTable.Entry.StaticAttr.Initial.ZERO;
+            }
+            // static 块作用域变量为 No Linkage，不可能重复定义（在 Identifier Resolution 中已检查）
+            SymbolTable.Entry.IdentifierAttr attr = new SymbolTable.Entry.StaticAttr(initialValue, false);
+            symbolTable.put(id.id, new SymbolTable.Entry(id, type, attr));
+        }
+    }
+
+    private void panicConflictType(
+        IdentifierNode id, TypeNode type, SymbolTable.Entry previous, boolean alreadyDefined) {
+        error();
+        String msg;
+        if ((previous.type instanceof FunctionTypeNode) != (type instanceof FunctionTypeNode)) {
+            msg = "'" + getLogger().white(id.id) + "' redeclared as different kind of symbol";
+        } else {
+            msg = "conflicting types for '" + getLogger().white(id.id) + "'; have '" +
+                  getLogger().white(type.getType().toString()) + "'";
+        }
+        panicWithPreviousRef(msg, id, previous, alreadyDefined);
     }
 
     @Override
@@ -211,7 +362,7 @@ public class TypeCheckingPass extends SemanticAnalysePass implements AstVisitor<
     @Override
     public Void visit(IdentifierNode node) {
         // 始终有定义
-        SymbolTableEntry entry = symbolTable.get(node.id);
+        SymbolTable.Entry entry = symbolTable.get(node.id);
         TypeNode type = entry.type;
         if (type instanceof FunctionTypeNode) {
             // 函数类型不能作为表达式使用
@@ -307,6 +458,14 @@ public class TypeCheckingPass extends SemanticAnalysePass implements AstVisitor<
                                  "' in for loop initial declaration";
                     logErrorWithSourceLine(decl.wholeLocation, msg);
                 }
+                if (decl.storageClass != null) {
+                    // for 初始化语句中不允许有存储类说明符
+                    error();
+                    String msg = "declaration of " + decl.storageClass.storageClass + " variable '" +
+                                 getLogger().white(getSourceFile().getByLocation(decl.identifier.wholeLocation)) +
+                                 "' in for loop initial declaration";
+                    logErrorWithSourceLine(decl.identifier.wholeLocation, msg);
+                }
             }
             node.init.accept(this);
         }
@@ -335,7 +494,7 @@ public class TypeCheckingPass extends SemanticAnalysePass implements AstVisitor<
             String msg = "function call expression shall have identifier as function designator";
             logErrorWithSourceLine(node.function.wholeLocation, msg);
         } else {
-            SymbolTableEntry entry = symbolTable.get(id.id);
+            SymbolTable.Entry entry = symbolTable.get(id.id);
             TypeNode type = entry.type;
             if (!(type instanceof FunctionTypeNode funcType)) {
                 // 不是函数类型

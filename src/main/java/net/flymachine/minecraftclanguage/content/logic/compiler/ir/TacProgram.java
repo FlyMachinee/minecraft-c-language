@@ -3,10 +3,10 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.ir;
 import java.util.List;
 
 public class TacProgram implements TacDataStructure {
-    public List<TacFunction> functionDefinitions;
+    public List<TacTopLevel> topLevels;
 
-    public TacProgram(List<TacFunction> functionDefinitions) {
-        this.functionDefinitions = functionDefinitions;
+    public TacProgram(List<TacTopLevel> topLevels) {
+        this.topLevels = topLevels;
     }
 
     @Override
@@ -15,8 +15,8 @@ public class TacProgram implements TacDataStructure {
             stringBuilder.append("  ".repeat(indentLevel));
         }
         stringBuilder.append("TacProgram([\n");
-        for (TacFunction function : functionDefinitions) {
-            function.genFormattedString(stringBuilder, indentLevel + 1, true);
+        for (TacTopLevel topLevel : topLevels) {
+            topLevel.genFormattedString(stringBuilder, indentLevel + 1, true);
             stringBuilder.append(",\n");
         }
         stringBuilder.append("  ".repeat(indentLevel)).append("])");

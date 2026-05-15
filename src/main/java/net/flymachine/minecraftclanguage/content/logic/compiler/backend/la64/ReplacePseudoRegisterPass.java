@@ -2,17 +2,24 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64;
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.HighLevelFunction;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.HighLevelProgram;
+import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.HighLevelTopLevel;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.instruction.*;
+import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.Data;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.HighLevelOperand;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.Pseudo;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.Stack;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.SymbolTable;
 
 import java.util.HashMap;
 import java.util.Map;
 
 public final class ReplacePseudoRegisterPass implements HighLevelVisitor<Void> {
 
-    public ReplacePseudoRegisterPass() { }
+    public ReplacePseudoRegisterPass(SymbolTable symbolTable) {
+        this.symbolTable = symbolTable;
+    }
+
+    private final SymbolTable symbolTable;
 
     // 指向当前已使用的元素
     // 相对于 $fp 寻址
@@ -23,8 +30,10 @@ public final class ReplacePseudoRegisterPass implements HighLevelVisitor<Void> {
     private final Map<String, Integer> registers = new HashMap<>();
 
     public void runOnProgram(HighLevelProgram program) {
-        for (HighLevelFunction func : program.functionDefinitions) {
-            runOnFunction(func);
+        for (HighLevelTopLevel topLevel : program.topLevels) {
+            if (topLevel instanceof HighLevelFunction func) {
+                runOnFunction(func);
+            }
         }
     }
 
@@ -107,12 +116,17 @@ public final class ReplacePseudoRegisterPass implements HighLevelVisitor<Void> {
     private HighLevelOperand replacePseudo(HighLevelOperand operand) {
         if (operand instanceof Pseudo pseudo) {
             String id = pseudo.identifier();
-            int offset = registers.computeIfAbsent(
-                id, k -> {
-                    stackOffset -= 4;
-                    return stackOffset;
-                });
-            return new Stack(offset);
+            if (registers.containsKey(id)) {
+                return new Stack(registers.get(id));
+            } else {
+                SymbolTable.Entry entry = symbolTable.get(id);
+                if (entry != null && !(entry.attr instanceof SymbolTable.Entry.LocalAttr)) {
+                    return new Data(id);
+                } else {
+                    registers.put(id, stackOffset -= 4);
+                    return new Stack(stackOffset);
+                }
+            }
         }
         return operand;
     }

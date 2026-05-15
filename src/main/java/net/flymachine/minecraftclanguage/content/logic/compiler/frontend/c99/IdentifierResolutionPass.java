@@ -1,9 +1,10 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99;
 
 import net.flymachine.minecraftclanguage.content.logger.ConsoleLogger;
-import net.flymachine.minecraftclanguage.content.logic.compiler.common.Linkage;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.StorageClassSpecifier;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.*;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -29,12 +30,14 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
     private static class IdentifierEntry {
         public IdentifierNode id;
         public TypeNode t;
-        public Linkage linkage;
+        public boolean hasLinkage;
+        public boolean defined; // 仅用于信息打印，不参与逻辑检查
 
-        public IdentifierEntry(IdentifierNode id, TypeNode t, Linkage linkage) {
+        public IdentifierEntry(IdentifierNode id, TypeNode t, boolean hasLinkage, boolean defined) {
             this.id = id;
             this.t = t;
-            this.linkage = linkage;
+            this.hasLinkage = hasLinkage;
+            this.defined = defined;
         }
     }
 
@@ -86,6 +89,14 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
         return null;
     }
 
+    private void panicWithPreviousRef(String msg, IdentifierNode id, IdentifierEntry previous) {
+        logErrorWithSourceLine(id.wholeLocation, msg);
+        msg = "previous " + (previous.defined ? "definition" : "declaration") + " of '" +
+              getLogger().white(id.id) + "' with type '" +
+              getLogger().white(previous.t.getType().toString()) + "'";
+        logNoteWithSourceLine(previous.id.wholeLocation, msg);
+    }
+
     private void visitFunctionTypeNode(FunctionTypeNode funcType, boolean isDefinition) {
         if (isDefinition) {
             // 如果 isDefinition，要求参数要么是单独的 void，要么就必须具名
@@ -103,7 +114,7 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
                     String msg = "ISO C99 does not support omitting parameter names in function definitions";
                     logErrorWithSourceLine(funcType.parameterTypes.get(i).getWholeLocation(), msg);
                 } else {
-                    visitDeclarationLike(funcType.parameters.get(i), funcType.parameterTypes.get(i));
+                    visitDeclarationLike(funcType.parameters.get(i), funcType.parameterTypes.get(i), null, true);
                 }
             }
         } else {
@@ -117,14 +128,12 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
 
                 IdentifierEntry entry = scope.get(identifier.id);
                 if (entry == null) {
-                    scope.put(identifier.id, new IdentifierEntry(identifier, type, Linkage.NONE));
+                    // 这里认为参数声明是定义，为 No Linkage
+                    scope.put(identifier.id, new IdentifierEntry(identifier, type, false, true));
                 } else {
                     error();
-                    String msg = "redefinition of '" + getLogger().white(identifier.id) + "'";
-                    logErrorWithSourceLine(identifier.wholeLocation, msg);
-                    msg = "previous definition of '" + getLogger().white(identifier.id) +
-                          "' with type '" + getLogger().white(entry.t.getType().toString()) + "'";
-                    logNoteWithSourceLine(entry.id.wholeLocation, msg);
+                    String msg = "redefinition of parameter '" + getLogger().white(identifier.id) + "'";
+                    panicWithPreviousRef(msg, identifier, entry);
                 }
             }
         }
@@ -141,7 +150,7 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
 
     @Override
     public Void visit(FunctionDefinitionNode node) {
-        visitDeclarationLike(node.identifier, node.functionType);
+        visitDeclarationLike(node.identifier, node.functionType, node.storageClass, true);
         enterScope();
         if (node.functionType instanceof FunctionTypeNode) {
             visitFunctionTypeNode((FunctionTypeNode) node.functionType, true);
@@ -174,7 +183,9 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
 
     @Override
     public Void visit(DeclarationNode node) {
-        visitDeclarationLike(node.identifier, node.type);
+        visitDeclarationLike(
+            node.identifier, node.type, node.storageClass,
+            !(node.type instanceof FunctionTypeNode) && node.initializer != null);
         if (node.type instanceof FunctionTypeNode funcType) {
             visitFunctionTypeNode(funcType, false);
         }
@@ -184,24 +195,101 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
         return null;
     }
 
-    private void visitDeclarationLike(IdentifierNode id, TypeNode type) {
-        Linkage linkage = type instanceof FunctionTypeNode ? Linkage.EXTERNAL : Linkage.NONE;
+    private void visitDeclarationLike(
+        IdentifierNode id, TypeNode type, @Nullable StorageClassSpecifierNode storageClass, boolean defined) {
+
         String name = id.id;
-        IdentifierEntry renamed = definitionInCurrentScope(name);
-        if (renamed != null) {
-            if ((linkage != Linkage.EXTERNAL || renamed.linkage != Linkage.EXTERNAL)) {
+        IdentifierEntry previous = definitionOf(name);
+        if (type instanceof FunctionTypeNode) {
+            // 函数声明，始终有链接
+            if (previous != null && definedInCurrentScope(name) && !previous.hasLinkage) {
+                // 当前作用域先前的声明无链接，肯定是变量，当前声明是函数声明，有链接，冲突
                 error();
-                String msg = "redefinition of '" + getLogger().white(name) + "'";
+                String msg = "'" + getLogger().white(name) + "' redeclared as different kind of symbol";
+                panicWithPreviousRef(msg, id, previous);
+                return;
+            }
+            // 无先前声明、先前声明有链接、先前声明不在当前作用域，这里暂时不管类型
+            if (!inGlobalScope() && storageClass != null &&
+                storageClass.storageClass.equals(StorageClassSpecifier.STATIC)) {
+                // 块作用域函数声明为 static 非法
+                error();
+                String msg = "invalid storage class for function '" + getLogger().white(name) + "'";
                 logErrorWithSourceLine(id.wholeLocation, msg);
-                msg = "previous definition of '" + getLogger().white(name) + "' with type '" +
-                      getLogger().white(renamed.t.getType().toString()) + "'";
-                logNoteWithSourceLine(renamed.id.wholeLocation, msg);
+            }
+            // 函数声明不需要重命名
+            if (previous != null && previous.defined && previous.hasLinkage) {
+                // 先前有声明、有链接且为定义，引用先前的定义
+                define(name, new IdentifierEntry(previous.id, previous.t, true, true));
+            } else {
+                // 先前无声明，或先前声明不是定义，或先前声明无链接
+                // 引入新符号
+                define(name, new IdentifierEntry(id, type, true, defined));
             }
         } else {
-            if (linkage == Linkage.NONE) {
-                id.id = makeUniqueName(name);
+            // 变量声明，如果在全局作用域则有链接，否则没有链接
+            if (inGlobalScope()) {
+                // 全局变量不需要重命名
+                // 这里不考虑可能的定义冲突，随后在类型检查中处理
+                if (previous == null || !previous.defined) {
+                    // 先前无声明，或先前声明不是定义
+                    define(name, new IdentifierEntry(id, type, true, defined));
+                }
+                // 否则采用先前的定义，目前在全局作用域，那么我们不需要再次定义，使用先前的即可
+            } else {
+                // 块作用域变量
+                if (previous != null) {
+                    // 先前有声明，而且是当前作用域的
+                    if (definedInCurrentScope(name) &&
+                        !(previous.hasLinkage && storageClass != null &&
+                          storageClass.storageClass.equals(StorageClassSpecifier.EXTERN))) {
+                        // 当前作用域之前的声明有链接，并且当前声明是 extern，则允许重定义
+                        // 除此之外，声明冲突
+                        error();
+                        String msg;
+                        if (!previous.hasLinkage) {
+                            // 先前的声明无链接
+                            if (storageClass == null ||
+                                !storageClass.storageClass.equals(StorageClassSpecifier.EXTERN)) {
+                                // 当前的声明无链接
+                                msg =
+                                    (defined ? "redefinition" : "redeclaration") + " of '" + getLogger().white(name) +
+                                    "' with no linkage";
+                            } else {
+                                // 当前的声明是 extern，有链接
+                                if (defined) {
+                                    msg = "redefinition of '" + getLogger().white(name) + "'";
+                                } else {
+                                    msg = "extern declaration of '" + getLogger().white(name) +
+                                          "' follows declaration with no linkage";
+                                }
+                            }
+                        } else {
+                            // 先前的声明有链接，则当前声明无链接
+                            msg = (defined ? "redefinition" : "redeclaration") + " of '" + getLogger().white(name) +
+                                  "' with no linkage";
+                        }
+                        panicWithPreviousRef(msg, id, previous);
+                        return;
+                    }
+                }
+                // 声明不冲突或先前无声明（不考虑类型）
+                if (storageClass != null && storageClass.storageClass.equals(StorageClassSpecifier.EXTERN)) {
+                    // 当前声明是 extern，有链接，不需要重命名
+                    if (previous != null && previous.defined && previous.hasLinkage) {
+                        // 先前有声明、有链接且为定义，引用先前的定义
+                        define(name, new IdentifierEntry(previous.id, previous.t, true, true));
+                    } else {
+                        // 先前无声明，或先前声明不是定义，或先前声明无链接
+                        // 引入新符号
+                        define(name, new IdentifierEntry(id, type, true, defined));
+                    }
+                } else {
+                    // 无链接，需要重命名
+                    id.id = makeUniqueName(name);
+                    define(name, new IdentifierEntry(id, type, false, defined));
+                }
             }
-            define(name, new IdentifierEntry(id, type, linkage));
         }
     }
 

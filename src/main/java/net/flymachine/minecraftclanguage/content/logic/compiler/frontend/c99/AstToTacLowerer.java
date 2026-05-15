@@ -13,16 +13,32 @@ import java.util.List;
 
 public final class AstToTacLowerer {
 
-    public AstToTacLowerer() { }
+    public AstToTacLowerer(SymbolTable symbolTable) {
+        this.symbolTable = symbolTable;
+    }
+
+    private final SymbolTable symbolTable;
 
     public TacProgram lower(ProgramNode program) {
-        List<TacFunction> functions = new ArrayList<>();
+        List<TacTopLevel> topLevels = new ArrayList<>();
         for (ExternalDeclarationNode externalDeclaration : program.declarations) {
             if (externalDeclaration instanceof FunctionDefinitionNode funcDef) {
-                functions.add(lowerFunction(funcDef));
+                topLevels.add(lowerFunction(funcDef));
             }
         }
-        return new TacProgram(functions);
+        // 遍历符号表，将需要本编译单元内初始化的全局变量进行定义
+        for (SymbolTable.Entry entry : symbolTable.getEntries()) {
+            SymbolTable.Entry.IdentifierAttr attr = entry.attr;
+            if (attr instanceof SymbolTable.Entry.StaticAttr staticAttr) {
+                SymbolTable.Entry.StaticAttr.InitialValue initialValue = staticAttr.initialValue;
+                if (initialValue instanceof SymbolTable.Entry.StaticAttr.Initial initial) {
+                    topLevels.add(new TacStaticVariable(entry.id.id, staticAttr.global, initial.value()));
+                } else if (initialValue instanceof SymbolTable.Entry.StaticAttr.Tentative) {
+                    topLevels.add(new TacStaticVariable(entry.id.id, staticAttr.global, 0));
+                }
+            }
+        }
+        return new TacProgram(topLevels);
     }
 
     private int tempVarCounter = 0;
@@ -45,12 +61,13 @@ public final class AstToTacLowerer {
         List<TacInstruction> instructions = new ArrayList<>();
         lowerStatement(functionDefinition.body, instructions);
         instructions.add(new TacReturn(new TacIntConstant(0)));
+        boolean global = symbolTable.get(functionDefinition.identifier.id).attr.isGlobal();
         FunctionTypeNode functionType = (FunctionTypeNode) functionDefinition.functionType;
         if (functionType.hasNoParameters()) {
-            return new TacFunction(functionDefinition.identifier.id, new ArrayList<>(), instructions);
+            return new TacFunction(functionDefinition.identifier.id, global, List.of(), instructions);
         } else {
             List<String> parameters = functionType.parameters.stream().map(param -> param.id).toList();
-            return new TacFunction(functionDefinition.identifier.id, parameters, instructions);
+            return new TacFunction(functionDefinition.identifier.id, global, parameters, instructions);
         }
     }
 
@@ -66,7 +83,9 @@ public final class AstToTacLowerer {
     }
 
     private void lowerDeclaration(DeclarationNode declaration, List<TacInstruction> instructions) {
-        if (declaration.initializer != null) {
+        // 一定为块作用域
+        // 无存储类且有初始化时，生成初始化三地址码
+        if (declaration.initializer != null && declaration.storageClass == null) {
             TacValue initValue = lowerExpression(declaration.initializer, instructions);
             instructions.add(new TacCopy(initValue, new TacVariable(declaration.identifier.id)));
         }

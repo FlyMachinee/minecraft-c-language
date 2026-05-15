@@ -47,6 +47,14 @@ public class BasicType implements Type {
         return kind.name().toLowerCase();
     }
 
+    public static BasicType fromString(String typeName) {
+        return switch (typeName) {
+            case "void" -> VOID;
+            case "int" -> INT;
+            default -> throw new IllegalArgumentException("Unknown basic type: " + typeName);
+        };
+    }
+
     public static BasicType VOID = new BasicType(Kind.VOID);
     public static BasicType INT = new BasicType(Kind.INT);
 }

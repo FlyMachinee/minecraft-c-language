@@ -19,9 +19,9 @@ public final class C99Frontend {
      * 将指定的字符流编译成中间表示
      *
      * @param charStream 包含源文件内容的字符流
-     * @return 前端编译后的中间表示，如果遇到错误则返回 null
+     * @return 前端编译后的中间表示以及符号表，如果遇到错误则返回 null
      */
-    public @Nullable TacProgram compile(CharStream charStream) {
+    public @Nullable Result compile(CharStream charStream) {
         SourceFile sourceFile = new SourceFile(charStream);
 
         C99Lexer lexer = new C99Lexer(charStream);
@@ -41,7 +41,13 @@ public final class C99Frontend {
             return null;
         }
 
-        AstNode ast = new AstBuilderVisitor().visit(tree);
+        AstBuilderVisitor astBuilderVisitor = new AstBuilderVisitor();
+        astBuilderVisitor.setSourceFile(sourceFile);
+        AstNode ast = astBuilderVisitor.visit(tree);
+
+        if (ast == null || astBuilderVisitor.hasSemanticError()) {
+            return null;
+        }
 
         IdentifierResolutionPass identifierResolutionPass = new IdentifierResolutionPass();
         identifierResolutionPass.setSourceFile(sourceFile);
@@ -58,6 +64,7 @@ public final class C99Frontend {
         if (typeCheckingPass.hasSemanticError()) {
             return null;
         }
+        SymbolTable symbolTable = typeCheckingPass.getSymbolTable();
 
         LabelResolutionPass labelResolutionPass = new LabelResolutionPass();
         labelResolutionPass.setSourceFile(sourceFile);
@@ -75,6 +82,9 @@ public final class C99Frontend {
             return null;
         }
 
-        return new AstToTacLowerer().lower((ProgramNode) ast);
+        TacProgram tacProgram = new AstToTacLowerer(symbolTable).lower((ProgramNode) ast);
+        return new Result(symbolTable, tacProgram);
     }
+
+    public record Result(SymbolTable symbolTable, TacProgram tacProgram) { }
 }

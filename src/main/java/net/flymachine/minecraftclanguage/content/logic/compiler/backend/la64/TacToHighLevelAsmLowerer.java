@@ -3,6 +3,8 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64;
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.register.GeneralPurposeRegister;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.HighLevelFunction;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.HighLevelProgram;
+import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.HighLevelStaticVar;
+import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.HighLevelTopLevel;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.instruction.*;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.HighLevelOperand;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.Immediate;
@@ -19,11 +21,15 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
     public TacToHighLevelAsmLowerer() { }
 
     public HighLevelProgram lower(TacProgram tacProgram) {
-        List<HighLevelFunction> functions = new ArrayList<>();
-        for (TacFunction tacFunction : tacProgram.functionDefinitions) {
-            functions.add(lowerFunction(tacFunction));
+        List<HighLevelTopLevel> topLevels = new ArrayList<>();
+        for (TacTopLevel topLevel : tacProgram.topLevels) {
+            if (topLevel instanceof TacFunction func) {
+                topLevels.add(lowerFunction(func));
+            } else if (topLevel instanceof TacStaticVariable staticVar) {
+                topLevels.add(new HighLevelStaticVar(staticVar.identifier, staticVar.global, staticVar.initValue));
+            }
         }
-        return new HighLevelProgram(functions);
+        return new HighLevelProgram(topLevels);
     }
 
     private List<HighLevelInstruction> target;
@@ -57,7 +63,7 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
         for (TacInstruction instruction : instructions) {
             instruction.accept(this);
         }
-        HighLevelFunction function = new HighLevelFunction(tacFunction.name, target);
+        HighLevelFunction function = new HighLevelFunction(tacFunction.name, tacFunction.global, target);
         function.maxCallStackArgSize = maxCallStackArgSize;
         return function;
     }

@@ -9,14 +9,14 @@ import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.L
 import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.LA64AsmStatement;
 import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.operand.LA64AsmImmOperand;
 import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.operand.LA64AsmSymOperand;
+import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.operand.LA64DirectiveNumArg;
 import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.operand.LA64DirectiveSymArg;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.HighLevelFunction;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.HighLevelProgram;
+import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.HighLevelStaticVar;
+import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.HighLevelTopLevel;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.instruction.*;
-import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.HighLevelOperand;
-import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.Immediate;
-import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.Pseudo;
-import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.Stack;
+import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.*;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.BinaryOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.Comparison;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.UnaryOperator;
@@ -31,10 +31,34 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
     private final List<LA64AsmStatement> target = new ArrayList<>();
 
     public List<LA64AsmStatement> lower(HighLevelProgram highLevelProgram) {
-        for (HighLevelFunction func : highLevelProgram.functionDefinitions) {
-            lowerFunction(func);
+        for (HighLevelTopLevel topLevel : highLevelProgram.topLevels) {
+            if (topLevel instanceof HighLevelFunction func) {
+                lowerFunction(func);
+            } else if (topLevel instanceof HighLevelStaticVar staticVar) {
+                lowerStaticVariable(staticVar);
+            }
         }
         return target;
+    }
+
+    private void lowerStaticVariable(HighLevelStaticVar staticVar) {
+        if (staticVar.global) {
+            target.add(new LA64AsmDirective("global", List.of(new LA64DirectiveSymArg(staticVar.name))));
+        }
+        if (staticVar.initValue == 0) {
+            // 初始化为0，放在bss段
+            target.add(new LA64AsmDirective("bss", List.of()));
+        } else {
+            // 初始化非0，放在data段
+            target.add(new LA64AsmDirective("data", List.of()));
+        }
+        target.add(new LA64AsmDirective("align", List.of(new LA64DirectiveNumArg(4))));
+        target.add(new LA64AsmLabel(staticVar.name));
+        if (staticVar.initValue != 0) {
+            target.add(new LA64AsmDirective("word", List.of(new LA64DirectiveNumArg(staticVar.initValue))));
+        } else {
+            target.add(new LA64AsmDirective("zero", List.of(new LA64DirectiveNumArg(4))));
+        }
     }
 
     private HighLevelFunction functionContext;
@@ -42,7 +66,10 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
     private void lowerFunction(HighLevelFunction function) {
         functionContext = function;
 
-        target.add(new LA64AsmDirective("global", List.of(new LA64DirectiveSymArg(function.name))));
+        if (function.global) {
+            target.add(new LA64AsmDirective("global", List.of(new LA64DirectiveSymArg(function.name))));
+        }
+        target.add(new LA64AsmDirective("text", List.of()));
         target.add(new LA64AsmLabel(function.name));
         generatePrologue(function);
 
@@ -119,47 +146,63 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
         if (dst instanceof Immediate) {
             throw new UnsupportedOperationException("Cannot move to an immediate");
         }
-
         if (src instanceof Pseudo || dst instanceof Pseudo) {
             throw new UnsupportedOperationException(
                 "Cannot move from/to pseudo register, should be replaced earlier");
         }
 
-        if (src instanceof Immediate immediate) {
-            if (dst instanceof GeneralPurposeRegister register) {
-                // 立即数到寄存器
-                target.add(createLoadImm(register, (int) immediate.value()));
-                return null;
-            } else if (dst instanceof Stack stack) {
-                // 立即数到内存地址
-                target.add(createLoadImm(GeneralPurposeRegister.T0, (int) immediate.value()));
-                target.add(createStore(GeneralPurposeRegister.T0, stack));
-                return null;
-            }
-        } else if (src instanceof GeneralPurposeRegister srcReg) {
-            if (dst instanceof GeneralPurposeRegister dstReg) {
-                // 寄存器到寄存器
+        // 特殊情况优化
+        if (dst instanceof GeneralPurposeRegister dstReg) {
+            // -> 寄存器
+            if (src instanceof Immediate srcImm) {
+                // 立即数 -> 寄存器
+                loadImm(dstReg, (int) srcImm.value());
+            } else if (src instanceof GeneralPurposeRegister srcReg) {
+                // 寄存器 -> 寄存器
                 target.add(new LA64AsmInstruction("move", List.of(dstReg, srcReg)));
-                return null;
-            } else if (dst instanceof Stack stack) {
-                // 寄存器到内存地址
-                target.add(createStore(srcReg, stack));
-                return null;
+            } else if (src instanceof Stack srcStack) {
+                // 栈 -> 寄存器
+                loadStack(dstReg, srcStack);
+            } else if (src instanceof Data srcData) {
+                // 全局符号 -> 寄存器
+                loadData(dstReg, srcData);
             }
-        } else if (src instanceof Stack srcStack) {
-            if (dst instanceof GeneralPurposeRegister dstReg) {
-                // 内存地址到寄存器
-                target.add(createLoad(dstReg, srcStack));
-                return null;
-            } else if (dst instanceof Stack dstStack) {
-                // 内存地址到内存地址
-                target.add(createLoad(GeneralPurposeRegister.T0, srcStack));
-                target.add(createStore(GeneralPurposeRegister.T0, dstStack));
-                return null;
-            }
+            return null;
         }
-        throw new UnsupportedOperationException(
-            "Unsupported move from " + src.getClass().getSimpleName() + " to " + dst.getClass().getSimpleName());
+        if (src instanceof GeneralPurposeRegister srcReg) {
+            // 寄存器 ->
+            if (dst instanceof Stack dstStack) {
+                // 寄存器 -> 栈
+                storeStack(srcReg, dstStack);
+            } else if (dst instanceof Data dstData) {
+                // 寄存器 -> 全局符号
+                storeData(srcReg, dstData, GeneralPurposeRegister.T1);
+            }
+            return null;
+        }
+
+        // 其他情况：将源加载到临时寄存器 T0，再存储到目标
+        // 此时 src 为 Immediate/Stack/Data，dst 为 Stack/Data
+        GeneralPurposeRegister tmp = GeneralPurposeRegister.T0;
+
+        if (src instanceof Immediate srcImm) {
+            loadImm(tmp, (int) srcImm.value());
+        } else if (src instanceof Stack srcStack) {
+            loadStack(tmp, srcStack);
+        } else if (src instanceof Data srcData) {
+            loadData(tmp, srcData);
+        } else {
+            throw new UnsupportedOperationException("Unsupported source type: " + src.getClass().getSimpleName());
+        }
+
+        if (dst instanceof Stack dstStack) {
+            storeStack(tmp, dstStack);
+        } else if (dst instanceof Data dstData) {
+            storeData(tmp, dstData, GeneralPurposeRegister.T1);
+        } else {
+            throw new UnsupportedOperationException("Unsupported destination type: " + dst.getClass().getSimpleName());
+        }
+        return null;
     }
 
     @Override
@@ -187,7 +230,6 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
         // 计算结果的存放地点
         var destResult = calcDestination(dst, GeneralPurposeRegister.T0);
         GeneralPurposeRegister dstReg = destResult.getFirst();
-        boolean needStore = destResult.getSecond();
 
         // 计算结果
         if (op == UnaryOperator.NOT) {
@@ -198,10 +240,7 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
             target.add(new LA64AsmInstruction(opName, List.of(dstReg, GeneralPurposeRegister.ZERO, operand)));
         }
 
-        if (needStore) {
-            // 若存放至内存，得将先前存放在 t0 的结果写回内存
-            target.add(createStore(GeneralPurposeRegister.T0, (Stack) dst));
-        }
+        storeToDest(destResult, dst, GeneralPurposeRegister.T1);
         return null;
     }
 
@@ -238,13 +277,10 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
             GeneralPurposeRegister srcReg = loadOperand(lhs, GeneralPurposeRegister.T0);
             Pair<GeneralPurposeRegister, Boolean> result = calcDestination(dst, GeneralPurposeRegister.T0);
             GeneralPurposeRegister dstReg = result.getFirst();
-            boolean needStore = result.getSecond();
             // slli.w/srai.w rd, rj, ui5
             target.add(new LA64AsmInstruction(
                 opName, List.of(dstReg, srcReg, new LA64AsmImmOperand(BitMath.extractBits((int) imm.value(), 5)))));
-            if (needStore) {
-                target.add(createStore(dstReg, (Stack) dst));
-            }
+            storeToDest(result, dst, GeneralPurposeRegister.T1);
             return null;
         }
         // 立即数位运算
@@ -270,12 +306,9 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
                 GeneralPurposeRegister srcReg = loadOperand(lhs, GeneralPurposeRegister.T0);
                 Pair<GeneralPurposeRegister, Boolean> result = calcDestination(dst, GeneralPurposeRegister.T0);
                 GeneralPurposeRegister dstReg = result.getFirst();
-                boolean needStore = result.getSecond();
                 target.add(new LA64AsmInstruction(
                     opName, List.of(dstReg, srcReg, new LA64AsmImmOperand(imm.value()))));
-                if (needStore) {
-                    target.add(createStore(dstReg, (Stack) dst));
-                }
+                storeToDest(result, dst, GeneralPurposeRegister.T1);
                 return null;
             }
         }
@@ -299,13 +332,10 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
             GeneralPurposeRegister srcReg = loadOperand(lhs, GeneralPurposeRegister.T0);
             Pair<GeneralPurposeRegister, Boolean> result = calcDestination(dst, GeneralPurposeRegister.T0);
             GeneralPurposeRegister dstReg = result.getFirst();
-            boolean needStore = result.getSecond();
             // slti rd, rj, si12
             target.add(new LA64AsmInstruction(
                 "slti", List.of(dstReg, srcReg, new LA64AsmImmOperand((int) imm.value()))));
-            if (needStore) {
-                target.add(createStore(dstReg, (Stack) dst));
-            }
+            storeToDest(result, dst, GeneralPurposeRegister.T1);
             return null;
         }
 
@@ -337,16 +367,12 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
         // 计算结果的存放地点
         var destResult = calcDestination(dst, GeneralPurposeRegister.T0);
         GeneralPurposeRegister dstReg = destResult.getFirst();
-        boolean needStore = destResult.getSecond();
 
         // 计算结果
         // op rd, rj, rk
         target.add(new LA64AsmInstruction(opName, List.of(dstReg, lhsReg, rhsReg)));
 
-        if (needStore) {
-            // 若存放至内存，得将先前存放在 t0 的结果写回内存
-            target.add(createStore(GeneralPurposeRegister.T0, (Stack) dst));
-        }
+        storeToDest(destResult, dst, GeneralPurposeRegister.T1);
         return null;
     }
 
@@ -367,16 +393,12 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
         // 计算结果的存放地点
         var destResult = calcDestination(dst, GeneralPurposeRegister.T0);
         GeneralPurposeRegister dstReg = destResult.getFirst();
-        boolean needStore = destResult.getSecond();
 
         // 计算结果
         // addi.w rd, rj, si12
         target.add(new LA64AsmInstruction("addi.w", List.of(dstReg, srcReg, new LA64AsmImmOperand(si12))));
 
-        if (needStore) {
-            // 若存放至内存，得将先前存放在 t0 的结果写回内存
-            target.add(createStore(GeneralPurposeRegister.T0, (Stack) dst));
-        }
+        storeToDest(destResult, dst, GeneralPurposeRegister.T1);
         return null;
     }
 
@@ -489,17 +511,28 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
             return reg;
         } else if (toLoad instanceof Stack stack) {
             // 在内存，加载到 fallback 寄存器
-            target.add(createLoad(fallback, stack));
+            loadStack(fallback, stack);
             return fallback;
         } else if (toLoad instanceof Immediate immediate) {
             // 立即数，加载到 fallback 寄存器
-            target.add(createLoadImm(fallback, (int) immediate.value()));
+            loadImm(fallback, (int) immediate.value());
+            return fallback;
+        } else if (toLoad instanceof Data data) {
+            // 全局符号，加载到 fallback 寄存器
+            loadData(fallback, data);
             return fallback;
         } else {
             throw new UnsupportedOperationException("Unsupported operand type: " + toLoad.getClass().getSimpleName());
         }
     }
 
+    /**
+     * 计算将结果存放至 {@code dest} 需要的寄存器和是否需要额外访存指令
+     *
+     * @param dest     结果存放位置
+     * @param fallback 如果需要存储，存放到该寄存器
+     * @return 计算结果，包含实际存放结果的寄存器和是否需要额外访存
+     */
     private static Pair<GeneralPurposeRegister, Boolean> calcDestination(
         HighLevelOperand dest, GeneralPurposeRegister fallback) {
 
@@ -507,7 +540,7 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
         if (dest instanceof GeneralPurposeRegister reg) {
             // 存放至寄存器，直接赋值
             return Pair.of(reg, false);
-        } else if (dest instanceof Stack) {
+        } else if (dest instanceof Stack || dest instanceof Data) {
             // 存放至内存，得先存放到 fallback
             return Pair.of(fallback, true);
         } else {
@@ -515,21 +548,82 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
         }
     }
 
-    private static LA64AsmInstruction createLoadImm(GeneralPurposeRegister dst, int imm) {
-        return new LA64AsmInstruction(
-            "li.w",
-            List.of(dst, new LA64AsmImmOperand(imm))
-        );
+    /**
+     * 将结果存放至目标地点
+     *
+     * @param destInfo 结果存放位置信息
+     * @param dest     结果位置
+     * @param tmp      写入全局符号时使用的临时寄存器，调用者保证在调用前后该寄存器值不被使用
+     */
+    private void storeToDest(
+        Pair<GeneralPurposeRegister, Boolean> destInfo, HighLevelOperand dest, GeneralPurposeRegister tmp) {
+        if (destInfo.getSecond()) {
+            // 将先前存放在寄存器的结果写回栈/内存
+            if (dest instanceof Stack dstStack) {
+                storeStack(destInfo.getFirst(), dstStack);
+            } else if (dest instanceof Data dstData) {
+                storeData(destInfo.getFirst(), dstData, tmp);
+            }
+        }
     }
 
-    private static LA64AsmInstruction createLoad(GeneralPurposeRegister dst, Stack src) {
+    /**
+     * 加载立即数至寄存器
+     *
+     * @param dst 目标寄存器
+     * @param imm 加载的立即数
+     */
+    private void loadImm(GeneralPurposeRegister dst, int imm) {
+        target.add(new LA64AsmInstruction("li.w", List.of(dst, new LA64AsmImmOperand(imm))));
+    }
+
+    /**
+     * 加载栈上值至寄存器
+     *
+     * @param dst 目标寄存器
+     * @param src 栈位置
+     */
+    private void loadStack(GeneralPurposeRegister dst, Stack src) {
         GeneralPurposeRegister regRef = src.fpRelative() ? GeneralPurposeRegister.FP : GeneralPurposeRegister.SP;
-        return new LA64AsmInstruction("ld.w", List.of(dst, regRef, new LA64AsmImmOperand(src.offset())));
+        target.add(new LA64AsmInstruction("ld.w", List.of(dst, regRef, new LA64AsmImmOperand(src.offset()))));
     }
 
-    private static LA64AsmInstruction createStore(GeneralPurposeRegister val, Stack dst) {
+    /**
+     * 将寄存器值写入栈上位置
+     *
+     * @param val 写入值所在寄存器
+     * @param dst 栈位置
+     */
+    private void storeStack(GeneralPurposeRegister val, Stack dst) {
         GeneralPurposeRegister regRef = dst.fpRelative() ? GeneralPurposeRegister.FP : GeneralPurposeRegister.SP;
-        return new LA64AsmInstruction("st.w", List.of(val, regRef, new LA64AsmImmOperand(dst.offset())));
+        target.add(new LA64AsmInstruction("st.w", List.of(val, regRef, new LA64AsmImmOperand(dst.offset()))));
+    }
+
+    /**
+     * 加载全局符号所指向内存中的值至寄存器
+     *
+     * @param dst 目标寄存器
+     * @param sym 全局符号
+     */
+    private void loadData(GeneralPurposeRegister dst, Data sym) {
+        // 先加载符号地址
+        target.add(new LA64AsmInstruction("la", List.of(dst, new LA64AsmSymOperand(sym.identifier()))));
+        // 再对符号地址访存
+        target.add(new LA64AsmInstruction("ld.w", List.of(dst, dst, new LA64AsmImmOperand(0))));
+    }
+
+    /**
+     * 将寄存器值写入全局符号所指向内存中的位置
+     *
+     * @param val 写入值所在寄存器
+     * @param sym 全局符号
+     * @param tmp 临时寄存器，调用者保证在调用前后该寄存器值不被使用
+     */
+    private void storeData(GeneralPurposeRegister val, Data sym, GeneralPurposeRegister tmp) {
+        // 先加载符号地址
+        target.add(new LA64AsmInstruction("la", List.of(tmp, new LA64AsmSymOperand(sym.identifier()))));
+        // 再将值写入符号地址
+        target.add(new LA64AsmInstruction("st.w", List.of(val, tmp, new LA64AsmImmOperand(0))));
     }
 
 }
