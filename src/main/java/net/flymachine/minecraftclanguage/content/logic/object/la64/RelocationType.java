@@ -31,10 +31,30 @@ public enum RelocationType {
      * 64 位绝对地址的 [51:32] 位
      */
     R_LARCH_ABS64_LO20,
-    
+
     /**
      * 64 位绝对地址的 [63:52] 位
      */
     R_LARCH_ABS64_HI12,
+
+    /**
+     * 32/64 位相对PC偏移的 [31:12] 位
+     */
+    R_LARCH_PCALA_HI20,
+
+    /**
+     * 32/64 位相对PC偏移的 [11:0] 位
+     */
+    R_LARCH_PCALA_LO12,
+
+    /**
+     * 64 位相对PC偏移的 [51:32] 位
+     */
+    R_LARCH_PCALA64_LO20,
+
+    /**
+     * 64 位相对PC偏移的 [63:52] 位
+     */
+    R_LARCH_PCALA64_HI12,
 
 }

@@ -52,7 +52,7 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
             // 初始化非0，放在data段
             target.add(new LA64AsmDirective("data", List.of()));
         }
-        target.add(new LA64AsmDirective("align", List.of(new LA64DirectiveNumArg(4))));
+        target.add(new LA64AsmDirective("balign", List.of(new LA64DirectiveNumArg(4))));
         target.add(new LA64AsmLabel(staticVar.name));
         if (staticVar.initValue != 0) {
             target.add(new LA64AsmDirective("word", List.of(new LA64DirectiveNumArg(staticVar.initValue))));
@@ -135,7 +135,7 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
                 GeneralPurposeRegister.SP,
                 new LA64AsmImmOperand(size))));
         // 返回
-        target.add(new LA64AsmInstruction("ret", null));
+        target.add(new LA64AsmInstruction("ret", List.of()));
     }
 
     @Override
@@ -607,7 +607,7 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
      */
     private void loadData(GeneralPurposeRegister dst, Data sym) {
         // 先加载符号地址
-        target.add(new LA64AsmInstruction("la", List.of(dst, new LA64AsmSymOperand(sym.identifier()))));
+        target.add(new LA64AsmInstruction("la.pcrel", List.of(dst, new LA64AsmSymOperand(sym.identifier()))));
         // 再对符号地址访存
         target.add(new LA64AsmInstruction("ld.w", List.of(dst, dst, new LA64AsmImmOperand(0))));
     }
@@ -621,7 +621,7 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
      */
     private void storeData(GeneralPurposeRegister val, Data sym, GeneralPurposeRegister tmp) {
         // 先加载符号地址
-        target.add(new LA64AsmInstruction("la", List.of(tmp, new LA64AsmSymOperand(sym.identifier()))));
+        target.add(new LA64AsmInstruction("la.pcrel", List.of(tmp, new LA64AsmSymOperand(sym.identifier()))));
         // 再将值写入符号地址
         target.add(new LA64AsmInstruction("st.w", List.of(val, tmp, new LA64AsmImmOperand(0))));
     }

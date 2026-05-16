@@ -190,6 +190,8 @@ public final class LA64Linker {
                     default -> 0; // 不可能
                 };
             }
+
+            default -> throw new RuntimeException("Unsupported relocation type: " + relocationEntry.relocationType());
         };
     }
 

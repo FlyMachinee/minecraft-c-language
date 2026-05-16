@@ -13,7 +13,6 @@ import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.*
 import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.operand.LA64AsmImmOperand;
 import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.operand.LA64AsmOperand;
 import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.operand.LA64AsmSymOperand;
-import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.operand.LA64DirectiveSymArg;
 import net.flymachine.minecraftclanguage.content.logic.memory.Segment;
 import net.flymachine.minecraftclanguage.content.logic.object.SymbolEntry;
 import net.flymachine.minecraftclanguage.content.logic.object.la64.LA64Object;
@@ -22,7 +21,6 @@ import net.flymachine.minecraftclanguage.content.logic.object.la64.RelocationTyp
 
 import java.io.ByteArrayOutputStream;
 import java.util.*;
-import java.util.stream.IntStream;
 
 public final class LA64Assembler {
 
@@ -31,6 +29,9 @@ public final class LA64Assembler {
     public LA64Object assemble(LA64Assembly assembly) {
         symbolTable.clear();
         globalSymbols.clear();
+        if (!checkArgAndOperand(assembly)) {
+            return null;
+        }
         collectSymbol(assembly);
         return generateObject(assembly);
     }
@@ -48,33 +49,59 @@ public final class LA64Assembler {
     private final Map<String, SymbolLocation> symbolTable = new HashMap<>();
     private final Set<String> globalSymbols = new HashSet<>();
 
-    private void collectSymbol(LA64Assembly assembly) {
-        // 默认目标为 text 段
-        Segment currentSegment = Segment.TEXT;
+    // 用于查询寄存器名
+    private final LA64RegisterResolver resolver = LA64RegisterResolver.getInstance();
 
-        // 每个段的当前偏移量
-        EnumMap<Segment, Integer> offsets = new EnumMap<>(Segment.class);
-        offsets.put(Segment.TEXT, 0);
-
-        // 用于查询寄存器名
-        LA64RegisterResolver resolver = LA64RegisterResolver.getInstance();
-
+    private boolean checkArgAndOperand(LA64Assembly assembly) {
         for (LA64AsmStatement statement : assembly.statements()) {
-
-            // 伪指令处理
+            // 伪指令检查
             if (statement instanceof LA64AsmDirective directive) {
                 switch (directive.name()) {
                     case "global" -> {
-                        if (!(directive.args().get(0) instanceof LA64DirectiveSymArg symArg)) {
+                        if (directive.argCount() != 1 && !directive.arg(0).isSym()) {
                             throw new IllegalArgumentException(
                                 "Expected symbol argument for global directive, but got: " + directive.args().get(0));
                         } else {
-                            String symbolName = symArg.symbol();
+                            String symbolName = directive.arg(0).asSym();
                             if (symbolName.startsWith(".L")) {
                                 throw new IllegalArgumentException(
                                     "Local labels cannot be declared global: " + symbolName);
                             }
-                            globalSymbols.add(symbolName);
+                        }
+                    }
+                    case "text", "data", "bss" -> {
+                        if (directive.argCount() != 0) {
+                            throw new IllegalArgumentException(
+                                "Expected no argument for text, but got: " + directive.args());
+                        }
+                    }
+                    case "balign" -> {
+                        if (directive.argCount() != 1 && !directive.arg(0).isNum()) {
+                            throw new IllegalArgumentException(
+                                "Expected numeric argument for align directive, but got: " + directive.args().get(0));
+                        }
+                    }
+                    case "word" -> {
+                        if (directive.argCount() != 1 && !directive.arg(0).isNum()) {
+                            throw new IllegalArgumentException(
+                                "Expected numeric argument for word directive, but got: " + directive.args().get(0));
+                        } else {
+                            long data = directive.arg(0).asNum();
+                            if (Integer.MIN_VALUE > data || data > Integer.MAX_VALUE) {
+                                // 非 32 位数值
+                                throw new IllegalArgumentException("Word value out of range: " + data);
+                            }
+                        }
+                    }
+                    case "zero" -> {
+                        if (directive.argCount() != 1 && !directive.arg(0).isNum()) {
+                            throw new IllegalArgumentException(
+                                "Expected numeric argument for zero directive, but got: " + directive.args().get(0));
+                        } else {
+                            long count = directive.arg(0).asNum();
+                            if (count < 0 || count > Integer.MAX_VALUE) {
+                                throw new IllegalArgumentException("Zero size out of range: " + count);
+                            }
                         }
                     }
                     default -> throw new UnsupportedOperationException("Unsupported directive: " + directive.name());
@@ -82,23 +109,209 @@ public final class LA64Assembler {
                 continue;
             }
 
-            // 当前段偏移
-            int offset = offsets.get(currentSegment);
-
             // 标签处理
             if (statement instanceof LA64AsmLabel label) {
                 String labelName = label.name();
-
                 // 不能是寄存器名
                 if (resolver.isRegisterName(labelName)) {
                     throw new IllegalArgumentException("Label cannot be a register name: " + labelName);
                 }
+                continue;
+            }
 
+            // 指令处理
+            if (statement instanceof LA64AsmInstruction instruction) {
+                List<LA64AsmOperand> ops = instruction.operands();
+
+                // 先判断是否是宏指令，如果不是再视为普通指令处理
+                switch (instruction.mnemonic()) {
+                    case "li.w" -> {
+                        // li.w rd, imm32
+                        if (ops.size() != 2 || !ops.get(0).isGpr() || !ops.get(1).isImm()) {
+                            throw new IllegalArgumentException(
+                                "Expected operands: reg, imm32 for li.w, but got: " + ops);
+                        }
+                        long imm32 = ops.get(1).asImm();
+                        if (imm32 < Integer.MIN_VALUE || imm32 > Integer.MAX_VALUE) {
+                            throw new IllegalArgumentException("Immediate value out of range for li.w: " + imm32);
+                        }
+                    }
+                    case "li.d" -> {
+                        // li.d rd, imm64
+                        if (ops.size() != 2 || !ops.get(0).isGpr() || !ops.get(1).isImm()) {
+                            throw new IllegalArgumentException(
+                                "Expected operands: reg, imm64 for li.d, but got: " + ops);
+                        }
+                    }
+                    case "ret" -> {
+                        // ret
+                        if (!ops.isEmpty()) {
+                            throw new IllegalArgumentException(
+                                "Expected no operand for ret, but got: " + ops);
+                        }
+                    }
+                    case "sle", "sge", "sgt", "seq", "sne" -> {
+                        // xxx rd, rj, rk
+                        if (ops.size() != 3 || !ops.get(0).isGpr() || !ops.get(1).isGpr() || !ops.get(2).isGpr()) {
+                            throw new IllegalArgumentException(
+                                "Expected operands: reg, reg, reg for " + instruction.mnemonic() + ", but got: " + ops);
+                        }
+                    }
+                    case "move" -> {
+                        // move rd, rj
+                        if (ops.size() != 2 || !ops.get(0).isGpr() || !ops.get(1).isGpr()) {
+                            throw new IllegalArgumentException(
+                                "Expected operands: reg, reg for move, but got: " + ops);
+                        }
+                    }
+                    case "la.abs" -> {
+                        // la.abs rd, sym
+                        if (ops.size() != 2 || !ops.get(0).isGpr() || !ops.get(1).isSym()) {
+                            throw new IllegalArgumentException(
+                                "Expected operands: reg, sym for la.abs, but got: " + ops);
+                        }
+                    }
+                    case "la.local", "la.pcrel" -> {
+                        // la.pcrel rd, sym
+                        // la.pcrel rd, rj, sym
+                        if (!(ops.size() == 2 && ops.get(0).isGpr() && ops.get(1).isSym()) &&
+                            !(ops.size() == 3 && ops.get(0).isGpr() && ops.get(1).isGpr() && ops.get(2).isSym())) {
+                            throw new IllegalArgumentException(
+                                "Expected operands: reg, sym or reg, reg, sym for " + instruction.mnemonic() +
+                                ", but got: " + ops);
+                        }
+                    }
+                    default -> {
+                        Optional<LA64InstructionInfo>
+                            optionalInfo = LA64InstructionSet.getByMnemonic(instruction.mnemonic());
+
+                        if (optionalInfo.isEmpty()) {
+                            throw new IllegalArgumentException(
+                                "Unsupported instruction mnemonic: " + instruction.mnemonic());
+                        }
+
+                        LA64InstructionInfo info = optionalInfo.get();
+                        if (info.operandTypes().length != ops.size()) {
+                            throw new IllegalArgumentException(
+                                "Expected " + info.operandTypes().length + " operands for instruction " +
+                                instruction.mnemonic() + ", but got: " + ops.size());
+                        }
+                        for (int i = 0; i < ops.size(); i++) {
+                            LA64OperandType expected = info.operandTypes()[i];
+                            LA64AsmOperand current = ops.get(i);
+                            boolean matched = switch (expected) {
+                                case GPR -> current.isGpr();
+                                case FPR -> current.isFpr();
+                                case UI5, UI12, SI12, SI20 -> {
+                                    if (!current.isImm()) {
+                                        yield false;
+                                    }
+                                    long imm = current.asImm();
+                                    if (imm < Integer.MIN_VALUE || imm > Integer.MAX_VALUE) {
+                                        yield false;
+                                    }
+                                    yield switch (expected) {
+                                        case UI5 -> BitMath.isUi5((int) imm);
+                                        case UI12 -> BitMath.isUi12((int) imm);
+                                        case SI12 -> BitMath.isSi12((int) imm);
+                                        case SI20 -> BitMath.isSi20((int) imm);
+                                        default -> false;
+                                    };
+                                }
+                                case OFFS16, OFFS21, OFFS26 -> {
+                                    if (current.isSym()) {
+                                        yield true; // 暂时认为在范围内
+                                    }
+                                    if (!current.isImm()) {
+                                        yield false;
+                                    }
+                                    long imm = current.asImm();
+                                    if (imm < Integer.MIN_VALUE || imm > Integer.MAX_VALUE) {
+                                        yield false;
+                                    }
+                                    int imm32 = (int) imm;
+                                    if ((imm32 & 0b11) != 0) {
+                                        // 地址必须 4 字节对齐
+                                        yield false;
+                                    }
+                                    imm32 >>= 2;
+                                    yield switch (expected) {
+                                        case OFFS16 -> BitMath.isOffs16(imm32);
+                                        case OFFS21 -> BitMath.isOffs21(imm32);
+                                        case OFFS26 -> BitMath.isOffs26(imm32);
+                                        default -> false;
+                                    };
+                                }
+                            };
+                            if (!matched) {
+                                throw new IllegalArgumentException(
+                                    "Operand type mismatch for operand " + (i + 1) + " of instruction " +
+                                    instruction.mnemonic() + ": expected " + expected + ", but got: " + current);
+                            }
+                        }
+                    }
+                }
+                continue;
+            }
+
+            throw new UnsupportedOperationException("Unsupported statement: " + statement);
+        }
+        return true;
+    }
+
+    private void collectSymbol(LA64Assembly assembly) {
+        // 默认目标为 text 段
+        Segment currentSegment = Segment.TEXT;
+
+        // 每个段的当前偏移量
+        EnumMap<Segment, Integer> offsets = new EnumMap<>(Segment.class);
+        offsets.put(Segment.TEXT, 0);
+        offsets.put(Segment.DATA, 0);
+        offsets.put(Segment.BSS, 0);
+
+        for (LA64AsmStatement statement : assembly.statements()) {
+
+            // 当前段偏移
+            int offset = offsets.get(currentSegment);
+
+            // 伪指令处理
+            if (statement instanceof LA64AsmDirective directive) {
+                switch (directive.name()) {
+                    case "global" -> {
+                        String symbolName = directive.arg(0).asSym();
+                        if (symbolName.startsWith(".L")) {
+                            throw new IllegalArgumentException(
+                                "Local labels cannot be declared global: " + symbolName);
+                        }
+                        globalSymbols.add(symbolName);
+                    }
+                    case "text", "data", "bss" -> currentSegment = Segment.valueOf(directive.name().toUpperCase());
+                    case "balign" -> {
+                        long alignment = directive.arg(0).asNum();
+                        offsets.put(currentSegment, alignOffsetTo((int) alignment, offset));
+                    }
+                    case "word" -> {
+                        if (currentSegment == Segment.BSS) {
+                            throw new IllegalArgumentException(".word directive cannot be used in bss segment");
+                        }
+                        offsets.put(currentSegment, offset + 4);
+                    }
+                    case "zero" -> {
+                        long count = directive.arg(0).asNum();
+                        offsets.put(currentSegment, offset + (int) count);
+                    }
+                    default -> throw new UnsupportedOperationException("Unsupported directive: " + directive.name());
+                }
+                continue;
+            }
+
+            // 标签处理
+            if (statement instanceof LA64AsmLabel label) {
+                String labelName = label.name();
                 // 不能重复
                 if (symbolTable.containsKey(labelName)) {
                     throw new IllegalArgumentException("Label already exists: " + labelName);
                 }
-
                 // 添加至符号表
                 symbolTable.put(labelName, new SymbolLocation(currentSegment, offset));
                 continue;
@@ -106,6 +319,10 @@ public final class LA64Assembler {
 
             // 指令处理
             if (statement instanceof LA64AsmInstruction instruction) {
+                if (currentSegment != Segment.TEXT) {
+                    throw new IllegalArgumentException(
+                        "Only text segment can contain instructions, but current segment is: " + currentSegment);
+                }
 
                 List<LA64AsmOperand> ops = instruction.operands();
 
@@ -113,16 +330,18 @@ public final class LA64Assembler {
                 int offsetIncrease = switch (instruction.mnemonic()) {
                     case "li.w" -> getExpandLiWSize(ops);
                     case "li.d" -> getExpandLiDSize(ops);
-                    case "ret", "sgt", "ble", "bgt", "move" -> 4;
                     case "sle", "sge", "seq", "sne" -> 8;
                     case "la.abs" -> 16;
-                    default -> {
-                        if (!LA64InstructionSet.isMnemonic(instruction.mnemonic())) {
-                            throw new IllegalArgumentException(
-                                "Unsupported instruction mnemonic: " + instruction.mnemonic());
+                    case "la.local", "la.pcrel" -> {
+                        if (ops.size() == 2) {
+                            // la.pcrel $rd, sym
+                            yield 2 * 4;
+                        } else {
+                            // la.pcrel $rd, $rj, sym
+                            yield 5 * 4;
                         }
-                        yield 4;
                     }
+                    default -> 4;
                 };
 
                 offsets.put(currentSegment, offset + offsetIncrease);
@@ -150,13 +369,12 @@ public final class LA64Assembler {
         // 默认目标为 text 段
         Segment currentSegment = Segment.TEXT;
 
-        // 每个段的当前偏移量
-        EnumMap<Segment, Integer> offsets = new EnumMap<>(Segment.class);
-        offsets.put(Segment.TEXT, 0);
-
         // 每个段的内容
         EnumMap<Segment, ByteArrayOutputStream> segmentContents = new EnumMap<>(Segment.class);
         segmentContents.put(Segment.TEXT, new ByteArrayOutputStream());
+        segmentContents.put(Segment.DATA, new ByteArrayOutputStream());
+        segmentContents.put(Segment.BSS, null);
+        int bssSize = 0;
 
         // 符号表等
         symbolList = new ArrayList<>();
@@ -180,17 +398,45 @@ public final class LA64Assembler {
 
         for (LA64AsmStatement statement : assembly.statements()) {
 
+            // 当前段内容
+            ByteArrayOutputStream out = segmentContents.get(currentSegment);
+
+            // 当前段偏移
+            int offset = currentSegment == Segment.BSS ? bssSize : out.size();
+
             // 伪指令处理
             if (statement instanceof LA64AsmDirective directive) {
                 switch (directive.name()) {
                     case "global" -> { }
+                    case "text", "data", "bss" -> currentSegment = Segment.valueOf(directive.name().toUpperCase());
+                    case "balign" -> {
+                        int newOffset = alignOffsetTo((int) directive.arg(0).asNum(), offset);
+                        if (newOffset > offset) {
+                            if (currentSegment != Segment.BSS) {
+                                // 使用 0 进行填充
+                                for (int i = 0; i < newOffset - offset; i++) {
+                                    out.write(0);
+                                }
+                            } else {
+                                bssSize = newOffset;
+                            }
+                        }
+                    }
+                    case "word" -> writeIntLittleEndian(out, (int) directive.arg(0).asNum());
+                    case "zero" -> {
+                        int count = (int) directive.arg(0).asNum();
+                        if (currentSegment != Segment.BSS) {
+                            for (int i = 0; i < count; i++) {
+                                out.write(0);
+                            }
+                        } else {
+                            bssSize += count;
+                        }
+                    }
                     default -> throw new UnsupportedOperationException("Unsupported directive: " + directive.name());
                 }
                 continue;
             }
-
-            // 当前段偏移
-            int offset = offsets.get(currentSegment);
 
             // 标签已经处理
             if (statement instanceof LA64AsmLabel) {
@@ -202,11 +448,8 @@ public final class LA64Assembler {
 
                 List<LA64AsmOperand> ops = instruction.operands();
 
-                // TODO: 检查是否为 text 段
-                ByteArrayOutputStream out = segmentContents.get(currentSegment);
-
                 // 先判断是否是宏指令，如果不是再视为普通指令处理
-                int offsetIncrease = switch (instruction.mnemonic()) {
+                switch (instruction.mnemonic()) {
                     case "li.w" -> expandLiW(ops, out);
                     case "li.d" -> expandLiD(ops, out);
                     case "ret" -> expandRet(out);
@@ -219,44 +462,37 @@ public final class LA64Assembler {
                     case "seq" -> expandSeq(ops, out);
                     case "sne" -> expandSne(ops, out);
                     case "la.abs" -> expandLaAbs(ops, out, offset);
-                    default -> {
-                        Optional<LA64InstructionInfo>
-                            optionalInfo = LA64InstructionSet.getByMnemonic(instruction.mnemonic());
-
-                        if (optionalInfo.isEmpty()) {
-                            throw new IllegalArgumentException(
-                                "Unsupported instruction mnemonic: " + instruction.mnemonic());
+                    case "la.local", "la.pcrel" -> {
+                        if (ops.size() == 2) {
+                            expandLaPcRel(ops, out, offset);
+                        } else {
+                            throw new IllegalArgumentException("Not supported yet");
                         }
-
-                        LA64InstructionInfo info = optionalInfo.get();
-                        LA64Operand[] convertedOps = IntStream
-                            .range(0, ops.size())
-                            .mapToObj(i -> {
-                                LA64AsmOperand asmOp = ops.get(i);
-                                LA64OperandType type = info.operandTypes()[i];
-                                checkOpType(type, asmOp);
-
-                                int value;
-                                if (asmOp instanceof LA64Register reg) {
-                                    value = reg.getNumber();
-                                } else if (asmOp instanceof LA64AsmImmOperand imm) {
-                                    value = (int) imm.value();
-                                } else if (asmOp instanceof LA64AsmSymOperand sym) {
-                                    value = getPcRelOffset(
-                                        sym, currentSegment, offset, info, type);
-                                } else {
-                                    throw new IllegalArgumentException(
-                                        "Unsupported operand type: " + asmOp.getClass().getName());
-                                }
-                                return new LA64Operand(type, value);
-                            })
-                            .toArray(LA64Operand[]::new);
-                        writeIntLittleEndian(out, LA64Encoder.encode(info, convertedOps));
-                        yield 4;
                     }
-                };
+                    default -> {
+                        LA64InstructionInfo info =
+                            LA64InstructionSet.getByMnemonic(instruction.mnemonic()).orElseThrow();
+                        List<LA64Operand> convertedOps = new ArrayList<>();
+                        for (int i = 0; i < ops.size(); i++) {
+                            LA64OperandType type = info.operandTypes()[i];
+                            LA64AsmOperand asmOp = ops.get(i);
 
-                offsets.put(currentSegment, offset + offsetIncrease);
+                            int value = 0;
+                            if (asmOp instanceof LA64Register reg) {
+                                value = reg.getNumber();
+                            } else if (asmOp instanceof LA64AsmImmOperand imm) {
+                                value = switch (type) {
+                                    case OFFS16, OFFS21, OFFS26 -> ((int) imm.value()) >> 2;
+                                    default -> (int) imm.value();
+                                };
+                            } else if (asmOp instanceof LA64AsmSymOperand sym) {
+                                value = getPcRelOffset(sym, currentSegment, offset, info, type);
+                            }
+                            convertedOps.add(new LA64Operand(type, value));
+                        }
+                        writeIntLittleEndian(out, LA64Encoder.encode(info, convertedOps.toArray(new LA64Operand[0])));
+                    }
+                }
             } else {
                 throw new UnsupportedOperationException("Unsupported statement: " + statement);
             }
@@ -264,7 +500,22 @@ public final class LA64Assembler {
 
         String newName = assembly.fileName().replaceAll("\\.[^.]+$", "") + ".o";
         return new LA64Object(
-            newName, segmentContents.get(Segment.TEXT).toByteArray(), symbolList, relocList, symbolNames);
+            newName,
+            segmentContents.get(Segment.TEXT).toByteArray(),
+            segmentContents.get(Segment.DATA).toByteArray(),
+            bssSize,
+            symbolList,
+            relocList,
+            symbolNames);
+    }
+
+    private static int alignOffsetTo(int align, int offset) {
+        // .balign xxx
+        // 将偏移量增加到下一个 xxx 的倍数
+        if (align <= 0 || (align & (align - 1)) != 0) {
+            throw new IllegalArgumentException("Alignment must be a positive power of 2: " + align);
+        }
+        return (offset + align - 1) & -align;
     }
 
     private static RelocationType getRelocationType(String mnemonic) {
@@ -277,35 +528,14 @@ public final class LA64Assembler {
         };
     }
 
-    private static void checkOpType(LA64OperandType type, LA64AsmOperand asmOp) {
-        switch (type) {
-            case GPR, FPR -> {
-                if (!(asmOp instanceof LA64Register)) {
-                    throw new IllegalArgumentException(
-                        "Expected register operand for type " + type + ", but got: " +
-                        asmOp.getClass().getName());
-                }
-            }
-            case SI12, SI20, UI12, OFFS16 -> {
-                if (asmOp instanceof LA64Register) {
-                    throw new IllegalArgumentException(
-                        "Expected immediate operand for type " + type + ", but got register: " +
-                        ((LA64Register) asmOp).getPrimaryName());
-                }
-            }
-        }
-    }
-
-    private int expandLiW(List<LA64AsmOperand> ops, ByteArrayOutputStream out) {
-        // TODO: 检查操作数类型
+    private void expandLiW(List<LA64AsmOperand> ops, ByteArrayOutputStream out) {
         // li.w dst, imm32
-        LA64Register dst = ((LA64Register) ops.get(0));
-        int value = (int) ((LA64AsmImmOperand) ops.get(1)).value();
+        LA64Register dst = ops.get(0).asGpr();
+        int value = (int) ops.get(1).asImm();
 
         if (BitMath.isSi12(value)) {
             // addi.w rd, zero, imm12
             writeFormat2RSi12(out, "addi.w", dst, GeneralPurposeRegister.ZERO, value);
-            return 4;
         } else {
             // lu12i.w rd, upper20
             // ori rd, rd, lower12
@@ -313,19 +543,17 @@ public final class LA64Assembler {
             int upper20 = value >>> 12;
             writeFormat1RSi20(out, "lu12i.w", dst, upper20);
             writeFormat2RUi12(out, "ori", dst, dst, lower12);
-            return 8;
         }
     }
 
-    private int expandLiD(List<LA64AsmOperand> ops, ByteArrayOutputStream out) {
-        // TODO: 检查操作数类型
+    private void expandLiD(List<LA64AsmOperand> ops, ByteArrayOutputStream out) {
         // li.w dst, imm64
-        LA64Register dst = ((LA64Register) ops.get(0));
-        long value = ((LA64AsmImmOperand) ops.get(1)).value();
+        LA64Register dst = ops.get(0).asGpr();
+        long value = ops.get(1).asImm();
 
         if (value >= Integer.MIN_VALUE && value <= Integer.MAX_VALUE) {
             // imm64 -> imm32
-            return expandLiW(ops, out);
+            expandLiW(ops, out);
         } else {
             // 暂时不支持
             throw new IllegalArgumentException("Imm64 value out of range for expansion: " + value);
@@ -333,9 +561,8 @@ public final class LA64Assembler {
     }
 
     private int getExpandLiWSize(List<LA64AsmOperand> ops) {
-        // TODO: 检查操作数类型
         // li.w dst, imm32
-        int value = (int) ((LA64AsmImmOperand) ops.get(1)).value();
+        int value = (int) ops.get(1).asImm();
         if (BitMath.isSi12(value)) {
             // addi.w rd, zero, imm12
             return 4;
@@ -347,9 +574,8 @@ public final class LA64Assembler {
     }
 
     private int getExpandLiDSize(List<LA64AsmOperand> ops) {
-        // TODO: 检查操作数类型
         // li.d dst, imm64
-        long value = ((LA64AsmImmOperand) ops.get(1)).value();
+        long value = ops.get(1).asImm();
 
         if (value >= Integer.MIN_VALUE && value <= Integer.MAX_VALUE) {
             // imm64 -> imm32
@@ -360,121 +586,111 @@ public final class LA64Assembler {
         }
     }
 
-    private int expandRet(ByteArrayOutputStream out) {
+    private void expandRet(ByteArrayOutputStream out) {
         // jirl zero, ra, 0
         // 可尝试替换为硬编码的数据，但可读性差
         writeFormat2ROffs16(out, "jirl", GeneralPurposeRegister.ZERO, GeneralPurposeRegister.RA, 0);
-        return 4;
     }
 
-    private int expandMove(List<LA64AsmOperand> ops, ByteArrayOutputStream out) {
+    private void expandMove(List<LA64AsmOperand> ops, ByteArrayOutputStream out) {
         // move rd, rj
-        // TODO: 强转前检测
-        LA64Register dst = ((LA64Register) ops.get(0));
-        LA64Register src = ((LA64Register) ops.get(1));
+        LA64Register dst = ops.get(0).asGpr();
+        LA64Register src = ops.get(1).asGpr();
 
         // or rd, rj, zero
         writeFormat3R(out, "or", dst, src, GeneralPurposeRegister.ZERO);
-        return 4;
     }
 
-    private int expandBgt(Segment currentSegment, List<LA64AsmOperand> ops, int offset, ByteArrayOutputStream out) {
+    private void expandBgt(Segment currentSegment, List<LA64AsmOperand> ops, int offset, ByteArrayOutputStream out) {
         // bgt rj, rd, offs16
-        LA64Register rj = ((LA64Register) ops.get(0));
-        LA64Register rd = ((LA64Register) ops.get(1));
+        LA64Register rj = ops.get(0).asGpr();
+        LA64Register rd = ops.get(1).asGpr();
         // => blt rd, rj, offs16
         if (ops.get(2) instanceof LA64AsmSymOperand sym) {
             int offs16 = getPcOffs16Offset(sym, currentSegment, offset);
             writeFormat2ROffs16(out, "blt", rd, rj, offs16);
-            return 4;
         } else {
             throw new IllegalArgumentException("Expected sym, but got " + ops.get(2));
         }
     }
 
-    private int expandBle(Segment currentSegment, List<LA64AsmOperand> ops, int offset, ByteArrayOutputStream out) {
+    private void expandBle(Segment currentSegment, List<LA64AsmOperand> ops, int offset, ByteArrayOutputStream out) {
         // ble rj, rd, offs16
-        LA64Register rj = ((LA64Register) ops.get(0));
-        LA64Register rd = ((LA64Register) ops.get(1));
+        LA64Register rj = ops.get(0).asGpr();
+        LA64Register rd = ops.get(1).asGpr();
         // => bge rd, rj, offs16
         if (ops.get(2) instanceof LA64AsmSymOperand sym) {
             int offs16 = getPcOffs16Offset(sym, currentSegment, offset);
             writeFormat2ROffs16(out, "bge", rd, rj, offs16);
-            return 4;
         } else {
             throw new IllegalArgumentException("Expected sym, but got " + ops.get(2));
         }
     }
 
-    private int expandSle(List<LA64AsmOperand> ops, ByteArrayOutputStream out) {
+    private void expandSle(List<LA64AsmOperand> ops, ByteArrayOutputStream out) {
         // sle rd, rj, rk
         // (a <= b) => !(b < a)
         // slt rd, rk, rj
         // xori rd, rd, 1
-        LA64Register rd = ((LA64Register) ops.get(0));
-        LA64Register rj = ((LA64Register) ops.get(1));
-        LA64Register rk = ((LA64Register) ops.get(2));
+        LA64Register rd = ops.get(0).asGpr();
+        LA64Register rj = ops.get(1).asGpr();
+        LA64Register rk = ops.get(2).asGpr();
 
         writeFormat3R(out, "slt", rd, rk, rj);
         writeFormat2RUi12(out, "xori", rd, rd, 1);
-        return 8;
     }
 
-    private int expandSgt(List<LA64AsmOperand> ops, ByteArrayOutputStream out) {
+    private void expandSgt(List<LA64AsmOperand> ops, ByteArrayOutputStream out) {
         // sgt rd, rj, rk
         // (a > b) => (b < a)
         // slt rd, rk, rj
-        LA64Register rd = ((LA64Register) ops.get(0));
-        LA64Register rj = ((LA64Register) ops.get(1));
-        LA64Register rk = ((LA64Register) ops.get(2));
+        LA64Register rd = ops.get(0).asGpr();
+        LA64Register rj = ops.get(1).asGpr();
+        LA64Register rk = ops.get(2).asGpr();
 
         writeFormat3R(out, "slt", rd, rk, rj);
-        return 4;
     }
 
-    private int expandSge(List<LA64AsmOperand> ops, ByteArrayOutputStream out) {
+    private void expandSge(List<LA64AsmOperand> ops, ByteArrayOutputStream out) {
         // sge rd, rj, rk
         // (a >= b) => !(a < b)
         // slt rd, rj, rk
         // xori rd, rd, 1
-        LA64Register rd = ((LA64Register) ops.get(0));
-        LA64Register rj = ((LA64Register) ops.get(1));
-        LA64Register rk = ((LA64Register) ops.get(2));
+        LA64Register rd = ops.get(0).asGpr();
+        LA64Register rj = ops.get(1).asGpr();
+        LA64Register rk = ops.get(2).asGpr();
 
         writeFormat3R(out, "slt", rd, rj, rk);
         writeFormat2RUi12(out, "xori", rd, rd, 1);
-        return 8;
     }
 
-    private int expandSeq(List<LA64AsmOperand> ops, ByteArrayOutputStream out) {
+    private void expandSeq(List<LA64AsmOperand> ops, ByteArrayOutputStream out) {
         // seq rd, rj, rk
         // =>
         // xor rd, rj, rk
         // sltui rd, rd, 1
-        LA64Register rd = ((LA64Register) ops.get(0));
-        LA64Register rj = ((LA64Register) ops.get(1));
-        LA64Register rk = ((LA64Register) ops.get(2));
+        LA64Register rd = ops.get(0).asGpr();
+        LA64Register rj = ops.get(1).asGpr();
+        LA64Register rk = ops.get(2).asGpr();
 
         writeFormat3R(out, "xor", rd, rj, rk);
         writeFormat2RSi12(out, "sltui", rd, rd, 1);
-        return 8;
     }
 
-    private int expandSne(List<LA64AsmOperand> ops, ByteArrayOutputStream out) {
+    private void expandSne(List<LA64AsmOperand> ops, ByteArrayOutputStream out) {
         // sne rd, rj, rk
         // =>
         // xor rd, rj, rk
         // sltu rd, zero, rd
-        LA64Register rd = ((LA64Register) ops.get(0));
-        LA64Register rj = ((LA64Register) ops.get(1));
-        LA64Register rk = ((LA64Register) ops.get(2));
+        LA64Register rd = ops.get(0).asGpr();
+        LA64Register rj = ops.get(1).asGpr();
+        LA64Register rk = ops.get(2).asGpr();
 
         writeFormat3R(out, "xor", rd, rj, rk);
         writeFormat3R(out, "sltu", rd, GeneralPurposeRegister.ZERO, rd);
-        return 8;
     }
 
-    private int expandLaAbs(List<LA64AsmOperand> ops, ByteArrayOutputStream out, int offset) {
+    private void expandLaAbs(List<LA64AsmOperand> ops, ByteArrayOutputStream out, int offset) {
         // la.abs rd, sym
         // =>
         // lu12i.w   rd, %abs_hi20(sym)       # R_LARCH_ABS_HI20        si20
@@ -482,10 +698,10 @@ public final class LA64Assembler {
         // lu32i.d   rd, %abs64_lo20(sym)     # R_LARCH_ABS64_LO20      si20
         // lu52i.d   rd, rd, %abs64_hi12(sym) # R_LARCH_ABS64_HI12      si12
 
-        LA64Register rd = ((LA64Register) ops.get(0));
-        LA64AsmSymOperand sym = ((LA64AsmSymOperand) ops.get(1));
+        LA64Register rd = ops.get(0).asGpr();
+        String sym = ops.get(1).asSym();
 
-        int symbolNameIndex = getSymbolNameIndexOrAdd(sym.symbol());
+        int symbolNameIndex = getSymbolNameIndexOrAdd(sym);
 
         writeFormat1RSi20(out, "lu12i.w", rd, 0);
         writeFormat2RUi12(out, "ori", rd, rd, 0);
@@ -508,7 +724,30 @@ public final class LA64Assembler {
             offset + 12,
             symbolNameIndex,
             RelocationType.R_LARCH_ABS64_HI12));
-        return 16;
+    }
+
+    private void expandLaPcRel(List<LA64AsmOperand> ops, ByteArrayOutputStream out, int offset) {
+        // la.local/la.pcrel rd, sym
+        // =>
+        // pcalau12i  $rd, %pc_hi20(sym)        # R_LARCH_PCALA_HI20       si20
+        // addi.d     $rd, $rd, %pc_lo12(sym)   # R_LARCH_PCALA_LO12       si12
+
+        LA64Register rd = ops.get(0).asGpr();
+        String sym = ops.get(1).asSym();
+
+        int symbolNameIndex = getSymbolNameIndexOrAdd(sym);
+
+        writeFormat1RSi20(out, "pcalau12i", rd, 0);
+        writeFormat2RSi12(out, "addi.d", rd, rd, 0);
+
+        relocList.add(new RelocationEntry(
+            offset,
+            symbolNameIndex,
+            RelocationType.R_LARCH_PCALA_HI20));
+        relocList.add(new RelocationEntry(
+            offset + 4,
+            symbolNameIndex,
+            RelocationType.R_LARCH_PCALA_LO12));
     }
 
     private int getPcRelOffset(
@@ -534,7 +773,7 @@ public final class LA64Assembler {
         } else {
             if (loc.segment != currentSegment) {
                 throw new IllegalArgumentException(
-                    "Current cannot support cross-segment symbol references");
+                    "Cannot jump to segment other than .text: " + symbol.symbol() + " in segment " + loc.segment);
             }
             int value = loc.offset - currentOffset;
             if ((value & 0b11) != 0) {

@@ -58,6 +58,11 @@ public final class BitMath {
         return (number & 0xFFFFF000) == 0;
     }
 
+    public static boolean isUi5(int number) {
+        // 检查该数字是否可被 5 位的无符号数表示
+        return (number & 0xFFFFFFE0) == 0;
+    }
+
     public static boolean isOffs16(int number) {
         // 检查该数字是否可被 16 位的有符号数表示
         return number >= -32768 && number <= 32767;

@@ -515,6 +515,37 @@ public final class LA64InstructionSet {
                 cpu.setGr(operands[0].value(), ((long) operands[1].value()) << 32 | (lower32 & 0xFFFFFFFFL));
                 cpu.pcNext();
             }));
+        add(new LA64InstructionInfo(
+            "pcalau12i",
+            0b0001_101,
+            7,
+            LA64InstructionFormat.MISCELLANEOUS,
+            new LA64OperandType[]{LA64OperandType.GPR, LA64OperandType.SI20},
+            (info, ops) -> {
+                // rd, si20
+                int rd = ops[0].value();
+                int si20 = ops[1].value();
+                return (info.opcode() << 25) | ((si20 & 0xFFFFF) << 5) | rd;
+            },
+            (machineCode) -> {
+                // rd, si20
+                int rd = BitMath.getRd(machineCode);
+                int si20 = BitMath.extractSignedBits(machineCode, 5, 20);
+                return new LA64Operand[]{
+                    LA64Operand.gpr(rd), LA64Operand.si20(si20)
+                };
+            },
+            (emulator, operands) -> {
+                // pcalau12i rd, si20
+                /*
+                    tmp = PC + SignExtend({si20, 12'b0}, GRLEN)
+                    GR[rd] = {tmp[GRLEN-1:12], 12'b0}
+                 */
+                LA64CpuState cpu = emulator.getCpuState();
+                long tmp = cpu.getPc() + (((long) operands[1].value()) << 12);
+                cpu.setGr(operands[0].value(), tmp & 0xFFFFFFFFFFFFF000L);
+                cpu.pcNext();
+            }));
         add(LA64InstructionInfo.format2GprSi12(
             "ld.w",
             0b0010_1000_10,

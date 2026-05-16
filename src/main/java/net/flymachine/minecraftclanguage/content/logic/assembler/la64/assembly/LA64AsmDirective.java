@@ -6,11 +6,11 @@ import org.jetbrains.annotations.NotNull;
 import java.util.List;
 import java.util.StringJoiner;
 
-public record LA64AsmDirective(String name, List<LA64DirectiveArgument> args) implements LA64AsmStatement {
+public record LA64AsmDirective(String name, @NotNull List<LA64DirectiveArgument> args) implements LA64AsmStatement {
 
     @Override
     public @NotNull String toString() {
-        if (args == null || args.isEmpty()) {
+        if (args.isEmpty()) {
             return "." + name;
         }
         StringJoiner joiner = new StringJoiner(", ", "." + name + " ", "");
@@ -18,5 +18,13 @@ public record LA64AsmDirective(String name, List<LA64DirectiveArgument> args) im
             joiner.add(arg.toString());
         }
         return joiner.toString();
+    }
+
+    public LA64DirectiveArgument arg(int index) {
+        return args.get(index);
+    }
+
+    public int argCount() {
+        return args.size();
     }
 }

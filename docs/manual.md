@@ -119,6 +119,7 @@
   * xori
   * lu12i.w
   * lu32i.d
+  * pcalau12i
 
 - 移位类运算
   * sll.w
@@ -159,7 +160,12 @@
 - la.abs
   * la.abs rd, symbol
   * 将一个绝对符号地址加载到寄存器 rd 中，该符号必须为绝对符号
-  * 该宏指令会根据符号地址的值选择使用 lu52i.d + lu32i.d + lu12i.w + ori 来实现符号地址加载操作
+  * 该宏指令会使用 lu52i.d + lu32i.d + lu12i.w + ori 来实现符号地址加载操作
+
+- la.pcrel
+  * la.pcrel rd, symbol
+  * 将一个相对符号地址加载到寄存器 rd 中，该符号必须为相对符号，范围为32位之内
+  * 该宏指令会使用 pcalau12i + addi.d 来实现符号地址加载操作
 
 - ret
   * ret
