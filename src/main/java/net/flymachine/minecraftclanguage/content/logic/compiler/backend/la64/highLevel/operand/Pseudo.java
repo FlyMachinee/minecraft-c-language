@@ -3,6 +3,6 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.hi
 /**
  * 伪寄存器，最终将会被替换为物理寄存器或栈上内存
  *
- * @param identifier
+ * @param name
  */
-public record Pseudo(String identifier) implements HighLevelOperand { }
+public record Pseudo(String name) implements HighLevelOperand { }

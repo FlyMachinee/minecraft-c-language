@@ -1,13 +1,13 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.instruction;
 
 /**
- *  {@link Call#identifier}，并且将 ra 寄存器设为下一条指令（返回地址）的值
+ *  {@link Call#name}，并且将 ra 寄存器设为下一条指令（返回地址）的值
  */
 public class Call implements HighLevelInstruction {
-    public String identifier;
+    public String name;
 
-    public Call(String identifier) {
-        this.identifier = identifier;
+    public Call(String name) {
+        this.name = name;
     }
 
     @Override

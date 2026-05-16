@@ -3,6 +3,6 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.hi
 /**
  * 数据标识符，标识着 data 段或 bss 段上的某个符号
  *
- * @param identifier 符号名
+ * @param name 符号名
  */
-public record Data(String identifier) implements HighLevelOperand { }
+public record Data(String name) implements HighLevelOperand { }

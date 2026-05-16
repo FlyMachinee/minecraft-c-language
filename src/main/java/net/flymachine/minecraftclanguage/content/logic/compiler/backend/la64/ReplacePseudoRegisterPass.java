@@ -39,7 +39,7 @@ public final class ReplacePseudoRegisterPass implements HighLevelVisitor<Void> {
 
     public void runOnFunction(HighLevelFunction function) {
         stackOffset = -function.savedRegisters * 8;
-        for (HighLevelInstruction inst : function.instructions) {
+        for (HighLevelInstruction inst : function.insts) {
             inst.accept(this);
         }
         function.variableSize = -stackOffset - function.savedRegisters * 8;
@@ -115,7 +115,7 @@ public final class ReplacePseudoRegisterPass implements HighLevelVisitor<Void> {
 
     private HighLevelOperand replacePseudo(HighLevelOperand operand) {
         if (operand instanceof Pseudo pseudo) {
-            String id = pseudo.identifier();
+            String id = pseudo.name();
             if (registers.containsKey(id)) {
                 return new Stack(registers.get(id));
             } else {

@@ -23,7 +23,7 @@ import java.util.List;
 public class HighLevelFunction implements HighLevelTopLevel {
     public String name;
     public boolean global;
-    public List<HighLevelInstruction> instructions;
+    public List<HighLevelInstruction> insts;
 
     /**
      * 栈指针要求以 16 字节对齐
@@ -52,10 +52,10 @@ public class HighLevelFunction implements HighLevelTopLevel {
      */
     public int maxCallStackArgSize = 0;
 
-    public HighLevelFunction(String name, boolean global, List<HighLevelInstruction> instructions) {
+    public HighLevelFunction(String name, boolean global, List<HighLevelInstruction> insts) {
         this.name = name;
         this.global = global;
-        this.instructions = instructions;
+        this.insts = insts;
     }
 
     public int getStackFrameSize() {

@@ -105,7 +105,7 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
         emitLabel(function.name);
         generatePrologue(function);
 
-        for (HighLevelInstruction instruction : function.instructions) {
+        for (HighLevelInstruction instruction : function.insts) {
             instruction.accept(this);
         }
     }
@@ -395,7 +395,7 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
 
     @Override
     public Void visitLabel(Label inst) {
-        emitLabel(".L" + inst.identifier);
+        emitLabel(".L" + inst.name);
         return null;
     }
 
@@ -472,7 +472,7 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
 
     @Override
     public Void visitCall(Call inst) {
-        emitInst("bl", new LA64AsmSymOperand(inst.identifier));
+        emitInst("bl", new LA64AsmSymOperand(inst.name));
         return null;
     }
 
@@ -598,7 +598,7 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
      */
     private void loadData(GeneralPurposeRegister dst, Data sym) {
         // 先加载符号地址
-        emitInst("la.pcrel", dst, new LA64AsmSymOperand(sym.identifier()));
+        emitInst("la.pcrel", dst, new LA64AsmSymOperand(sym.name()));
         // 再对符号地址访存
         emitInst("ld.w", dst, dst, new LA64AsmImmOperand(0));
     }
@@ -612,7 +612,7 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
      */
     private void storeData(GeneralPurposeRegister val, Data sym, GeneralPurposeRegister tmp) {
         // 先加载符号地址
-        emitInst("la.pcrel", tmp, new LA64AsmSymOperand(sym.identifier()));
+        emitInst("la.pcrel", tmp, new LA64AsmSymOperand(sym.name()));
         // 再将值写入符号地址
         emitInst("st.w", val, tmp, new LA64AsmImmOperand(0));
     }

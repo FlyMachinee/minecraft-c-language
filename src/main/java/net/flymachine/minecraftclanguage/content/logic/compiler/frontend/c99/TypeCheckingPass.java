@@ -36,7 +36,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         if (!(node.funcType instanceof FunctionTypeNode funcType)) {
             // 不是函数类型
             error();
-            String msg = "identifier declared in a function definition shall have a function type; have '" +
+            String msg = "name declared in a function definition shall have a function type; have '" +
                          getLogger().white(node.funcType.getType().toString()) + "'";
             logErrorWithSourceLine(node.id.wholeLoc, msg);
         } else {
@@ -488,7 +488,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         if (!(node.func instanceof IdentifierNode id)) {
             // 目前不允许调用函数指针
             error();
-            String msg = "function call expression shall have identifier as function designator";
+            String msg = "function call expression shall have name as function designator";
             logErrorWithSourceLine(node.func.wholeLoc, msg);
         } else {
             SymbolTable.Entry entry = symbolTable.get(id.id);
