@@ -1,14 +1,14 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.ir;
 
 public class TacVariable implements TacValue {
-    public String identifier;
+    public String name;
 
-    public TacVariable(String identifier) {
-        this.identifier = identifier;
+    public TacVariable(String name) {
+        this.name = name;
     }
 
     @Override
     public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
-        stringBuilder.append("Var(").append(identifier).append(")");
+        stringBuilder.append("Var(").append(name).append(")");
     }
 }

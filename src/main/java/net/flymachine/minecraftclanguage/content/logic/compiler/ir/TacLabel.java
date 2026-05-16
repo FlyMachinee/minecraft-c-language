@@ -1,10 +1,10 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.ir;
 
 public class TacLabel implements TacInstruction {
-    public String identifier;
+    public String name;
 
-    public TacLabel(String identifier) {
-        this.identifier = identifier;
+    public TacLabel(String name) {
+        this.name = name;
     }
 
     @Override
@@ -12,7 +12,7 @@ public class TacLabel implements TacInstruction {
         if (indentFirstLine) {
             stringBuilder.append("  ".repeat(indentLevel));
         }
-        stringBuilder.append("Label(").append(identifier).append(")");
+        stringBuilder.append("Label(").append(name).append(")");
     }
 
     @Override

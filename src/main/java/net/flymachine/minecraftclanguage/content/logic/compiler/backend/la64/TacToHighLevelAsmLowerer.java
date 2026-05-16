@@ -26,7 +26,7 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
             if (topLevel instanceof TacFunction func) {
                 topLevels.add(lowerFunction(func));
             } else if (topLevel instanceof TacStaticVariable staticVar) {
-                topLevels.add(new HighLevelStaticVar(staticVar.identifier, staticVar.global, staticVar.initValue));
+                topLevels.add(new HighLevelStaticVar(staticVar.name, staticVar.global, staticVar.initValue));
             }
         }
         return new HighLevelProgram(topLevels);
@@ -59,7 +59,7 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
             argIndex++;
         }
 
-        List<TacInstruction> instructions = tacFunction.instructions;
+        List<TacInstruction> instructions = tacFunction.insts;
         for (TacInstruction instruction : instructions) {
             instruction.accept(this);
         }
@@ -122,7 +122,7 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
 
     @Override
     public Void visit(TacLabel inst) {
-        target.add(new Label(inst.identifier));
+        target.add(new Label(inst.name));
         return null;
     }
 
@@ -249,7 +249,7 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
         if (tacValue instanceof TacIntConstant tacIntConstant) {
             return new Immediate(tacIntConstant.value);
         } else if (tacValue instanceof TacVariable tacVariable) {
-            return new Pseudo(tacVariable.identifier);
+            return new Pseudo(tacVariable.name);
         }
         throw new UnsupportedOperationException("Unsupported value type: " + tacValue.getClass().getSimpleName());
     }
