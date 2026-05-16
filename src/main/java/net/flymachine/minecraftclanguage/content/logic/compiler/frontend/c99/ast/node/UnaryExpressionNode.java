@@ -8,7 +8,7 @@ public class UnaryExpressionNode extends ExpressionNode {
     public ExpressionNode exp;
 
     public UnaryExpressionNode(UnaryOperatorNode op, ExpressionNode exp) {
-        super(SourceLocation.concat(op.wholeLocation, exp.wholeLocation));
+        super(SourceLocation.concat(op.wholeLoc, exp.wholeLoc));
         this.op = op;
         this.exp = exp;
     }

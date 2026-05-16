@@ -4,13 +4,13 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
 public class ReturnNode extends StatementNode {
-    public ExpressionNode expression;
+    public ExpressionNode exp;
     public SourceLocation returnLocation;
 
-    public ReturnNode(SourceLocation returnLocation, ExpressionNode expression) {
-        super(SourceLocation.concat(returnLocation, expression.wholeLocation));
+    public ReturnNode(SourceLocation returnLocation, ExpressionNode exp) {
+        super(SourceLocation.concat(returnLocation, exp.wholeLoc));
         this.returnLocation = returnLocation;
-        this.expression = expression;
+        this.exp = exp;
     }
 
     @Override
@@ -28,7 +28,7 @@ public class ReturnNode extends StatementNode {
             stringBuilder.append(",\n");
         }
         stringBuilder.append("  ".repeat(indentLevel + 1)).append("exp=");
-        expression.genFormattedString(stringBuilder, indentLevel + 1, false);
+        exp.genFormattedString(stringBuilder, indentLevel + 1, false);
         stringBuilder.append("  ".repeat(indentLevel));
         stringBuilder.append(")\n");
     }

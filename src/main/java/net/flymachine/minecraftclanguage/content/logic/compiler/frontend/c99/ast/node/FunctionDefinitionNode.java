@@ -5,18 +5,18 @@ import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocatio
 import org.jetbrains.annotations.Nullable;
 
 public final class FunctionDefinitionNode extends AstNode implements ExternalDeclarationNode {
-    public IdentifierNode identifier;
-    public TypeNode functionType;
+    public IdentifierNode id;
+    public TypeNode funcType;
     public @Nullable StorageClassSpecifierNode storageClass;
     public CompoundStatementNode body;
 
     public FunctionDefinitionNode(
-        SourceLocation wholeLocation, IdentifierNode identifier, TypeNode functionType,
+        SourceLocation wholeLocation, IdentifierNode id, TypeNode funcType,
         @Nullable StorageClassSpecifierNode storageClass, CompoundStatementNode body) {
 
         super(wholeLocation);
-        this.identifier = identifier;
-        this.functionType = functionType;
+        this.id = id;
+        this.funcType = funcType;
         this.storageClass = storageClass;
         this.body = body;
     }
@@ -31,9 +31,9 @@ public final class FunctionDefinitionNode extends AstNode implements ExternalDec
         if (indentFirstLine) { stringBuilder.append("  ".repeat(indentLevel)); }
         stringBuilder.append("FunctionDefinitionNode(\n");
         stringBuilder.append("  ".repeat(indentLevel + 1));
-        stringBuilder.append("name=\"").append(identifier.id).append("\",\n");
+        stringBuilder.append("name=\"").append(id.id).append("\",\n");
         stringBuilder.append("  ".repeat(indentLevel + 1)).append("type=");
-        functionType.genFormattedString(stringBuilder);
+        funcType.genFormattedString(stringBuilder);
         stringBuilder.append(",\n");
         stringBuilder.append("  ".repeat(indentLevel + 1)).append("storage=");
         if (storageClass != null) {

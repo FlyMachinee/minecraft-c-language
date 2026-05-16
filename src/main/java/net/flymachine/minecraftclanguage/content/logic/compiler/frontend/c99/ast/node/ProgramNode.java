@@ -6,11 +6,11 @@ import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocatio
 import java.util.List;
 
 public final class ProgramNode extends AstNode {
-    public List<ExternalDeclarationNode> declarations;
+    public List<ExternalDeclarationNode> extDecls;
 
-    public ProgramNode(SourceLocation wholeLocation, List<ExternalDeclarationNode> declarations) {
+    public ProgramNode(SourceLocation wholeLocation, List<ExternalDeclarationNode> extDecls) {
         super(wholeLocation);
-        this.declarations = declarations;
+        this.extDecls = extDecls;
     }
 
     @Override
@@ -22,7 +22,7 @@ public final class ProgramNode extends AstNode {
     public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) { stringBuilder.append("  ".repeat(indentLevel)); }
         stringBuilder.append("ProgramNode(externalDecls=[\n");
-        for (ExternalDeclarationNode declaration : declarations) {
+        for (ExternalDeclarationNode declaration : extDecls) {
             declaration.genFormattedString(stringBuilder, indentLevel + 1, true);
             stringBuilder.append("  ".repeat(indentLevel + 1)).append(",\n");
         }

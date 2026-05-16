@@ -3,20 +3,20 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.as
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
 
 public final class StatementBlockItemNode extends AstNode implements BlockItemNode {
-    public StatementNode statement;
+    public StatementNode stmt;
 
-    public StatementBlockItemNode(StatementNode statement) {
-        super(statement.wholeLocation);
-        this.statement = statement;
+    public StatementBlockItemNode(StatementNode stmt) {
+        super(stmt.wholeLoc);
+        this.stmt = stmt;
     }
 
     @Override
     public <T> T accept(AstVisitor<T> visitor) {
-        return statement.accept(visitor);
+        return stmt.accept(visitor);
     }
 
     @Override
     public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
-        statement.genFormattedString(stringBuilder, indentLevel, indentFirstLine);
+        stmt.genFormattedString(stringBuilder, indentLevel, indentFirstLine);
     }
 }

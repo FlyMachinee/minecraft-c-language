@@ -3,20 +3,20 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.as
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
 
 public final class ForInitExpressionNode extends AstNode implements ForInitNode {
-    public ExpressionNode expression;
+    public ExpressionNode exp;
 
-    public ForInitExpressionNode(ExpressionNode expression) {
-        super(expression.wholeLocation);
-        this.expression = expression;
+    public ForInitExpressionNode(ExpressionNode exp) {
+        super(exp.wholeLoc);
+        this.exp = exp;
     }
 
     @Override
     public <T> T accept(AstVisitor<T> visitor) {
-        return expression.accept(visitor);
+        return exp.accept(visitor);
     }
 
     @Override
     public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
-        expression.genFormattedString(stringBuilder, indentLevel, indentFirstLine);
+        exp.genFormattedString(stringBuilder, indentLevel, indentFirstLine);
     }
 }

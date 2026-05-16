@@ -4,6 +4,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
 public class NullStatementNode extends StatementNode {
+    // 其 Location 为分号的 Location
 
     public NullStatementNode(SourceLocation wholeLocation) {
         super(wholeLocation);

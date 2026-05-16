@@ -10,14 +10,14 @@ public final class IfStatementNode extends StatementNode {
     public @Nullable StatementNode elseStmt;
 
     public IfStatementNode(ExpressionNode cond, StatementNode thenStmt, StatementNode elseStmt) {
-        super(SourceLocation.concat(cond.wholeLocation, elseStmt.wholeLocation));
+        super(SourceLocation.concat(cond.wholeLoc, elseStmt.wholeLoc));
         this.cond = cond;
         this.thenStmt = thenStmt;
         this.elseStmt = elseStmt;
     }
 
     public IfStatementNode(ExpressionNode cond, StatementNode thenStmt) {
-        super(SourceLocation.concat(cond.wholeLocation, thenStmt.wholeLocation));
+        super(SourceLocation.concat(cond.wholeLoc, thenStmt.wholeLoc));
         this.cond = cond;
         this.thenStmt = thenStmt;
         this.elseStmt = null;

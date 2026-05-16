@@ -3,14 +3,14 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.as
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
 public abstract class AstNode implements AstInterface {
-    public final SourceLocation wholeLocation;
+    public final SourceLocation wholeLoc;
 
     @Override
     public SourceLocation getWholeLocation() {
-        return wholeLocation;
+        return wholeLoc;
     }
 
-    protected AstNode(SourceLocation wholeLocation) {
-        this.wholeLocation = wholeLocation;
+    protected AstNode(SourceLocation wholeLoc) {
+        this.wholeLoc = wholeLoc;
     }
 }

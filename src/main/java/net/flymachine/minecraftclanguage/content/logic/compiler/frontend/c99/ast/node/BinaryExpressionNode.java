@@ -9,7 +9,7 @@ public class BinaryExpressionNode extends ExpressionNode {
     public ExpressionNode rhs;
 
     public BinaryExpressionNode(BinaryOperatorNode op, ExpressionNode lhs, ExpressionNode rhs) {
-        super(SourceLocation.concat(lhs.wholeLocation, rhs.wholeLocation));
+        super(SourceLocation.concat(lhs.wholeLoc, rhs.wholeLoc));
         this.op = op;
         this.lhs = lhs;
         this.rhs = rhs;

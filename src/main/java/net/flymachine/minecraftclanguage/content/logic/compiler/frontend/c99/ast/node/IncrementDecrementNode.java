@@ -7,13 +7,13 @@ public class IncrementDecrementNode extends ExpressionNode {
     public boolean isIncrement;
     public boolean isPrefix;
     public ExpressionNode operand;
-    public SourceLocation operatorLocation;
+    public SourceLocation operatorLoc;
 
     public IncrementDecrementNode(
-        SourceLocation operatorLocation, boolean isIncrement, boolean isPrefix, ExpressionNode operand) {
+        SourceLocation operatorLoc, boolean isIncrement, boolean isPrefix, ExpressionNode operand) {
 
-        super(SourceLocation.concat(operatorLocation, operand.wholeLocation));
-        this.operatorLocation = operatorLocation;
+        super(SourceLocation.concat(operatorLoc, operand.wholeLoc));
+        this.operatorLoc = operatorLoc;
         this.isIncrement = isIncrement;
         this.isPrefix = isPrefix;
         this.operand = operand;

@@ -8,18 +8,18 @@ import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocatio
 import java.util.List;
 
 public final class FunctionTypeNode extends AstNode implements TypeNode {
-    public TypeNode returnType;
-    public List<TypeNode> parameterTypes;
-    public List<IdentifierNode> parameters;
+    public TypeNode retType;
+    public List<TypeNode> paramTypes;
+    public List<IdentifierNode> params;
 
     public FunctionTypeNode(
-        SourceLocation wholeLocation, TypeNode returnType, List<TypeNode> parameterTypes,
-        List<IdentifierNode> parameters) {
+        SourceLocation wholeLocation, TypeNode retType, List<TypeNode> paramTypes,
+        List<IdentifierNode> params) {
 
         super(wholeLocation);
-        this.returnType = returnType;
-        this.parameterTypes = parameterTypes;
-        this.parameters = parameters;
+        this.retType = retType;
+        this.paramTypes = paramTypes;
+        this.params = params;
     }
 
     @Override
@@ -34,12 +34,12 @@ public final class FunctionTypeNode extends AstNode implements TypeNode {
 
     @Override
     public FunctionType getType() {
-        return new FunctionType(returnType.getType(), parameterTypes.stream().map(TypeNode::getType).toList());
+        return new FunctionType(retType.getType(), paramTypes.stream().map(TypeNode::getType).toList());
     }
 
     public boolean hasNoParameters() {
-        if (parameterTypes.isEmpty()) { return true; }
-        return parameterTypes.size() == 1 && parameterTypes.get(0) instanceof BasicTypeNode basicType &&
+        if (paramTypes.isEmpty()) { return true; }
+        return paramTypes.size() == 1 && paramTypes.get(0) instanceof BasicTypeNode basicType &&
                basicType.getType().getKind() == BasicType.Kind.VOID;
     }
 }

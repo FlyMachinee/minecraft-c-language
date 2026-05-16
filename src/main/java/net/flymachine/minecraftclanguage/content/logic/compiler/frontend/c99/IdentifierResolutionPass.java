@@ -82,7 +82,7 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
     @Override
     public Void visit(ProgramNode node) {
         enterScope();
-        for (ExternalDeclarationNode externalDeclaration : node.declarations) {
+        for (ExternalDeclarationNode externalDeclaration : node.extDecls) {
             externalDeclaration.accept(this);
         }
         exitScope();
@@ -90,11 +90,11 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
     }
 
     private void panicWithPreviousRef(String msg, IdentifierNode id, IdentifierEntry previous) {
-        logErrorWithSourceLine(id.wholeLocation, msg);
+        logErrorWithSourceLine(id.wholeLoc, msg);
         msg = "previous " + (previous.defined ? "definition" : "declaration") + " of '" +
               getLogger().white(id.id) + "' with type '" +
               getLogger().white(previous.t.getType().toString()) + "'";
-        logNoteWithSourceLine(previous.id.wholeLocation, msg);
+        logNoteWithSourceLine(previous.id.wholeLoc, msg);
     }
 
     private void visitFunctionTypeNode(FunctionTypeNode funcType, boolean isDefinition) {
@@ -107,24 +107,24 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
                 return;
             }
 
-            for (int i = 0; i < funcType.parameters.size(); i++) {
+            for (int i = 0; i < funcType.params.size(); i++) {
                 // 检查是否具名
-                if (funcType.parameters.get(i) == null) {
+                if (funcType.params.get(i) == null) {
                     error();
                     String msg = "ISO C99 does not support omitting parameter names in function definitions";
-                    logErrorWithSourceLine(funcType.parameterTypes.get(i).getWholeLocation(), msg);
+                    logErrorWithSourceLine(funcType.paramTypes.get(i).getWholeLocation(), msg);
                 } else {
-                    visitDeclarationLike(funcType.parameters.get(i), funcType.parameterTypes.get(i), null, true);
+                    visitDeclarationLike(funcType.params.get(i), funcType.paramTypes.get(i), null, true);
                 }
             }
         } else {
             // 否则，只要求参数列表中的参数名不重复即可，参数可不具名，也不会被定义
             HashMap<String, IdentifierEntry> scope = new HashMap<>();
-            for (int i = 0; i < funcType.parameters.size(); i++) {
-                if (funcType.parameters.get(i) == null) { continue; }
+            for (int i = 0; i < funcType.params.size(); i++) {
+                if (funcType.params.get(i) == null) { continue; }
 
-                IdentifierNode identifier = funcType.parameters.get(i);
-                TypeNode type = funcType.parameterTypes.get(i);
+                IdentifierNode identifier = funcType.params.get(i);
+                TypeNode type = funcType.paramTypes.get(i);
 
                 IdentifierEntry entry = scope.get(identifier.id);
                 if (entry == null) {
@@ -138,10 +138,10 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
             }
         }
         // 递归检查返回类型和参数类型
-        if (funcType.returnType instanceof FunctionTypeNode) {
-            visitFunctionTypeNode((FunctionTypeNode) funcType.returnType, false);
+        if (funcType.retType instanceof FunctionTypeNode) {
+            visitFunctionTypeNode((FunctionTypeNode) funcType.retType, false);
         }
-        for (TypeNode paramType : funcType.parameterTypes) {
+        for (TypeNode paramType : funcType.paramTypes) {
             if (paramType instanceof FunctionTypeNode) {
                 visitFunctionTypeNode((FunctionTypeNode) paramType, false);
             }
@@ -150,10 +150,10 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
 
     @Override
     public Void visit(FunctionDefinitionNode node) {
-        visitDeclarationLike(node.identifier, node.functionType, node.storageClass, true);
+        visitDeclarationLike(node.id, node.funcType, node.storageClass, true);
         enterScope();
-        if (node.functionType instanceof FunctionTypeNode) {
-            visitFunctionTypeNode((FunctionTypeNode) node.functionType, true);
+        if (node.funcType instanceof FunctionTypeNode) {
+            visitFunctionTypeNode((FunctionTypeNode) node.funcType, true);
         }
         for (BlockItemNode item : node.body.blockItems) {
             item.accept(this);
@@ -164,7 +164,7 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
 
     @Override
     public Void visit(ReturnNode node) {
-        node.expression.accept(this);
+        node.exp.accept(this);
         return null;
     }
 
@@ -184,13 +184,13 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
     @Override
     public Void visit(DeclarationNode node) {
         visitDeclarationLike(
-            node.identifier, node.type, node.storageClass,
-            !(node.type instanceof FunctionTypeNode) && node.initializer != null);
+            node.id, node.type, node.storageClass,
+            !(node.type instanceof FunctionTypeNode) && node.init != null);
         if (node.type instanceof FunctionTypeNode funcType) {
             visitFunctionTypeNode(funcType, false);
         }
-        if (node.initializer != null) {
-            node.initializer.accept(this);
+        if (node.init != null) {
+            node.init.accept(this);
         }
         return null;
     }
@@ -215,7 +215,7 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
                 // 块作用域函数声明为 static 非法
                 error();
                 String msg = "invalid storage class for function '" + getLogger().white(name) + "'";
-                logErrorWithSourceLine(id.wholeLocation, msg);
+                logErrorWithSourceLine(id.wholeLoc, msg);
             }
             // 函数声明不需要重命名
             if (previous != null && previous.defined && previous.hasLinkage) {
@@ -295,7 +295,7 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
 
     @Override
     public Void visit(ExpressionStatementNode node) {
-        node.expression.accept(this);
+        node.exp.accept(this);
         return null;
     }
 
@@ -311,7 +311,7 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
         if (renamed == null) {
             error();
             String msg = "'" + getLogger().white(name) + "' undeclared";
-            logErrorWithSourceLine(node.wholeLocation, msg);
+            logErrorWithSourceLine(node.wholeLoc, msg);
         } else {
             node.id = renamed.id.id;
         }
@@ -323,7 +323,7 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
         if (!(node.lhs instanceof IdentifierNode)) {
             error();
             String msg = "lvalue required as left operand of assignment";
-            logErrorWithSourceLine(node.op.wholeLocation, msg);
+            logErrorWithSourceLine(node.op.wholeLoc, msg);
         }
         node.lhs.accept(this);
         node.rhs.accept(this);
@@ -340,7 +340,7 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
             } else {
                 msg = "lvalue required as decrement operand";
             }
-            logErrorWithSourceLine(node.operatorLocation, msg);
+            logErrorWithSourceLine(node.operatorLoc, msg);
         }
         node.operand.accept(this);
         return null;
@@ -359,8 +359,8 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
     @Override
     public Void visit(ConditionalExpressionNode node) {
         node.cond.accept(this);
-        node.thenExpr.accept(this);
-        node.elseExpr.accept(this);
+        node.thenExp.accept(this);
+        node.elseExp.accept(this);
         return null;
     }
 
@@ -427,8 +427,8 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
 
     @Override
     public Void visit(FunctionCallNode node) {
-        node.function.accept(this);
-        for (ExpressionNode arg : node.arguments) {
+        node.func.accept(this);
+        for (ExpressionNode arg : node.args) {
             arg.accept(this);
         }
         return null;

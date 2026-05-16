@@ -13,7 +13,7 @@ public class SwitchStatementNode extends StatementNode {
     public DefaultLabelInfo defaultLabel;
 
     public SwitchStatementNode(ExpressionNode exp, StatementNode body) {
-        super(SourceLocation.concat(exp.wholeLocation, body.wholeLocation));
+        super(SourceLocation.concat(exp.wholeLoc, body.wholeLoc));
         this.exp = exp;
         this.body = body;
     }

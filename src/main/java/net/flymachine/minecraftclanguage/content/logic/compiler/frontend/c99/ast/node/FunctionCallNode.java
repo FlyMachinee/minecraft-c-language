@@ -6,13 +6,13 @@ import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocatio
 import java.util.List;
 
 public final class FunctionCallNode extends ExpressionNode {
-    public ExpressionNode function;
-    public List<ExpressionNode> arguments;
+    public ExpressionNode func;
+    public List<ExpressionNode> args;
 
-    public FunctionCallNode(SourceLocation wholeLocation, ExpressionNode function, List<ExpressionNode> arguments) {
+    public FunctionCallNode(SourceLocation wholeLocation, ExpressionNode func, List<ExpressionNode> args) {
         super(wholeLocation);
-        this.function = function;
-        this.arguments = arguments;
+        this.func = func;
+        this.args = args;
     }
 
     @Override
@@ -25,9 +25,9 @@ public final class FunctionCallNode extends ExpressionNode {
         if (indentFirstLine) { stringBuilder.append("  ".repeat(indentLevel)); }
         stringBuilder.append("FunctionCallNode(\n");
         stringBuilder.append("  ".repeat(indentLevel + 1)).append("function=");
-        function.genFormattedString(stringBuilder, indentLevel + 1, false);
+        func.genFormattedString(stringBuilder, indentLevel + 1, false);
         stringBuilder.append("  ".repeat(indentLevel + 1)).append("arguments=[\n");
-        for (ExpressionNode argument : arguments) {
+        for (ExpressionNode argument : args) {
             argument.genFormattedString(stringBuilder, indentLevel + 2, true);
             stringBuilder.append("  ".repeat(indentLevel + 2)).append(",\n");
         }

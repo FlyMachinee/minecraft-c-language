@@ -5,12 +5,15 @@ import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocatio
 
 public final class GotoNode extends StatementNode {
     public IdentifierNode target;
-    public SourceLocation gotoLocation;
+    /**
+     * goto 关键字的 Location
+     */
+    public SourceLocation gotoLoc;
 
-    public GotoNode(SourceLocation gotoLocation, IdentifierNode target) {
-        super(SourceLocation.concat(gotoLocation, target.wholeLocation));
+    public GotoNode(SourceLocation gotoLoc, IdentifierNode target) {
+        super(SourceLocation.concat(gotoLoc, target.wholeLoc));
         this.target = target;
-        this.gotoLocation = gotoLocation;
+        this.gotoLoc = gotoLoc;
     }
 
     @Override

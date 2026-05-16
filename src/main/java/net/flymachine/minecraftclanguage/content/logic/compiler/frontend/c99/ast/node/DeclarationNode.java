@@ -7,37 +7,37 @@ import org.jetbrains.annotations.Nullable;
 public final class DeclarationNode extends AstNode implements ExternalDeclarationNode {
     public @Nullable StorageClassSpecifierNode storageClass;
     public TypeNode type;
-    public IdentifierNode identifier;
-    public @Nullable ExpressionNode initializer;
+    public IdentifierNode id;
+    public @Nullable ExpressionNode init;
 
     public DeclarationNode(
         SourceLocation wholeLocation, @Nullable StorageClassSpecifierNode storageClass, TypeNode type,
-        IdentifierNode identifier, @Nullable ExpressionNode initializer) {
+        IdentifierNode id, @Nullable ExpressionNode init) {
 
         super(wholeLocation);
         this.storageClass = storageClass;
         this.type = type;
-        this.identifier = identifier;
-        this.initializer = initializer;
+        this.id = id;
+        this.init = init;
     }
 
     public DeclarationNode(
         SourceLocation wholeLocation, @Nullable StorageClassSpecifierNode storageClass, TypeNode type,
-        IdentifierNode identifier) {
+        IdentifierNode id) {
 
         super(wholeLocation);
         this.storageClass = storageClass;
         this.type = type;
-        this.identifier = identifier;
-        this.initializer = null;
+        this.id = id;
+        this.init = null;
     }
 
-    public DeclarationNode(SourceLocation wholeLocation, TypeNode type, IdentifierNode identifier) {
+    public DeclarationNode(SourceLocation wholeLocation, TypeNode type, IdentifierNode id) {
         super(wholeLocation);
         this.storageClass = null;
         this.type = type;
-        this.identifier = identifier;
-        this.initializer = null;
+        this.id = id;
+        this.init = null;
     }
 
     @Override
@@ -59,10 +59,10 @@ public final class DeclarationNode extends AstNode implements ExternalDeclaratio
         stringBuilder.append("  ".repeat(indentLevel + 1)).append("type=");
         type.genFormattedString(stringBuilder);
         stringBuilder.append(",\n");
-        stringBuilder.append("  ".repeat(indentLevel + 1)).append("id=\"").append(identifier.id).append("\",\n");
+        stringBuilder.append("  ".repeat(indentLevel + 1)).append("id=\"").append(id.id).append("\",\n");
         stringBuilder.append("  ".repeat(indentLevel + 1)).append("init=");
-        if (initializer != null) {
-            initializer.genFormattedString(stringBuilder, indentLevel + 1, false);
+        if (init != null) {
+            init.genFormattedString(stringBuilder, indentLevel + 1, false);
         } else {
             stringBuilder.append("null\n");
         }

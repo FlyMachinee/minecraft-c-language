@@ -21,7 +21,7 @@ public final class AstToTacLowerer {
 
     public TacProgram lower(ProgramNode program) {
         List<TacTopLevel> topLevels = new ArrayList<>();
-        for (ExternalDeclarationNode extDecl : program.declarations) {
+        for (ExternalDeclarationNode extDecl : program.extDecls) {
             if (extDecl instanceof FunctionDefinitionNode funcDef) {
                 topLevels.add(lowerFunc(funcDef));
             }
@@ -68,21 +68,21 @@ public final class AstToTacLowerer {
         instructions = new ArrayList<>();
         lowerStmt(funcDef.body);
         emitTac(new TacReturn(new TacIntConstant(0)));
-        boolean global = symbolTable.get(funcDef.identifier.id).attr.isGlobal();
-        FunctionTypeNode functionType = (FunctionTypeNode) funcDef.functionType;
+        boolean global = symbolTable.get(funcDef.id.id).attr.isGlobal();
+        FunctionTypeNode functionType = (FunctionTypeNode) funcDef.funcType;
         if (functionType.hasNoParameters()) {
-            return new TacFunction(funcDef.identifier.id, global, List.of(), instructions);
+            return new TacFunction(funcDef.id.id, global, List.of(), instructions);
         } else {
-            List<String> parameters = functionType.parameters.stream().map(param -> param.id).toList();
-            return new TacFunction(funcDef.identifier.id, global, parameters, instructions);
+            List<String> parameters = functionType.params.stream().map(param -> param.id).toList();
+            return new TacFunction(funcDef.id.id, global, parameters, instructions);
         }
     }
 
     private void lowerBlockItem(BlockItemNode blockItem) {
         if (blockItem instanceof StatementBlockItemNode stmt) {
-            lowerStmt(stmt.statement);
+            lowerStmt(stmt.stmt);
         } else if (blockItem instanceof DeclarationBlockItemNode decl) {
-            lowerDecl(decl.declaration);
+            lowerDecl(decl.decl);
         } else {
             throw new RuntimeException("Unknown instruction: " + blockItem.toString());
         }
@@ -91,9 +91,9 @@ public final class AstToTacLowerer {
     private void lowerDecl(DeclarationNode decl) {
         // 一定为块作用域
         // 无存储类且有初始化时，生成初始化三地址码
-        if (decl.initializer != null && decl.storageClass == null) {
-            TacValue initValue = lowerExp(decl.initializer);
-            emitTac(new TacCopy(initValue, new TacVariable(decl.identifier.id)));
+        if (decl.init != null && decl.storageClass == null) {
+            TacValue initValue = lowerExp(decl.init);
+            emitTac(new TacCopy(initValue, new TacVariable(decl.id.id)));
         }
     }
 
@@ -117,10 +117,10 @@ public final class AstToTacLowerer {
         }
 
         if (stmt instanceof ReturnNode ret) {
-            TacValue returnValue = lowerExp(ret.expression);
+            TacValue returnValue = lowerExp(ret.exp);
             emitTac(new TacReturn(returnValue));
         } else if (stmt instanceof ExpressionStatementNode expStmt) {
-            lowerExp(expStmt.expression);
+            lowerExp(expStmt.exp);
         } else if (stmt instanceof IfStatementNode ifStmt) {
             if (ifStmt.elseStmt != null) {
                 // if (cond) thenStmt else elseStmt
@@ -242,9 +242,9 @@ public final class AstToTacLowerer {
 
             if (forLoop.init != null) {
                 if (forLoop.init instanceof ForInitDeclarationNode decl) {
-                    lowerDecl(decl.declaration);
+                    lowerDecl(decl.decl);
                 } else if (forLoop.init instanceof ForInitExpressionNode expr) {
-                    lowerExp(expr.expression);
+                    lowerExp(expr.exp);
                 } else {
                     throw new RuntimeException("unexpected init node in for loop: " + forLoop.init.getClass());
                 }
@@ -551,22 +551,22 @@ public final class AstToTacLowerer {
                 case ALWAYS_JUMP -> {
                     // cond=0，只需求假分支即可
                     emitTac(new TacLabel(labelCondFalse));
-                    return lowerExp(condExp.elseExpr);
+                    return lowerExp(condExp.elseExp);
                 }
                 case NEVER_JUMP -> {
                     // cond=1，只需求真分支即可
-                    TacValue ret = lowerExp(condExp.thenExpr);
+                    TacValue ret = lowerExp(condExp.thenExp);
                     emitTac(new TacLabel(labelCondFalse));
                     return ret;
                 }
             }
             String labelCondEnd = makeLabel("cond_end");
-            TacValue thenValue = lowerExp(condExp.thenExpr);
+            TacValue thenValue = lowerExp(condExp.thenExp);
             TacVariable dst = new TacVariable(makeTempVar());
             emitTac(new TacCopy(thenValue, dst));
             emitTac(new TacJump(labelCondEnd));
             emitTac(new TacLabel(labelCondFalse));
-            TacValue elseValue = lowerExp(condExp.elseExpr);
+            TacValue elseValue = lowerExp(condExp.elseExp);
             emitTac(new TacCopy(elseValue, dst));
             emitTac(new TacLabel(labelCondEnd));
             return dst;
@@ -580,9 +580,9 @@ public final class AstToTacLowerer {
             // dst = invoke(func, [res0, res1,...])
             // yield dst
 
-            IdentifierNode funcId = (IdentifierNode) funcCall.function;
+            IdentifierNode funcId = (IdentifierNode) funcCall.func;
             List<TacValue> args = new ArrayList<>();
-            for (ExpressionNode arg : funcCall.arguments) {
+            for (ExpressionNode arg : funcCall.args) {
                 args.add(lowerExp(arg));
             }
             TacVariable dst = new TacVariable(makeTempVar());

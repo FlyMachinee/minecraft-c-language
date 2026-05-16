@@ -5,14 +5,14 @@ import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocatio
 
 public final class ConditionalExpressionNode extends ExpressionNode {
     public ExpressionNode cond;
-    public ExpressionNode thenExpr;
-    public ExpressionNode elseExpr;
+    public ExpressionNode thenExp;
+    public ExpressionNode elseExp;
 
-    public ConditionalExpressionNode(ExpressionNode cond, ExpressionNode thenExpr, ExpressionNode elseExpr) {
-        super(SourceLocation.concat(cond.wholeLocation, elseExpr.wholeLocation));
+    public ConditionalExpressionNode(ExpressionNode cond, ExpressionNode thenExp, ExpressionNode elseExp) {
+        super(SourceLocation.concat(cond.wholeLoc, elseExp.wholeLoc));
         this.cond = cond;
-        this.thenExpr = thenExpr;
-        this.elseExpr = elseExpr;
+        this.thenExp = thenExp;
+        this.elseExp = elseExp;
     }
 
     @Override
@@ -29,9 +29,9 @@ public final class ConditionalExpressionNode extends ExpressionNode {
         stringBuilder.append("  ".repeat(indentLevel + 1)).append("cond=");
         cond.genFormattedString(stringBuilder, indentLevel + 1, false);
         stringBuilder.append("  ".repeat(indentLevel + 1)).append("thenExpr=");
-        thenExpr.genFormattedString(stringBuilder, indentLevel + 1, false);
+        thenExp.genFormattedString(stringBuilder, indentLevel + 1, false);
         stringBuilder.append("  ".repeat(indentLevel + 1)).append("elseExpr=");
-        elseExpr.genFormattedString(stringBuilder, indentLevel + 1, false);
+        elseExp.genFormattedString(stringBuilder, indentLevel + 1, false);
         stringBuilder.append("  ".repeat(indentLevel)).append(")\n");
     }
 }

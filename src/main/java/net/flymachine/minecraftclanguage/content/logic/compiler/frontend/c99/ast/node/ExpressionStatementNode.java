@@ -3,11 +3,11 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.as
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
 
 public class ExpressionStatementNode extends StatementNode {
-    public ExpressionNode expression;
+    public ExpressionNode exp;
 
-    public ExpressionStatementNode(ExpressionNode expression) {
-        super(expression.wholeLocation);
-        this.expression = expression;
+    public ExpressionStatementNode(ExpressionNode exp) {
+        super(exp.wholeLoc);
+        this.exp = exp;
     }
 
     @Override
@@ -27,7 +27,7 @@ public class ExpressionStatementNode extends StatementNode {
             stringBuilder.append(",\n");
         }
         stringBuilder.append("  ".repeat(indentLevel + 1)).append("exp=");
-        expression.genFormattedString(stringBuilder, indentLevel + 1, false);
+        exp.genFormattedString(stringBuilder, indentLevel + 1, false);
         stringBuilder.append("  ".repeat(indentLevel)).append(")\n");
     }
 }

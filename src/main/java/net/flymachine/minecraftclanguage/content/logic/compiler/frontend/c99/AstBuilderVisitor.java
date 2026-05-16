@@ -124,7 +124,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
             error();
             String msg =
                 "type defaults to '" + logger.white("int") + "' in declaration of '" + logger.white(res.id.id) + "'";
-            logErrorWithSourceLine(res.id.wholeLocation, msg);
+            logErrorWithSourceLine(res.id.wholeLoc, msg);
         }
         CompoundStatementNode body = (CompoundStatementNode) visit(ctx.compoundStatement());
         return new FunctionDefinitionNode(getSourceLocation(ctx), res.id, res.t, typeAndSpecifiers.storageClass, body);
@@ -271,14 +271,14 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
                     error();
                     String msg = "type defaults to '" + logger.white("int") + "' in type name";
                     assert paramStorageClass != null; // 没有类型，那么一定有存储类型
-                    logErrorWithSourceLine(paramStorageClass.wholeLocation, msg);
+                    logErrorWithSourceLine(paramStorageClass.wholeLoc, msg);
                     paramBaseType = new BasicTypeNode(null, BasicType.INT);
                 }
                 if (paramStorageClass != null && paramStorageClass.storageClass != StorageClassSpecifier.REGISTER) {
                     // 有非 register 的存储类型
                     error();
                     String msg = "storage class specified for unnamed parameter";
-                    logErrorWithSourceLine(paramStorageClass.wholeLocation, msg);
+                    logErrorWithSourceLine(paramStorageClass.wholeLoc, msg);
                 }
                 parameterTypes.add(paramBaseType);
                 parameters.add(null);
@@ -294,13 +294,13 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
                     error();
                     String msg = "type defaults to '" + logger.white("int") + "' in declaration of '" +
                                  logger.white(paramRes.id.id) + "'";
-                    logErrorWithSourceLine(paramRes.id.wholeLocation, msg);
+                    logErrorWithSourceLine(paramRes.id.wholeLoc, msg);
                 }
                 if (paramStorageClass != null && paramStorageClass.storageClass != StorageClassSpecifier.REGISTER) {
                     // 有非 register 的存储类型
                     error();
                     String msg = "storage class specified for parameter '" + logger.white(paramRes.id.id) + "'";
-                    logErrorWithSourceLine(paramStorageClass.wholeLocation, msg);
+                    logErrorWithSourceLine(paramStorageClass.wholeLoc, msg);
                 }
 
                 parameterTypes.add(paramRes.t);
@@ -336,7 +336,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
                 String msg =
                     "type defaults to '" + logger.white("int") + "' in declaration of '" + logger.white(res.id.id) +
                     "'";
-                logErrorWithSourceLine(res.id.wholeLocation, msg);
+                logErrorWithSourceLine(res.id.wholeLoc, msg);
             }
 
             IdentifierNode id = res.id;

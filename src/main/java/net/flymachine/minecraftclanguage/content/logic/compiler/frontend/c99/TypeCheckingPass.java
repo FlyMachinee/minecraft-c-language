@@ -24,7 +24,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
 
     @Override
     public Void visit(ProgramNode node) {
-        for (ExternalDeclarationNode externalDeclaration : node.declarations) {
+        for (ExternalDeclarationNode externalDeclaration : node.extDecls) {
             externalDeclaration.accept(this);
         }
         return null;
@@ -33,29 +33,29 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
     @Override
     public Void visit(FunctionDefinitionNode node) {
 
-        if (!(node.functionType instanceof FunctionTypeNode funcType)) {
+        if (!(node.funcType instanceof FunctionTypeNode funcType)) {
             // 不是函数类型
             error();
             String msg = "identifier declared in a function definition shall have a function type; have '" +
-                         getLogger().white(node.functionType.getType().toString()) + "'";
-            logErrorWithSourceLine(node.identifier.wholeLocation, msg);
+                         getLogger().white(node.funcType.getType().toString()) + "'";
+            logErrorWithSourceLine(node.id.wholeLoc, msg);
         } else {
-            visitFunctionDeclaration(node.identifier, funcType, node.storageClass, true);
+            visitFunctionDeclaration(node.id, funcType, node.storageClass, true);
 
             // 检查参数类型
             // 到了这里，要么所有参数都具名且不重复，要么只有单独的void参数
-            for (int i = 0; i < funcType.parameters.size(); i++) {
-                IdentifierNode id = funcType.parameters.get(i);
-                TypeNode type = funcType.parameterTypes.get(i);
+            for (int i = 0; i < funcType.params.size(); i++) {
+                IdentifierNode id = funcType.params.get(i);
+                TypeNode type = funcType.paramTypes.get(i);
                 if (id != null) {
                     if (!type.getType().isComplete()) {
                         // 不完整类型
                         error();
                         String msg =
-                            "parameter '" + getLogger().white(getSourceFile().getByLocation(id.wholeLocation)) +
+                            "parameter '" + getLogger().white(getSourceFile().getByLocation(id.wholeLoc)) +
                             "' has incomplete type '" +
                             getLogger().white(type.getType().toString()) + "'";
-                        logErrorWithSourceLine(id.wholeLocation, msg);
+                        logErrorWithSourceLine(id.wholeLoc, msg);
                     }
                     symbolTable.put(id.id, new SymbolTable.Entry(id, type, SymbolTable.Entry.LocalAttr.INSTANCE));
                 }
@@ -70,7 +70,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
 
     @Override
     public Void visit(ReturnNode node) {
-        node.expression.accept(this);
+        node.exp.accept(this);
         return null;
     }
 
@@ -93,26 +93,25 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             // 不完整类型
             error();
             String msg =
-                "storage size of '" + getLogger().white(getSourceFile().getByLocation(node.identifier.wholeLocation)) +
-                "' isn't known; have type '" +
-                getLogger().white(node.type.getType().toString()) + "'";
-            logErrorWithSourceLine(node.identifier.wholeLocation, msg);
+                "storage size of '" + getLogger().white(getSourceFile().getByLocation(node.id.wholeLoc)) +
+                "' isn't known; have type '" + getLogger().white(node.type.getType().toString()) + "'";
+            logErrorWithSourceLine(node.id.wholeLoc, msg);
         } else if (node.type instanceof FunctionTypeNode funcType) {
             // 函数声明
-            visitFunctionDeclaration(node.identifier, funcType, node.storageClass, false);
+            visitFunctionDeclaration(node.id, funcType, node.storageClass, false);
 
-            if (node.initializer != null) {
+            if (node.init != null) {
                 // 函数类型不能使用赋值初始化
                 error();
-                String msg = "function '" + getLogger().white(node.identifier.id) + "' is initialized like a variable";
-                logErrorWithSourceLine(node.initializer.wholeLocation, msg);
+                String msg = "function '" + getLogger().white(node.id.id) + "' is initialized like a variable";
+                logErrorWithSourceLine(node.init.wholeLoc, msg);
             }
         } else {
             // 变量声明
             if (isFileScope) {
-                visitFileScopeVariableDeclaration(node.identifier, node.type, node.storageClass, node.initializer);
+                visitFileScopeVariableDeclaration(node.id, node.type, node.storageClass, node.init);
             } else {
-                visitBlockScopeVariableDeclaration(node.identifier, node.type, node.storageClass, node.initializer);
+                visitBlockScopeVariableDeclaration(node.id, node.type, node.storageClass, node.init);
             }
         }
         return null;
@@ -120,11 +119,10 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
 
     private void panicWithPreviousRef(
         String msg, IdentifierNode id, SymbolTable.Entry previous, boolean defined) {
-        logErrorWithSourceLine(id.wholeLocation, msg);
+        logErrorWithSourceLine(id.wholeLoc, msg);
         msg = "previous " + (defined ? "definition" : "declaration") + " of '" +
-              getLogger().white(id.id) + "' with type '" +
-              getLogger().white(previous.type.getType().toString()) + "'";
-        logNoteWithSourceLine(previous.id.wholeLocation, msg);
+              getLogger().white(id.id) + "' with type '" + getLogger().white(previous.type.getType().toString()) + "'";
+        logNoteWithSourceLine(previous.id.wholeLoc, msg);
     }
 
     public void visitFunctionDeclaration(
@@ -133,13 +131,13 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
 
         // 检查返回类型
         // 目前只能是 int
-        if (!(funcType.returnType instanceof BasicTypeNode returnType) ||
+        if (!(funcType.retType instanceof BasicTypeNode returnType) ||
             returnType.getType().getKind() != BasicType.Kind.INT) {
             // 返回值类型不合法
             error();
             String msg = "function '" + getLogger().white(id.id) + "' has invalid return type '" +
-                         getLogger().white(funcType.returnType.getType().toString()) + "'";
-            logErrorWithSourceLine(id.wholeLocation, msg);
+                         getLogger().white(funcType.retType.getType().toString()) + "'";
+            logErrorWithSourceLine(id.wholeLoc, msg);
         }
 
         // 如果已经声明/定义，检查类型是否匹配
@@ -205,7 +203,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             // 其他类型的初始化表达式不合法
             error();
             String msg = "initializer element is not constant";
-            logErrorWithSourceLine(init.wholeLocation, msg);
+            logErrorWithSourceLine(init.wholeLoc, msg);
             // 给一个 dummy 类型以继续后续检查
             initialValue = SymbolTable.Entry.StaticAttr.NoInitializer.INSTANCE;
         }
@@ -290,7 +288,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                 error();
                 String msg =
                     "'" + getLogger().white(id.id) + "' has both '" + getLogger().white("extern") + "' and initializer";
-                logErrorWithSourceLine(init.wholeLocation, msg);
+                logErrorWithSourceLine(init.wholeLoc, msg);
                 // 这里不 return，继续处理下面的检查与定义
             }
             SymbolTable.Entry previous = symbolTable.get(id.id);
@@ -324,7 +322,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                 // 其他类型的初始化表达式不合法
                 error();
                 String msg = "initializer element is not constant";
-                logErrorWithSourceLine(init.wholeLocation, msg);
+                logErrorWithSourceLine(init.wholeLoc, msg);
                 // 这里不 return，继续处理下面的定义，防止后续引用无定义
                 // 设置一个 dummy 值
                 initialValue = SymbolTable.Entry.StaticAttr.Initial.ZERO;
@@ -350,7 +348,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
 
     @Override
     public Void visit(ExpressionStatementNode node) {
-        node.expression.accept(this);
+        node.exp.accept(this);
         return null;
     }
 
@@ -368,14 +366,13 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             // 函数类型不能作为表达式使用
             error();
             String msg = "function used in arithmetic";
-            logErrorWithSourceLine(node.wholeLocation, msg);
+            logErrorWithSourceLine(node.wholeLoc, msg);
         } else if (!type.getType().isComplete()) {
             // 不完整类型不能使用
             error();
-            String msg = "storage size of '" + getLogger().white(getSourceFile().getByLocation(node.wholeLocation)) +
-                         "' isn't known; have type '" +
-                         getLogger().white(type.getType().toString()) + "'";
-            logErrorWithSourceLine(node.wholeLocation, msg);
+            String msg = "storage size of '" + getLogger().white(getSourceFile().getByLocation(node.wholeLoc)) +
+                         "' isn't known; have type '" + getLogger().white(type.getType().toString()) + "'";
+            logErrorWithSourceLine(node.wholeLoc, msg);
         }
         return null;
     }
@@ -406,8 +403,8 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
     @Override
     public Void visit(ConditionalExpressionNode node) {
         node.cond.accept(this);
-        node.thenExpr.accept(this);
-        node.elseExpr.accept(this);
+        node.thenExp.accept(this);
+        node.elseExp.accept(this);
         return null;
     }
 
@@ -450,21 +447,21 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
     public Void visit(ForLoopNode node) {
         if (node.init != null) {
             if (node.init instanceof ForInitDeclarationNode forInitDecl) {
-                DeclarationNode decl = forInitDecl.declaration;
+                DeclarationNode decl = forInitDecl.decl;
                 if (decl.type instanceof FunctionTypeNode) {
                     // for 初始化语句中不允许声明函数类型
                     error();
-                    String msg = "declaration of non-variable '" + getLogger().white(decl.identifier.id) +
+                    String msg = "declaration of non-variable '" + getLogger().white(decl.id.id) +
                                  "' in for loop initial declaration";
-                    logErrorWithSourceLine(decl.wholeLocation, msg);
+                    logErrorWithSourceLine(decl.wholeLoc, msg);
                 }
                 if (decl.storageClass != null) {
                     // for 初始化语句中不允许有存储类说明符
                     error();
                     String msg = "declaration of " + decl.storageClass.storageClass + " variable '" +
-                                 getLogger().white(getSourceFile().getByLocation(decl.identifier.wholeLocation)) +
+                                 getLogger().white(getSourceFile().getByLocation(decl.id.wholeLoc)) +
                                  "' in for loop initial declaration";
-                    logErrorWithSourceLine(decl.identifier.wholeLocation, msg);
+                    logErrorWithSourceLine(decl.id.wholeLoc, msg);
                 }
             }
             node.init.accept(this);
@@ -488,70 +485,70 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
 
     @Override
     public Void visit(FunctionCallNode node) {
-        if (!(node.function instanceof IdentifierNode id)) {
+        if (!(node.func instanceof IdentifierNode id)) {
             // 目前不允许调用函数指针
             error();
             String msg = "function call expression shall have identifier as function designator";
-            logErrorWithSourceLine(node.function.wholeLocation, msg);
+            logErrorWithSourceLine(node.func.wholeLoc, msg);
         } else {
             SymbolTable.Entry entry = symbolTable.get(id.id);
             TypeNode type = entry.type;
             if (!(type instanceof FunctionTypeNode funcType)) {
                 // 不是函数类型
                 error();
-                String msg = "called object '" + getLogger().white(getSourceFile().getByLocation(id.wholeLocation)) +
+                String msg = "called object '" + getLogger().white(getSourceFile().getByLocation(id.wholeLoc)) +
                              "' is not a function or function pointer; have type '" +
                              getLogger().white(type.getType().toString()) + "'";
-                logErrorWithSourceLine(id.wholeLocation, msg);
+                logErrorWithSourceLine(id.wholeLoc, msg);
                 msg = "declared here";
-                logNoteWithSourceLine(entry.id.wholeLocation, msg);
+                logNoteWithSourceLine(entry.id.wholeLoc, msg);
             } else {
                 // 检查调用是否合法
                 if (funcType.hasNoParameters()) {
                     // 无参数
-                    if (!node.arguments.isEmpty()) {
+                    if (!node.args.isEmpty()) {
                         // 传递了参数
                         error();
                         String msg = "too many arguments to function '" + getLogger().white(id.id) + "'";
-                        logErrorWithSourceLine(node.function.wholeLocation, msg);
+                        logErrorWithSourceLine(node.func.wholeLoc, msg);
                         msg = "declared here";
-                        logNoteWithSourceLine(entry.id.wholeLocation, msg);
+                        logNoteWithSourceLine(entry.id.wholeLoc, msg);
                     }
                 } else {
                     // 有参数
-                    if (node.arguments.size() < funcType.parameterTypes.size()) {
+                    if (node.args.size() < funcType.paramTypes.size()) {
                         // 参数不足
                         error();
                         String msg = "too few arguments to function '" + getLogger().white(id.id) + "'";
-                        logErrorWithSourceLine(node.function.wholeLocation, msg);
+                        logErrorWithSourceLine(node.func.wholeLoc, msg);
                         msg = "declared here";
-                        logNoteWithSourceLine(entry.id.wholeLocation, msg);
-                    } else if (node.arguments.size() > funcType.parameterTypes.size()) {
+                        logNoteWithSourceLine(entry.id.wholeLoc, msg);
+                    } else if (node.args.size() > funcType.paramTypes.size()) {
                         // 参数过多
                         error();
                         String msg = "too many arguments to function '" + getLogger().white(id.id) + "'";
-                        logErrorWithSourceLine(node.function.wholeLocation, msg);
+                        logErrorWithSourceLine(node.func.wholeLoc, msg);
                         msg = "declared here";
-                        logNoteWithSourceLine(entry.id.wholeLocation, msg);
+                        logNoteWithSourceLine(entry.id.wholeLoc, msg);
                     } else {
                         // 参数数量正确，检查类型
-                        for (int i = 0; i < node.arguments.size(); i++) {
+                        for (int i = 0; i < node.args.size(); i++) {
                             // 假设所有表达式类型都是 int
                             Type argType = BasicType.INT;
-                            TypeNode paramType = funcType.parameterTypes.get(i);
+                            TypeNode paramType = funcType.paramTypes.get(i);
                             if (!argType.isCompatible(paramType.getType())) {
                                 // 参数类型不兼容
                                 error();
                                 String msg =
                                     "incompatible type for argument " + (i + 1) + " of '" + getLogger().white(id.id) +
                                     "'";
-                                logErrorWithSourceLine(node.arguments.get(i).wholeLocation, msg);
+                                logErrorWithSourceLine(node.args.get(i).wholeLoc, msg);
                                 msg = "expected '" + getLogger().white(paramType.getType().toString()) +
                                       "' but argument is of type '" + getLogger().white(argType.toString()) + "'";
                                 logNoteWithSourceLine(
                                     SourceLocation.concat(
-                                        funcType.parameterTypes.get(i).getWholeLocation(),
-                                        funcType.parameters.get(i).getWholeLocation()),
+                                        funcType.paramTypes.get(i).getWholeLocation(),
+                                        funcType.params.get(i).getWholeLocation()),
                                     msg);
                             }
                         }
@@ -560,7 +557,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             }
         }
         // 检查所有的参数
-        for (ExpressionNode arg : node.arguments) {
+        for (ExpressionNode arg : node.args) {
             arg.accept(this);
         }
         return null;

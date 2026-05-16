@@ -43,7 +43,7 @@ public final class LabelResolutionPass extends SemanticAnalysePass implements As
 
     @Override
     public Void visit(ProgramNode node) {
-        for (ExternalDeclarationNode externalDeclaration : node.declarations) {
+        for (ExternalDeclarationNode externalDeclaration : node.extDecls) {
             externalDeclaration.accept(this);
         }
         return null;
@@ -63,7 +63,7 @@ public final class LabelResolutionPass extends SemanticAnalysePass implements As
                 for (GotoNode gotoNode : gotoNodes) {
                     String msg =
                         "label '" + getLogger().white(label) + "' used but not defined";
-                    logErrorWithSourceLine(gotoNode.gotoLocation, msg);
+                    logErrorWithSourceLine(gotoNode.gotoLoc, msg);
                 }
             }
         }
@@ -95,9 +95,9 @@ public final class LabelResolutionPass extends SemanticAnalysePass implements As
             // 标签重定义
             error();
             String msg = "duplicate label '" + getLogger().white(id) + "'";
-            logErrorWithSourceLine(gotoLabelInfo.label.wholeLocation, msg);
+            logErrorWithSourceLine(gotoLabelInfo.label.wholeLoc, msg);
             msg = "previous definition of '" + getLogger().white(id) + "'";
-            logNoteWithSourceLine(definition.label.wholeLocation, msg);
+            logNoteWithSourceLine(definition.label.wholeLoc, msg);
         } else {
             // 重命名以函数名开头
             rename(gotoLabelInfo.label);
@@ -168,7 +168,7 @@ public final class LabelResolutionPass extends SemanticAnalysePass implements As
     private int labelRenameCounter = 0;
 
     private void rename(IdentifierNode identifierNode) {
-        identifierNode.id = currentFunction.identifier.id + "__" + identifierNode.id + "__" + labelRenameCounter++;
+        identifierNode.id = currentFunction.id.id + "__" + identifierNode.id + "__" + labelRenameCounter++;
     }
 
     @Override

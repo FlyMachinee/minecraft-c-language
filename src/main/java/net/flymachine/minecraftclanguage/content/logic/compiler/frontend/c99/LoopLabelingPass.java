@@ -75,7 +75,7 @@ public final class LoopLabelingPass extends SemanticAnalysePass implements AstVi
 
     @Override
     public Void visit(ProgramNode node) {
-        for (ExternalDeclarationNode externalDeclaration : node.declarations) {
+        for (ExternalDeclarationNode externalDeclaration : node.extDecls) {
             externalDeclaration.accept(this);
         }
         return null;
@@ -167,7 +167,7 @@ public final class LoopLabelingPass extends SemanticAnalysePass implements AstVi
         } else {
             error();
             String msg = "break statement not within loop or switch";
-            logErrorWithSourceLine(node.wholeLocation, msg);
+            logErrorWithSourceLine(node.wholeLoc, msg);
         }
         return null;
     }
@@ -180,7 +180,7 @@ public final class LoopLabelingPass extends SemanticAnalysePass implements AstVi
         } else {
             error();
             String msg = "continue statement not within a loop";
-            logErrorWithSourceLine(node.wholeLocation, msg);
+            logErrorWithSourceLine(node.wholeLoc, msg);
         }
         return null;
     }
