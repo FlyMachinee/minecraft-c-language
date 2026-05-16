@@ -53,7 +53,7 @@ public final class LA64Assembler {
     private final LA64RegisterResolver resolver = LA64RegisterResolver.getInstance();
 
     private boolean checkArgAndOperand(LA64Assembly assembly) {
-        for (LA64AsmStatement statement : assembly.statements()) {
+        for (LA64AsmStatement statement : assembly.stmts()) {
             // 伪指令检查
             if (statement instanceof LA64AsmDirective directive) {
                 switch (directive.name()) {
@@ -269,7 +269,7 @@ public final class LA64Assembler {
         offsets.put(Segment.DATA, 0);
         offsets.put(Segment.BSS, 0);
 
-        for (LA64AsmStatement statement : assembly.statements()) {
+        for (LA64AsmStatement statement : assembly.stmts()) {
 
             // 当前段偏移
             int offset = offsets.get(currentSegment);
@@ -396,7 +396,7 @@ public final class LA64Assembler {
                 globalSymbols.contains(symbolName)));
         }
 
-        for (LA64AsmStatement statement : assembly.statements()) {
+        for (LA64AsmStatement statement : assembly.stmts()) {
 
             // 当前段内容
             ByteArrayOutputStream out = segmentContents.get(currentSegment);
@@ -745,17 +745,17 @@ public final class LA64Assembler {
         LA64AsmSymOperand symbol, Segment currentSegment, int currentOffset, LA64InstructionInfo info,
         LA64OperandType type) {
 
-        SymbolLocation loc = symbolTable.get(symbol.symbol());
+        SymbolLocation loc = symbolTable.get(symbol.name());
 
         if (loc == null) {
             // 未定义符号
-            if (symbol.symbol().startsWith(".L")) {
+            if (symbol.name().startsWith(".L")) {
                 throw new IllegalArgumentException(
-                    "Undefined local symbol: " + symbol.symbol());
+                    "Undefined local symbol: " + symbol.name());
             }
 
             // 非局部符号，添加至重定位表
-            int symbolNameIndex = getSymbolNameIndexOrAdd(symbol.symbol());
+            int symbolNameIndex = getSymbolNameIndexOrAdd(symbol.name());
             relocList.add(new RelocationEntry(
                 currentOffset,
                 symbolNameIndex,
@@ -764,7 +764,7 @@ public final class LA64Assembler {
         } else {
             if (loc.segment != currentSegment) {
                 throw new IllegalArgumentException(
-                    "Cannot jump to segment other than .text: " + symbol.symbol() + " in segment " + loc.segment);
+                    "Cannot jump to segment other than .text: " + symbol.name() + " in segment " + loc.segment);
             }
             int value = loc.offset - currentOffset;
             if ((value & 0b11) != 0) {

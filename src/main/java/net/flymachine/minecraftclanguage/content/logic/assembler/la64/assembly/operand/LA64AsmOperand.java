@@ -33,6 +33,6 @@ public interface LA64AsmOperand {
     }
 
     default String asSym() {
-        return ((LA64AsmSymOperand) this).symbol();
+        return ((LA64AsmSymOperand) this).name();
     }
 }

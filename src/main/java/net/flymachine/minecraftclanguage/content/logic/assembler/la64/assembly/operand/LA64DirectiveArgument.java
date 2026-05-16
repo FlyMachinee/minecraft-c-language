@@ -14,6 +14,6 @@ public sealed interface LA64DirectiveArgument permits LA64DirectiveNumArg, LA64D
     }
 
     default String asSym() {
-        return ((LA64DirectiveSymArg) this).symbol();
+        return ((LA64DirectiveSymArg) this).name();
     }
 }
