@@ -57,7 +57,7 @@ public final class LA64Assembler {
             // 伪指令检查
             if (statement instanceof LA64AsmDirective directive) {
                 switch (directive.name()) {
-                    case "global" -> {
+                    case "globl", "global" -> {
                         if (directive.argCount() != 1 && !directive.arg(0).isSym()) {
                             throw new IllegalArgumentException(
                                 "Expected symbol argument for global directive, but got: " + directive.args().get(0));
@@ -75,16 +75,18 @@ public final class LA64Assembler {
                                 "Expected no argument for text, but got: " + directive.args());
                         }
                     }
-                    case "balign" -> {
+                    case "align", "balign" -> {
                         if (directive.argCount() != 1 && !directive.arg(0).isNum()) {
                             throw new IllegalArgumentException(
-                                "Expected numeric argument for align directive, but got: " + directive.args().get(0));
+                                "Expected numeric argument for align/balign directive, but got: " +
+                                directive.args().get(0));
                         }
                     }
-                    case "word" -> {
+                    case "long", "word" -> {
                         if (directive.argCount() != 1 && !directive.arg(0).isNum()) {
                             throw new IllegalArgumentException(
-                                "Expected numeric argument for word directive, but got: " + directive.args().get(0));
+                                "Expected numeric argument for word/long directive, but got: " +
+                                directive.args().get(0));
                         } else {
                             long data = directive.arg(0).asNum();
                             if (Integer.MIN_VALUE > data || data > Integer.MAX_VALUE) {
@@ -277,7 +279,7 @@ public final class LA64Assembler {
             // 伪指令处理
             if (statement instanceof LA64AsmDirective directive) {
                 switch (directive.name()) {
-                    case "global" -> {
+                    case "globl", "global" -> {
                         String symbolName = directive.arg(0).asSym();
                         if (symbolName.startsWith(".L")) {
                             throw new IllegalArgumentException(
@@ -286,11 +288,11 @@ public final class LA64Assembler {
                         globalSymbols.add(symbolName);
                     }
                     case "text", "data", "bss" -> currentSegment = Segment.valueOf(directive.name().toUpperCase());
-                    case "balign" -> {
+                    case "align", "balign" -> {
                         long alignment = directive.arg(0).asNum();
                         offsets.put(currentSegment, BitMath.alignUp(offset, (int) alignment));
                     }
-                    case "word" -> {
+                    case "long", "word" -> {
                         if (currentSegment == Segment.BSS) {
                             throw new IllegalArgumentException(".word directive cannot be used in bss segment");
                         }
@@ -407,9 +409,9 @@ public final class LA64Assembler {
             // 伪指令处理
             if (statement instanceof LA64AsmDirective directive) {
                 switch (directive.name()) {
-                    case "global" -> { }
+                    case "globl", "global" -> { }
                     case "text", "data", "bss" -> currentSegment = Segment.valueOf(directive.name().toUpperCase());
-                    case "balign" -> {
+                    case "align", "balign" -> {
                         int newOffset = BitMath.alignUp(offset, (int) directive.arg(0).asNum());
                         if (newOffset > offset) {
                             if (currentSegment != Segment.BSS) {
@@ -422,7 +424,7 @@ public final class LA64Assembler {
                             }
                         }
                     }
-                    case "word" -> writeIntLittleEndian(out, (int) directive.arg(0).asNum());
+                    case "long", "word" -> writeIntLittleEndian(out, (int) directive.arg(0).asNum());
                     case "zero" -> {
                         int count = (int) directive.arg(0).asNum();
                         if (currentSegment != Segment.BSS) {
