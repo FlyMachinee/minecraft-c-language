@@ -288,7 +288,7 @@ public final class LA64Assembler {
                     case "text", "data", "bss" -> currentSegment = Segment.valueOf(directive.name().toUpperCase());
                     case "balign" -> {
                         long alignment = directive.arg(0).asNum();
-                        offsets.put(currentSegment, alignOffsetTo((int) alignment, offset));
+                        offsets.put(currentSegment, BitMath.alignUp(offset, (int) alignment));
                     }
                     case "word" -> {
                         if (currentSegment == Segment.BSS) {
@@ -410,7 +410,7 @@ public final class LA64Assembler {
                     case "global" -> { }
                     case "text", "data", "bss" -> currentSegment = Segment.valueOf(directive.name().toUpperCase());
                     case "balign" -> {
-                        int newOffset = alignOffsetTo((int) directive.arg(0).asNum(), offset);
+                        int newOffset = BitMath.alignUp(offset, (int) directive.arg(0).asNum());
                         if (newOffset > offset) {
                             if (currentSegment != Segment.BSS) {
                                 // 使用 0 进行填充
@@ -507,15 +507,6 @@ public final class LA64Assembler {
             symbolList,
             relocList,
             symbolNames);
-    }
-
-    private static int alignOffsetTo(int align, int offset) {
-        // .balign xxx
-        // 将偏移量增加到下一个 xxx 的倍数
-        if (align <= 0 || (align & (align - 1)) != 0) {
-            throw new IllegalArgumentException("Alignment must be a positive power of 2: " + align);
-        }
-        return (offset + align - 1) & -align;
     }
 
     private static RelocationType getRelocationType(String mnemonic) {

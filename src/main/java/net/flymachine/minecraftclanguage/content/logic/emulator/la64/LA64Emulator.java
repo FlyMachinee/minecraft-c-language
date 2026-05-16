@@ -51,8 +51,8 @@ public final class LA64Emulator {
         byte[] textSeg = executable.text();
         long textVA = executable.textVA();
         long textVPN = textVA / SimpleRam.PAGE_SIZE;
-        long testPageCount = (textSeg.length + SimpleRam.PAGE_SIZE - 1) / SimpleRam.PAGE_SIZE;
-        for (int i = 0; i < testPageCount; ++i) {
+        long textPageCount = (textSeg.length + SimpleRam.PAGE_SIZE - 1) / SimpleRam.PAGE_SIZE;
+        for (int i = 0; i < textPageCount; ++i) {
             mmu.addPageTableEntry(
                 textVPN + i,
                 new LA64MemoryManagementUnit.LA64PageTableEntry(ppn++, true));
@@ -62,6 +62,34 @@ public final class LA64Emulator {
             int offset = i * SimpleRam.PAGE_SIZE;
             int length = Math.min(SimpleRam.PAGE_SIZE, textSeg.length - offset);
             ram.dmaToMemory(textPA, textSeg, offset, length);
+        }
+
+        // data 段紧随 text 段之后
+        byte[] dataSeg = executable.data();
+        long dataVA = textVA + textPageCount * SimpleRam.PAGE_SIZE;
+        long dataVPN = dataVA / SimpleRam.PAGE_SIZE;
+        long dataPageCount = (dataSeg.length + SimpleRam.PAGE_SIZE - 1) / SimpleRam.PAGE_SIZE;
+        for (int i = 0; i < dataPageCount; ++i) {
+            mmu.addPageTableEntry(
+                dataVPN + i,
+                new LA64MemoryManagementUnit.LA64PageTableEntry(ppn++, true));
+            long dataPA = mmu.translateVirtualAddress(
+                dataVA + (long) i * SimpleRam.PAGE_SIZE,
+                LA64MemoryManagementUnit.LA64MemoryAccessType.STORE);
+            int offset = i * SimpleRam.PAGE_SIZE;
+            int length = Math.min(SimpleRam.PAGE_SIZE, dataSeg.length - offset);
+            ram.dmaToMemory(dataPA, dataSeg, offset, length);
+        }
+
+        // bss 段紧随 data 段之后
+        int bssSize = executable.bssSize();
+        long bssVA = dataVA + dataPageCount * SimpleRam.PAGE_SIZE;
+        long bssVPN = bssVA / SimpleRam.PAGE_SIZE;
+        long bssPageCount = (bssSize + SimpleRam.PAGE_SIZE - 1) / SimpleRam.PAGE_SIZE;
+        for (int i = 0; i < bssPageCount; ++i) {
+            mmu.addPageTableEntry(
+                bssVPN + i,
+                new LA64MemoryManagementUnit.LA64PageTableEntry(ppn++, true));
         }
 
         long stackVPN = executable.stackTopVA() / SimpleRam.PAGE_SIZE;

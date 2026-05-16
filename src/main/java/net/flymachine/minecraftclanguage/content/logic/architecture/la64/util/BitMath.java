@@ -77,4 +77,12 @@ public final class BitMath {
         // 检查该数字是否可被 26 位的有符号数表示
         return number >= -33554432 && number <= 33554431;
     }
+
+    public static int alignUp(int number, int alignment) {
+        // 将 number 向上取整到下一个 alignment 的倍数
+        if (alignment <= 0 || (alignment & (alignment - 1)) != 0) {
+            throw new IllegalArgumentException("Alignment must be a positive power of 2");
+        }
+        return (number + alignment - 1) & -alignment;
+    }
 }
