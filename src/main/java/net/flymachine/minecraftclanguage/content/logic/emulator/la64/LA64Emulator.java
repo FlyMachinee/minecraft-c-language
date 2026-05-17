@@ -8,6 +8,7 @@ import net.flymachine.minecraftclanguage.content.logic.cpu.la64.LA64CpuState;
 import net.flymachine.minecraftclanguage.content.logic.cpu.la64.LA64MemoryManagementUnit;
 import net.flymachine.minecraftclanguage.content.logic.cpu.la64.exception.LA64RuntimeException;
 import net.flymachine.minecraftclanguage.content.logic.device.la64.Teletypewriter;
+import net.flymachine.minecraftclanguage.content.logic.executable.Segment;
 import net.flymachine.minecraftclanguage.content.logic.executable.la64.LA64Executable;
 import net.flymachine.minecraftclanguage.content.logic.memory.MemoryCrossbar;
 import net.flymachine.minecraftclanguage.content.logic.memory.MemoryLikeDevice;
@@ -48,48 +49,18 @@ public final class LA64Emulator {
     }
 
     public void loadExecutable(LA64Executable executable) {
-        byte[] textSeg = executable.text();
-        long textVA = executable.textVA();
-        long textVPN = textVA / SimpleRam.PAGE_SIZE;
-        long textPageCount = (textSeg.length + SimpleRam.PAGE_SIZE - 1) / SimpleRam.PAGE_SIZE;
-        for (int i = 0; i < textPageCount; ++i) {
-            mmu.addPageTableEntry(
-                textVPN + i,
-                new LA64MemoryManagementUnit.LA64PageTableEntry(ppn++, true));
-            long textPA = mmu.translateVirtualAddress(
-                textVA + (long) i * SimpleRam.PAGE_SIZE,
-                LA64MemoryManagementUnit.LA64MemoryAccessType.FETCH);
-            int offset = i * SimpleRam.PAGE_SIZE;
-            int length = Math.min(SimpleRam.PAGE_SIZE, textSeg.length - offset);
-            ram.dmaToMemory(textPA, textSeg, offset, length);
-        }
 
-        // data 段紧随 text 段之后
-        byte[] dataSeg = executable.data();
-        long dataVA = textVA + textPageCount * SimpleRam.PAGE_SIZE;
-        long dataVPN = dataVA / SimpleRam.PAGE_SIZE;
-        long dataPageCount = (dataSeg.length + SimpleRam.PAGE_SIZE - 1) / SimpleRam.PAGE_SIZE;
-        for (int i = 0; i < dataPageCount; ++i) {
-            mmu.addPageTableEntry(
-                dataVPN + i,
-                new LA64MemoryManagementUnit.LA64PageTableEntry(ppn++, true));
-            long dataPA = mmu.translateVirtualAddress(
-                dataVA + (long) i * SimpleRam.PAGE_SIZE,
-                LA64MemoryManagementUnit.LA64MemoryAccessType.STORE);
-            int offset = i * SimpleRam.PAGE_SIZE;
-            int length = Math.min(SimpleRam.PAGE_SIZE, dataSeg.length - offset);
-            ram.dmaToMemory(dataPA, dataSeg, offset, length);
-        }
-
-        // bss 段紧随 data 段之后
-        int bssSize = executable.bssSize();
-        long bssVA = dataVA + dataPageCount * SimpleRam.PAGE_SIZE;
-        long bssVPN = bssVA / SimpleRam.PAGE_SIZE;
-        long bssPageCount = (bssSize + SimpleRam.PAGE_SIZE - 1) / SimpleRam.PAGE_SIZE;
-        for (int i = 0; i < bssPageCount; ++i) {
-            mmu.addPageTableEntry(
-                bssVPN + i,
-                new LA64MemoryManagementUnit.LA64PageTableEntry(ppn++, true));
+        for (Segment segment : executable.segments()) {
+            long startVPN = segment.virtualAddr() / SimpleRam.PAGE_SIZE;
+            long endVPN = (segment.virtualAddr() + segment.size() - 1) / SimpleRam.PAGE_SIZE;
+            for (long vpn = startVPN; vpn <= endVPN; ++vpn) {
+                mmu.addPageTableEntry(vpn, new LA64MemoryManagementUnit.LA64PageTableEntry(ppn++, true));
+            }
+            if (segment.data() != null) {
+                long vaddr = segment.virtualAddr();
+                long paddr = mmu.translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.LOAD);
+                ram.dmaToMemory(paddr, segment.data(), 0, segment.data().length);
+            }
         }
 
         long stackVPN = executable.stackTopVA() / SimpleRam.PAGE_SIZE;
@@ -98,7 +69,7 @@ public final class LA64Emulator {
                 stackVPN - i,
                 new LA64MemoryManagementUnit.LA64PageTableEntry(ppn++, true));
         }
-        cpuState.setPc(executable.textVA() + executable.entryOffset());
+        cpuState.setPc(executable.entryPoint());
     }
 
     public long start() {

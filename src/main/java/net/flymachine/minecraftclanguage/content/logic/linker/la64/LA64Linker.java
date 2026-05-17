@@ -1,6 +1,10 @@
 package net.flymachine.minecraftclanguage.content.logic.linker.la64;
 
+import it.unimi.dsi.fastutil.ints.Int2ObjectArrayMap;
+import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.util.BitMath;
+import net.flymachine.minecraftclanguage.content.logic.executable.Segment;
+import net.flymachine.minecraftclanguage.content.logic.executable.SegmentPermission;
 import net.flymachine.minecraftclanguage.content.logic.executable.la64.LA64Executable;
 import net.flymachine.minecraftclanguage.content.logic.linker.LinkOptions;
 import net.flymachine.minecraftclanguage.content.logic.object.*;
@@ -46,59 +50,184 @@ public final class LA64Linker {
         }
     }
 
+    // 记录节在输出段中的位置
+    private static class PlacementInfo {
+        final int segmentIndex;
+        final int offsetInSegment;
+
+        PlacementInfo(int segIdx, int off) {
+            this.segmentIndex = segIdx;
+            this.offsetInSegment = off;
+        }
+    }
+
+    private static class OutputSegment {
+        final int index;
+        final long wantedAddr;
+        final Set<SegmentPermission> perms;
+        long finalAddr;
+        private ByteArrayOutputStream dataStream = new ByteArrayOutputStream();
+        private byte[] data;
+        int totalSize = 0;
+        int align = 1;
+        // final List<SectionContribution> contributions = new ArrayList<>();
+
+        OutputSegment(int idx, long wanted, Set<SegmentPermission> perms) {
+            this.index = idx;
+            this.wantedAddr = wanted;
+            this.perms = perms;
+        }
+
+        int addDataSection(byte[] data, int align) {
+            int offset = dataStream.size();
+            // 简单对齐
+            if (align > 1) {
+                int pad = (align - (offset % align)) % align;
+                for (int i = 0; i < pad; i++) {
+                    dataStream.write(0);
+                }
+                offset = dataStream.size();
+                this.align = Math.max(align, this.align);
+            }
+            try {
+                dataStream.write(data);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+            // contributions.add(new SectionContribution(offset, data.length, false));
+            totalSize = dataStream.size();
+            return offset;
+        }
+
+        int addBssSection(int size, int align) {
+            int offset = totalSize;
+            if (align > 1) {
+                int pad = (align - (offset % align)) % align;
+                offset += pad;
+                totalSize += pad;
+                this.align = Math.max(align, this.align);
+            }
+            // contributions.add(new SectionContribution(offset, size, true));
+            totalSize += size;
+            return offset;
+        }
+
+        byte[] getData() {
+            if (data == null) {
+                data = dataStream.toByteArray();
+                dataStream = null;
+            }
+            return data;
+        }
+
+        // record SectionContribution(int offsetInSegment, int size, boolean isBss) { }
+    }
+
     public LA64Executable link(LA64Object... objects) {
         if (objects.length == 0) {
             throw new IllegalArgumentException("Cannot link an empty object");
         }
 
-        // 每节的起始偏移，相对与 text 节起点处
-        // data 节放置在 text 节后的下一个页开始，bss 节放置在 data 节后的下一个页开始
-        Map<SectionType, List<Integer>> sectionsOffsets = new EnumMap<>(SectionType.class);
-        sectionsOffsets.put(SectionType.TEXT, new ArrayList<>());
-        sectionsOffsets.put(SectionType.DATA, new ArrayList<>());
-        sectionsOffsets.put(SectionType.BSS, new ArrayList<>());
+        // 处理链接选项
+        // 段信息
+        Int2ObjectMap<OutputSegment> outputSegments = new Int2ObjectArrayMap<>();
+        for (LinkOptions.SegmentConfig config : options.segmentConfigs()) {
+            if (outputSegments.containsKey(config.segmentIndex())) {
+                throw new IllegalArgumentException(
+                    "Duplicate segment config for segment index: " + config.segmentIndex());
+            }
+            outputSegments.put(
+                config.segmentIndex(),
+                new OutputSegment(config.segmentIndex(), config.virtualAddr(), config.permissions()));
+        }
 
-        // 合并 text 节，记录每个 text 节的起始偏移
-        List<Integer> textOffsets = sectionsOffsets.get(SectionType.TEXT);
-        ByteArrayOutputStream mergedTextStream = new ByteArrayOutputStream();
-        for (LA64Object obj : objects) {
-            textOffsets.add(mergedTextStream.size());
-            try {
-                byte[] data = obj.sections().stream().filter(sec -> sec.type() == SectionType.TEXT).findFirst()
-                                 .map(Section::data).orElse(new byte[0]);
-                mergedTextStream.write(data);
-            } catch (IOException e) {
-                throw new RuntimeException("Failed to merge text sections", e);
+        // 记录每个目标文件中每个节在输出段中的偏移
+        Int2ObjectMap<EnumMap<SectionType, PlacementInfo>> placements = new Int2ObjectArrayMap<>();
+        for (int i = 0; i < objects.length; i++) {
+            placements.put(i, new EnumMap<>(SectionType.class));
+        }
+        // 收集数据至输出段，记录每个节的偏移
+        // 按照各个节在链接选项中出现的先后顺序进行合并
+        EnumSet<SectionType> seenSections = EnumSet.noneOf(SectionType.class);
+        int seenBssInSegmentIndex = -1;
+        for (LinkOptions.SegmentMapping mapping : options.segmentMappings()) {
+            // 当前遍历节
+            SectionType secType = mapping.sectionType();
+            if (!seenSections.add(secType)) {
+                throw new IllegalArgumentException(
+                    "Section ." + secType.toString().toLowerCase() + " is mapped multiple times");
+            }
+
+            // 当前遍历节需要合并到的段索引
+            int segmentIndex = mapping.segmentIndex();
+            if (!outputSegments.containsKey(segmentIndex)) {
+                throw new IllegalArgumentException("Missing segment config for segment index: " + segmentIndex);
+            }
+            if (secType == SectionType.BSS) {
+                seenBssInSegmentIndex = segmentIndex;
+            } else {
+                if (seenBssInSegmentIndex != -1 && segmentIndex == seenBssInSegmentIndex) {
+                    throw new IllegalArgumentException(
+                        "Section ." + secType.toString().toLowerCase() +
+                        " cannot be mapped after .bss in a single segment, i.e. .bss must be at last of the segment");
+                }
+            }
+
+            // 遍历所有输入文件，将指定节的数据追加到对应输出段末尾，并记录位置
+            OutputSegment outSeg = outputSegments.get(segmentIndex);
+            for (int i = 0; i < objects.length; i++) {
+                LA64Object obj = objects[i];
+                Section sec = obj.sections().stream().filter(s -> s.type() == secType).findFirst().orElse(null);
+                if (sec == null) {
+                    continue;
+                }
+                int offsetInSeg;
+                if (secType == SectionType.BSS) {
+                    offsetInSeg = outSeg.addBssSection(sec.size(), sec.align());
+                } else {
+                    offsetInSeg = outSeg.addDataSection(sec.data(), sec.align());
+                }
+                // 第 i 个输入文件的 secType 节被放置在 segmentIndex 段的 offsetInSeg 处
+                placements.get(i).put(secType, new PlacementInfo(segmentIndex, offsetInSeg));
             }
         }
-        byte[] mergedText = mergedTextStream.toByteArray();
 
-        int dataBaseOffset = BitMath.alignUp(mergedText.length, 4096);
-        // 合并 data 节，记录每个 data 节的起始偏移
-        List<Integer> dataOffsets = sectionsOffsets.get(SectionType.DATA);
-        ByteArrayOutputStream mergedDataStream = new ByteArrayOutputStream();
-        for (LA64Object obj : objects) {
-            dataOffsets.add(dataBaseOffset + mergedDataStream.size());
-            try {
-                byte[] data = obj.sections().stream().filter(sec -> sec.type() == SectionType.DATA).findFirst()
-                                 .map(Section::data).orElse(new byte[0]);
-                mergedDataStream.write(data);
-            } catch (IOException e) {
-                throw new RuntimeException("Failed to merge data sections", e);
-            }
-        }
-        byte[] mergedData = mergedDataStream.toByteArray();
-
-        int bssBaseOffset = BitMath.alignUp(dataBaseOffset + mergedData.length, 4096);
-        // 合并 bss 节，记录每个 bss 节的起始偏移
-        List<Integer> bssOffsets = sectionsOffsets.get(SectionType.BSS);
-        int totalBssSize = 0;
-        for (LA64Object obj : objects) {
-            bssOffsets.add(bssBaseOffset + totalBssSize);
-            Section bssSection =
-                obj.sections().stream().filter(sec -> sec.type() == SectionType.BSS).findFirst().orElse(null);
-            if (bssSection != null) {
-                totalBssSize += bssSection.size();
+        // 为每个输出段分配虚拟地址
+        List<OutputSegment> sortedOutputSegments = new ArrayList<>(outputSegments.values());
+        sortedOutputSegments.sort(Comparator.comparingInt(seg -> seg.index));
+        for (int i = 0; i < outputSegments.size(); i++) {
+            OutputSegment seg = sortedOutputSegments.get(i);
+            long currStart = seg.wantedAddr;
+            if (currStart != 0) {
+                // 如果链接选项中指定了该段的虚拟地址，则使用该地址
+                // 检查是否满足对齐要求
+                if (currStart != BitMath.alignUp(currStart, seg.align)) {
+                    throw new IllegalArgumentException(
+                        "Specified virtual address for segment " + seg.index + " does not satisfy alignment " +
+                        "requirement of " + seg.align + ": " + currStart);
+                }
+                // 检查是否与先前段的地址范围重叠
+                long currEnd = currStart + seg.totalSize;
+                for (int j = 0; j < i; ++j) {
+                    OutputSegment prevSeg = sortedOutputSegments.get(j);
+                    long prevStart = prevSeg.finalAddr;
+                    long prevEnd = prevStart + prevSeg.totalSize;
+                    if (currStart < prevEnd && currEnd > prevStart) {
+                        throw new IllegalArgumentException(
+                            "Specified virtual address for segment " + seg.index +
+                            " overlaps with segment " + prevSeg.index + ": [" + currStart + ", " + currEnd +
+                            ") vs [" + prevStart + ", " + prevEnd + ")");
+                    }
+                }
+                // 没有问题
+                seg.finalAddr = currStart;
+            } else {
+                // 否则自动分配地址，分配至前一段末尾的下一个页开始处
+                if (i != 0) {
+                    OutputSegment prevSeg = sortedOutputSegments.get(i - 1);
+                    currStart = prevSeg.finalAddr + prevSeg.totalSize;
+                }
+                seg.finalAddr = BitMath.alignUp(currStart, Math.max(4096, seg.align));
             }
         }
 
@@ -107,6 +236,7 @@ public final class LA64Linker {
         Map<Integer, Map<String, LocalSymbol>> localSymbols = new HashMap<>();
         for (int i = 0; i < objects.length; i++) {
             LA64Object obj = objects[i];
+            EnumMap<SectionType, PlacementInfo> placementInfo = placements.get(i);
 
             List<SymbolEntry> symbols = obj.symbols();
             List<String> names = obj.symbolNames();
@@ -115,10 +245,16 @@ public final class LA64Linker {
 
             for (SymbolEntry sym : symbols) {
                 String symName = names.get(sym.symbolNameIndex());
+                // 该符号所在节
+                SectionType sectionType = sym.sectionType();
+                // 符号所在节的位置信息
+                PlacementInfo pInfo = placementInfo.get(sectionType);
+                // 符号所在节的所在段的信息
+                OutputSegment outSeg = outputSegments.get(pInfo.segmentIndex);
 
-                // 该符号的相对虚拟地址，相对于 text 节起始
-                // = 该符号所在节的偏移 + 该符号在目标文件该节中的偏移
-                long finalAddr = sectionsOffsets.get(sym.sectionType()).get(i) + sym.offset();
+                // 该符号的虚拟地址
+                // = 该符号所在段的虚拟地址 + 该符号所在节的段内偏移 + 该符号在目标文件该节中的偏移
+                long finalAddr = outSeg.finalAddr + pInfo.offsetInSegment + sym.offset();
 
                 // 仅对 global 符号操作
                 if (sym.isGlobal()) {
@@ -141,61 +277,86 @@ public final class LA64Linker {
         // 重定位
         for (int i = 0; i < objects.length; i++) {
             LA64Object obj = objects[i];
-            // 该目标文件 text 节的起始偏移
-            int base = textOffsets.get(i);
+            EnumMap<SectionType, PlacementInfo> placementInfo = placements.get(i);
 
-            List<RelocationEntry> relocationEntries =
-                obj.sections().stream()
-                   .filter(sec -> sec.type() == SectionType.TEXT).findFirst()
-                   .map(Section::relocations).orElse(List.of());
-            
-            List<String> names = obj.symbolNames();
-
-            for (RelocationEntry relocationEntry : relocationEntries) {
-                // 在本目标文件内获取符号名
-                String symName = names.get(relocationEntry.symbolNameIndex());
-
-                // 目标值
-                int value;
-
-                // 查询符号
-                // 先查询本目标文件内符号，再查询全局符号表
-                LocalSymbol local = localSymbols.get(i).get(symName);
-                if (local != null) {
-                    // 在本文件内找到
-                    value = getRelocatedValue(relocationEntry, base, local.virtualAddress, local.isAbsolute);
-                } else {
-                    // 未找到，在全局范围内查找
-                    GlobalSymbol target = globalSymbols.get(symName);
-                    if (target == null) {
-                        throw new RuntimeException("Undefined symbol: " + symName);
-                    }
-                    value = getRelocatedValue(relocationEntry, base, target.virtualAddress, target.isAbsolute);
+            // 对输入文件的每一个节进行重定位
+            for (Section sec : obj.sections()) {
+                if (sec.relocations().isEmpty()) {
+                    continue;
+                }
+                if (sec.type() != SectionType.TEXT) {
+                    throw new RuntimeException(
+                        "Relocations in section ." + sec.type().toString().toLowerCase() +
+                        " are not supported yet in object " + obj.fileName());
                 }
 
-                // 将 value 写入到 text 的适当位置
-                int offsetInMerged = base + relocationEntry.offset();
-                patchInstruction(mergedText, offsetInMerged, relocationEntry.relocationType(), value);
+                PlacementInfo pInfo = placementInfo.get(sec.type());
+                OutputSegment outSeg = outputSegments.get(pInfo.segmentIndex);
+                byte[] segData = outSeg.getData();
+                List<String> names = obj.symbolNames();
+
+                // 该节起始处的虚拟地址
+                long base = outSeg.finalAddr + pInfo.offsetInSegment;
+
+                // 对该节中的每一个重定位表项
+                for (RelocationEntry relocationEntry : sec.relocations()) {
+                    // 在本目标文件内获取符号名
+                    String symName = names.get(relocationEntry.symbolNameIndex());
+
+                    // 目标值
+                    int value;
+
+                    // 查询符号
+                    // 先查询本目标文件内符号，再查询全局符号表
+                    LocalSymbol local = localSymbols.get(i).get(symName);
+                    if (local != null) {
+                        // 在本文件内找到
+                        value = getRelocatedValue(relocationEntry, base, local.virtualAddress, local.isAbsolute);
+                    } else {
+                        // 未找到，在全局范围内查找
+                        GlobalSymbol target = globalSymbols.get(symName);
+                        if (target == null) {
+                            throw new RuntimeException("Undefined symbol: " + symName);
+                        }
+                        value = getRelocatedValue(relocationEntry, base, target.virtualAddress, target.isAbsolute);
+                    }
+
+                    // 将 value 写入到适当位置
+                    int offsetInOutSeg = pInfo.offsetInSegment + relocationEntry.offset();
+                    // 目前只处理 .text 内的重定位，直接这样就好
+                    patchInstruction(segData, offsetInOutSeg, relocationEntry.relocationType(), value);
+                }
             }
         }
 
-        // 解析入口符号偏移
+        // 构建最终输出段列表
+        List<Segment> finalSegments = new ArrayList<>();
+        for (OutputSegment outSeg : sortedOutputSegments) {
+            byte[] data = outSeg.getData();
+            Segment seg = new Segment(outSeg.finalAddr, data, outSeg.totalSize, outSeg.align, outSeg.perms);
+            finalSegments.add(seg);
+        }
+
+        // 解析入口符号地址
         GlobalSymbol entrySymbol = globalSymbols.get(options.entrySymbol());
         if (entrySymbol == null) {
             throw new RuntimeException("Entry symbol not found: " + options.entrySymbol());
         }
-        int entryOffset = (int) (entrySymbol.virtualAddress);
+        long entryPoint = entrySymbol.virtualAddress;
 
         String outFileName = objects.length == 1 ? objects[0].fileName().replace(".o", ".exe") : "a.exe";
         return new LA64Executable(
-            outFileName, mergedText, options.textVA(), mergedData, totalBssSize, entryOffset, options.stackTopVA(),
+            outFileName,
+            finalSegments,
+            entryPoint,
+            options.stackTopVA(),
             options.stackPageCount());
     }
 
-    private int getRelocatedValue(RelocationEntry relocationEntry, int base, long targetVA, boolean isAbsolute) {
-        // 需要被修补的指令的相对地址，相对于 text 节起始
-        // = 该目标文件 text 节偏移 + 该重定位项指令在目标文件 text 节的偏移
-        long instrAddr = base + relocationEntry.offset();
+    private int getRelocatedValue(RelocationEntry relocationEntry, long base, long targetVA, boolean isAbsolute) {
+        // 需要被修补的区域的虚拟地址
+        // = 所在节起始处的虚拟地址 + 该重定位项的节内偏移
+        long addr = base + relocationEntry.offset();
 
         // 重定位符号的地址
         return switch (relocationEntry.relocationType()) {
@@ -207,7 +368,7 @@ public final class LA64Linker {
                         "Cannot apply PC-relative relocation to an absolute symbol: " + targetVA);
                 }
 
-                long diff = targetVA - instrAddr;
+                long diff = targetVA - addr;
                 if ((diff & 0b11) != 0) {
                     throw new RuntimeException("Unaligned target address for PC-relative relocation: " + targetVA);
                 }
@@ -263,7 +424,7 @@ public final class LA64Linker {
                         "Cannot apply PC-relative relocation to an absolute symbol: " + targetVA);
                 }
                 // https://github.com/llvm/llvm-project/blob/main/llvm/lib/ExecutionEngine/RuntimeDyld/RuntimeDyldELF.cpp#L818
-                long pageDelta = getPageDelta(targetVA, instrAddr, relocationEntry.relocationType());
+                long pageDelta = getPageDelta(targetVA, addr, relocationEntry.relocationType());
                 yield switch (relocationEntry.relocationType()) {
                     case R_LARCH_PCALA_HI20 -> (int) ((pageDelta >> 12) & 0xFFFFF);
                     case R_LARCH_PCALA_LO12 -> (int) (targetVA & 0xFFF);

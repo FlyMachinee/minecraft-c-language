@@ -85,4 +85,12 @@ public final class BitMath {
         }
         return (number + alignment - 1) & -alignment;
     }
+
+    public static long alignUp(long number, long alignment) {
+        // 将 number 向上取整到下一个 alignment 的倍数
+        if (alignment <= 0 || (alignment & (alignment - 1)) != 0) {
+            throw new IllegalArgumentException("Alignment must be a positive power of 2");
+        }
+        return (number + alignment - 1) & -alignment;
+    }
 }
