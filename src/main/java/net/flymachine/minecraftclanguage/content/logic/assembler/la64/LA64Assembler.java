@@ -371,7 +371,9 @@ public final class LA64Assembler {
         // 每个节的内容
         EnumMap<SectionType, ByteArrayOutputStream> sectionContents = new EnumMap<>(SectionType.class);
         EnumMap<SectionType, List<RelocationEntry>> sectionRelocations = new EnumMap<>(SectionType.class);
+        EnumMap<SectionType, Integer> sectionMaxAlign = new EnumMap<>(SectionType.class);
         for (SectionType type : SectionType.values()) {
+            sectionMaxAlign.put(type, 1);
             if (type == SectionType.BSS) {
                 continue;
             }
@@ -415,7 +417,8 @@ public final class LA64Assembler {
                     case "text", "data", "bss" ->
                         currentSectionType = SectionType.valueOf(directive.name().toUpperCase());
                     case "align", "balign" -> {
-                        int newOffset = BitMath.alignUp(offset, (int) directive.arg(0).asNum());
+                        int align = (int) directive.arg(0).asNum();
+                        int newOffset = BitMath.alignUp(offset, align);
                         if (newOffset > offset) {
                             if (currentSectionType != SectionType.BSS) {
                                 // 使用 0 进行填充
@@ -426,6 +429,10 @@ public final class LA64Assembler {
                                 bssSize = newOffset;
                             }
                         }
+                        // 更新当前节的最大对齐要求
+                        sectionMaxAlign.computeIfPresent(
+                            currentSectionType,
+                            (k, currentMaxAlign) -> Math.max(currentMaxAlign, align));
                     }
                     case "long", "word" -> writeIntLittleEndian(out, (int) directive.arg(0).asNum());
                     case "zero" -> {
@@ -506,11 +513,12 @@ public final class LA64Assembler {
         String newName = assembly.fileName().replaceAll("\\.[^.]+$", "") + ".o";
         List<Section> sections = new ArrayList<>();
         for (SectionType type : SectionType.values()) {
+            int maxAlign = sectionMaxAlign.get(type);
             if (type == SectionType.BSS) {
                 // .bss 节特殊处理
                 if (bssSize != 0) {
                     // 节不为空则添加指节头表
-                    sections.add(new Section(type, bssSize));
+                    sections.add(new Section(type, bssSize, maxAlign));
                 }
             } else {
                 // 默认节处理
@@ -518,7 +526,7 @@ public final class LA64Assembler {
                 if (data.length != 0) {
                     // 节不为空则添加指节头表
                     List<RelocationEntry> relocList = sectionRelocations.get(type);
-                    sections.add(new Section(type, data, relocList));
+                    sections.add(new Section(type, data, maxAlign, relocList));
                 }
             }
         }

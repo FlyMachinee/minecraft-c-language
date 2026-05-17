@@ -17,6 +17,7 @@ public final class CRunTime {
 
         String crt0Code = """
                                 .global _start
+                                .balign 4
                             _start:
                                 # Initialize the stack pointer
                                 la.abs sp, __stack_top

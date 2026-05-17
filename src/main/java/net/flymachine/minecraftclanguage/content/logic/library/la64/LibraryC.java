@@ -18,6 +18,7 @@ public final class LibraryC {
 
         String libcCode = """
                                 .global putchar
+                                .balign 4
                             putchar:
                                 # argument in a0
                                 # write in tty address

@@ -102,6 +102,7 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
             emitDir("global", new LA64DirectiveSymArg(function.name));
         }
         emitDir("text");
+        emitDir("balign", new LA64DirectiveNumArg(4));
         emitLabel(function.name);
         generatePrologue(function);
 

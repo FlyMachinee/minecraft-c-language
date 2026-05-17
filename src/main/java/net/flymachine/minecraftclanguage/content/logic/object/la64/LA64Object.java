@@ -28,7 +28,7 @@ public record LA64Object(
 
         // 打印每个节的基本信息
         out.println("Sections:");
-        out.printf("  %-10s %-12s %-8s %s%n", "Name", "Size(bytes)", "DataLen", "Relocs");
+        out.printf("  %-10s %-12s %-8s %-6s %s%n", "Name", "Size(bytes)", "DataLen", "Align", "Relocs");
         for (Section sec : sections) {
             String secName = "." + sec.type().name().toLowerCase();
             String sizeStr = String.valueOf(sec.size());
@@ -39,8 +39,9 @@ public record LA64Object(
                 assert sec.data() != null;
                 dataLenStr = String.valueOf(sec.data().length);
             }
+            String alignStr = String.valueOf(sec.align());
             String relocsStr = sec.relocations().isEmpty() ? "-" : String.valueOf(sec.relocations().size());
-            out.printf("  %-10s %-12s %-8s %s%n", secName, sizeStr, dataLenStr, relocsStr);
+            out.printf("  %-10s %-12s %-8s %-6s %s%n", secName, sizeStr, dataLenStr, alignStr, relocsStr);
         }
         out.println();
 
