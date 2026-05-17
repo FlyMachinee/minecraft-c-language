@@ -3,11 +3,8 @@ package net.flymachine.minecraftclanguage.content.logic.linker.la64;
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.util.BitMath;
 import net.flymachine.minecraftclanguage.content.logic.executable.la64.LA64Executable;
 import net.flymachine.minecraftclanguage.content.logic.linker.LinkOptions;
-import net.flymachine.minecraftclanguage.content.logic.object.SectionType;
-import net.flymachine.minecraftclanguage.content.logic.object.SymbolEntry;
+import net.flymachine.minecraftclanguage.content.logic.object.*;
 import net.flymachine.minecraftclanguage.content.logic.object.la64.LA64Object;
-import net.flymachine.minecraftclanguage.content.logic.object.la64.RelocationEntry;
-import net.flymachine.minecraftclanguage.content.logic.object.la64.RelocationType;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -67,7 +64,9 @@ public final class LA64Linker {
         for (LA64Object obj : objects) {
             textOffsets.add(mergedTextStream.size());
             try {
-                mergedTextStream.write(obj.text());
+                byte[] data = obj.sections().stream().filter(sec -> sec.type() == SectionType.TEXT).findFirst()
+                                 .map(Section::data).orElse(new byte[0]);
+                mergedTextStream.write(data);
             } catch (IOException e) {
                 throw new RuntimeException("Failed to merge text sections", e);
             }
@@ -81,7 +80,9 @@ public final class LA64Linker {
         for (LA64Object obj : objects) {
             dataOffsets.add(dataBaseOffset + mergedDataStream.size());
             try {
-                mergedDataStream.write(obj.data());
+                byte[] data = obj.sections().stream().filter(sec -> sec.type() == SectionType.DATA).findFirst()
+                                 .map(Section::data).orElse(new byte[0]);
+                mergedDataStream.write(data);
             } catch (IOException e) {
                 throw new RuntimeException("Failed to merge data sections", e);
             }
@@ -94,7 +95,11 @@ public final class LA64Linker {
         int totalBssSize = 0;
         for (LA64Object obj : objects) {
             bssOffsets.add(bssBaseOffset + totalBssSize);
-            totalBssSize += obj.bssSize();
+            Section bssSection =
+                obj.sections().stream().filter(sec -> sec.type() == SectionType.BSS).findFirst().orElse(null);
+            if (bssSection != null) {
+                totalBssSize += bssSection.size();
+            }
         }
 
         // 构建全局符号表与各文件的局部符号表
@@ -139,7 +144,11 @@ public final class LA64Linker {
             // 该目标文件 text 节的起始偏移
             int base = textOffsets.get(i);
 
-            List<RelocationEntry> relocationEntries = obj.relocations();
+            List<RelocationEntry> relocationEntries =
+                obj.sections().stream()
+                   .filter(sec -> sec.type() == SectionType.TEXT).findFirst()
+                   .map(Section::relocations).orElse(List.of());
+            
             List<String> names = obj.symbolNames();
 
             for (RelocationEntry relocationEntry : relocationEntries) {
@@ -165,7 +174,7 @@ public final class LA64Linker {
                 }
 
                 // 将 value 写入到 text 的适当位置
-                int offsetInMerged = base + relocationEntry.textOffset();
+                int offsetInMerged = base + relocationEntry.offset();
                 patchInstruction(mergedText, offsetInMerged, relocationEntry.relocationType(), value);
             }
         }
@@ -186,7 +195,7 @@ public final class LA64Linker {
     private int getRelocatedValue(RelocationEntry relocationEntry, int base, long targetVA, boolean isAbsolute) {
         // 需要被修补的指令的相对地址，相对于 text 节起始
         // = 该目标文件 text 节偏移 + 该重定位项指令在目标文件 text 节的偏移
-        long instrAddr = base + relocationEntry.textOffset();
+        long instrAddr = base + relocationEntry.offset();
 
         // 重定位符号的地址
         return switch (relocationEntry.relocationType()) {

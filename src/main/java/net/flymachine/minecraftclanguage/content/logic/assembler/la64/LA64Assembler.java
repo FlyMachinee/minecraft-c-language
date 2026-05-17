@@ -13,11 +13,8 @@ import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.*
 import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.operand.LA64AsmImmOperand;
 import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.operand.LA64AsmOperand;
 import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.operand.LA64AsmSymOperand;
-import net.flymachine.minecraftclanguage.content.logic.object.SectionType;
-import net.flymachine.minecraftclanguage.content.logic.object.SymbolEntry;
+import net.flymachine.minecraftclanguage.content.logic.object.*;
 import net.flymachine.minecraftclanguage.content.logic.object.la64.LA64Object;
-import net.flymachine.minecraftclanguage.content.logic.object.la64.RelocationEntry;
-import net.flymachine.minecraftclanguage.content.logic.object.la64.RelocationType;
 
 import java.io.ByteArrayOutputStream;
 import java.util.*;
@@ -355,8 +352,6 @@ public final class LA64Assembler {
         }
     }
 
-    private List<SymbolEntry> symbolList;
-    private List<RelocationEntry> relocList;
     private List<String> symbolNames;
 
     private int getSymbolNameIndexOrAdd(String symbolName) {
@@ -375,14 +370,18 @@ public final class LA64Assembler {
 
         // 每个节的内容
         EnumMap<SectionType, ByteArrayOutputStream> sectionContents = new EnumMap<>(SectionType.class);
-        sectionContents.put(SectionType.TEXT, new ByteArrayOutputStream());
-        sectionContents.put(SectionType.DATA, new ByteArrayOutputStream());
-        sectionContents.put(SectionType.BSS, null);
+        EnumMap<SectionType, List<RelocationEntry>> sectionRelocations = new EnumMap<>(SectionType.class);
+        for (SectionType type : SectionType.values()) {
+            if (type == SectionType.BSS) {
+                continue;
+            }
+            sectionContents.put(type, new ByteArrayOutputStream());
+            sectionRelocations.put(type, new ArrayList<>());
+        }
         int bssSize = 0;
 
         // 符号表等
-        symbolList = new ArrayList<>();
-        relocList = new ArrayList<>();
+        List<SymbolEntry> symbolList = new ArrayList<>();
         symbolNames = new ArrayList<>();
         for (Map.Entry<String, SymbolLocation> entry : symbolTable.entrySet()) {
             String symbolName = entry.getKey();
@@ -402,8 +401,9 @@ public final class LA64Assembler {
 
         for (LA64AsmStatement statement : assembly.stmts()) {
 
-            // 当前节内容
+            // 当前节内容与重定位表
             ByteArrayOutputStream out = sectionContents.get(currentSectionType);
+            List<RelocationEntry> relocs = sectionRelocations.get(currentSectionType);
 
             // 当前节偏移
             int offset = currentSectionType == SectionType.BSS ? bssSize : out.size();
@@ -459,17 +459,17 @@ public final class LA64Assembler {
                     case "li.d" -> expandLiD(ops, out);
                     case "ret" -> expandRet(out);
                     case "move" -> expandMove(ops, out);
-                    case "bgt" -> expandBgt(currentSectionType, ops, offset, out);
-                    case "ble" -> expandBle(currentSectionType, ops, offset, out);
+                    case "bgt" -> expandBgt(currentSectionType, ops, offset, out, relocs);
+                    case "ble" -> expandBle(currentSectionType, ops, offset, out, relocs);
                     case "sle" -> expandSle(ops, out);
                     case "sgt" -> expandSgt(ops, out);
                     case "sge" -> expandSge(ops, out);
                     case "seq" -> expandSeq(ops, out);
                     case "sne" -> expandSne(ops, out);
-                    case "la.abs" -> expandLaAbs(ops, out, offset);
+                    case "la.abs" -> expandLaAbs(ops, out, offset, relocs);
                     case "la.local", "la.pcrel" -> {
                         if (ops.size() == 2) {
-                            expandLaPcRel(ops, out, offset);
+                            expandLaPcRel(ops, out, offset, relocs);
                         } else {
                             throw new IllegalArgumentException("Not supported yet");
                         }
@@ -491,7 +491,7 @@ public final class LA64Assembler {
                                     default -> (int) imm.value();
                                 };
                             } else if (asmOp instanceof LA64AsmSymOperand sym) {
-                                value = getPcRelOffset(sym, currentSectionType, offset, info, type);
+                                value = getPcRelOffset(sym, currentSectionType, offset, info, type, relocs);
                             }
                             convertedOps.add(new LA64Operand(type, value));
                         }
@@ -504,14 +504,25 @@ public final class LA64Assembler {
         }
 
         String newName = assembly.fileName().replaceAll("\\.[^.]+$", "") + ".o";
-        return new LA64Object(
-            newName,
-            sectionContents.get(SectionType.TEXT).toByteArray(),
-            sectionContents.get(SectionType.DATA).toByteArray(),
-            bssSize,
-            symbolList,
-            relocList,
-            symbolNames);
+        List<Section> sections = new ArrayList<>();
+        for (SectionType type : SectionType.values()) {
+            if (type == SectionType.BSS) {
+                // .bss 节特殊处理
+                if (bssSize != 0) {
+                    // 节不为空则添加指节头表
+                    sections.add(new Section(type, bssSize));
+                }
+            } else {
+                // 默认节处理
+                byte[] data = sectionContents.get(type).toByteArray();
+                if (data.length != 0) {
+                    // 节不为空则添加指节头表
+                    List<RelocationEntry> relocList = sectionRelocations.get(type);
+                    sections.add(new Section(type, data, relocList));
+                }
+            }
+        }
+        return new LA64Object(newName, sections, symbolList, symbolNames);
     }
 
     private static RelocationType getRelocationType(String mnemonic) {
@@ -598,13 +609,14 @@ public final class LA64Assembler {
     }
 
     private void expandBgt(
-        SectionType currentSectionType, List<LA64AsmOperand> ops, int offset, ByteArrayOutputStream out) {
+        SectionType currentSectionType, List<LA64AsmOperand> ops, int offset, ByteArrayOutputStream out,
+        List<RelocationEntry> relocList) {
         // bgt rj, rd, offs16
         LA64Register rj = ops.get(0).asGpr();
         LA64Register rd = ops.get(1).asGpr();
         // => blt rd, rj, offs16
         if (ops.get(2) instanceof LA64AsmSymOperand sym) {
-            int offs16 = getPcOffs16Offset(sym, currentSectionType, offset);
+            int offs16 = getPcOffs16Offset(sym, currentSectionType, offset, relocList);
             writeFormat2ROffs16(out, "blt", rd, rj, offs16);
         } else {
             throw new IllegalArgumentException("Expected sym, but got " + ops.get(2));
@@ -612,13 +624,14 @@ public final class LA64Assembler {
     }
 
     private void expandBle(
-        SectionType currentSectionType, List<LA64AsmOperand> ops, int offset, ByteArrayOutputStream out) {
+        SectionType currentSectionType, List<LA64AsmOperand> ops, int offset, ByteArrayOutputStream out,
+        List<RelocationEntry> relocList) {
         // ble rj, rd, offs16
         LA64Register rj = ops.get(0).asGpr();
         LA64Register rd = ops.get(1).asGpr();
         // => bge rd, rj, offs16
         if (ops.get(2) instanceof LA64AsmSymOperand sym) {
-            int offs16 = getPcOffs16Offset(sym, currentSectionType, offset);
+            int offs16 = getPcOffs16Offset(sym, currentSectionType, offset, relocList);
             writeFormat2ROffs16(out, "bge", rd, rj, offs16);
         } else {
             throw new IllegalArgumentException("Expected sym, but got " + ops.get(2));
@@ -688,7 +701,8 @@ public final class LA64Assembler {
         writeFormat3R(out, "sltu", rd, GeneralPurposeRegister.ZERO, rd);
     }
 
-    private void expandLaAbs(List<LA64AsmOperand> ops, ByteArrayOutputStream out, int offset) {
+    private void expandLaAbs(
+        List<LA64AsmOperand> ops, ByteArrayOutputStream out, int offset, List<RelocationEntry> relocList) {
         // la.abs rd, sym
         // =>
         // lu12i.w   rd, %abs_hi20(sym)       # R_LARCH_ABS_HI20        si20
@@ -712,7 +726,8 @@ public final class LA64Assembler {
         relocList.add(new RelocationEntry(offset + 12, symbolNameIndex, RelocationType.R_LARCH_ABS64_HI12));
     }
 
-    private void expandLaPcRel(List<LA64AsmOperand> ops, ByteArrayOutputStream out, int offset) {
+    private void expandLaPcRel(
+        List<LA64AsmOperand> ops, ByteArrayOutputStream out, int offset, List<RelocationEntry> relocList) {
         // la.local/la.pcrel rd, sym
         // =>
         // pcalau12i  $rd, %pc_hi20(sym)        # R_LARCH_PCALA_HI20       si20
@@ -732,7 +747,7 @@ public final class LA64Assembler {
 
     private int getPcRelOffset(
         LA64AsmSymOperand symbol, SectionType currentSectionType, int currentOffset, LA64InstructionInfo info,
-        LA64OperandType type) {
+        LA64OperandType type, List<RelocationEntry> relocList) {
 
         SymbolLocation loc = symbolTable.get(symbol.name());
 
@@ -765,10 +780,11 @@ public final class LA64Assembler {
         }
     }
 
-    private int getPcOffs16Offset(LA64AsmSymOperand symbol, SectionType currentSectionType, int currentOffset) {
+    private int getPcOffs16Offset(
+        LA64AsmSymOperand symbol, SectionType currentSectionType, int currentOffset, List<RelocationEntry> relocList) {
         return getPcRelOffset(
             symbol, currentSectionType, currentOffset,
-            LA64InstructionSet.getByMnemonic("blt").orElseThrow(), LA64OperandType.OFFS16);
+            LA64InstructionSet.getByMnemonic("blt").orElseThrow(), LA64OperandType.OFFS16, relocList);
     }
 
     private static void writeFormat3R(

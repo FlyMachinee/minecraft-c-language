@@ -1,4 +1,4 @@
-package net.flymachine.minecraftclanguage.content.logic.object.la64;
+package net.flymachine.minecraftclanguage.content.logic.object;
 
 public enum RelocationType {
 
