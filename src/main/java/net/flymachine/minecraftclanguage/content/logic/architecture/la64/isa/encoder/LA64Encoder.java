@@ -12,7 +12,7 @@ public final class LA64Encoder {
         return encode(instruction.inst(), instruction.operands());
     }
 
-    public static int encode(LA64InstructionInfo info, LA64Operand[] ops) {
+    public static int encode(LA64InstructionInfo info, LA64Operand... ops) {
         return switch (info.format()) {
             case FORMAT_3R -> encode3R(info.opcode(), ops);
             case FORMAT_2RI12 -> encode2RI12(info.opcode(), ops);

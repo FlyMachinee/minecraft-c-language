@@ -3,7 +3,7 @@ package net.flymachine.minecraftclanguage.content.logic.linker.la64;
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.util.BitMath;
 import net.flymachine.minecraftclanguage.content.logic.executable.la64.LA64Executable;
 import net.flymachine.minecraftclanguage.content.logic.linker.LinkOptions;
-import net.flymachine.minecraftclanguage.content.logic.memory.Segment;
+import net.flymachine.minecraftclanguage.content.logic.object.SectionType;
 import net.flymachine.minecraftclanguage.content.logic.object.SymbolEntry;
 import net.flymachine.minecraftclanguage.content.logic.object.la64.LA64Object;
 import net.flymachine.minecraftclanguage.content.logic.object.la64.RelocationEntry;
@@ -54,15 +54,15 @@ public final class LA64Linker {
             throw new IllegalArgumentException("Cannot link an empty object");
         }
 
-        // 每段的起始偏移，相对与 text 段起点处
-        // data 段放置在 text 段后的下一个页开始，bss 段放置在 data 段后的下一个页开始
-        Map<Segment, List<Integer>> segmentsOffsets = new EnumMap<>(Segment.class);
-        segmentsOffsets.put(Segment.TEXT, new ArrayList<>());
-        segmentsOffsets.put(Segment.DATA, new ArrayList<>());
-        segmentsOffsets.put(Segment.BSS, new ArrayList<>());
+        // 每节的起始偏移，相对与 text 节起点处
+        // data 节放置在 text 节后的下一个页开始，bss 节放置在 data 节后的下一个页开始
+        Map<SectionType, List<Integer>> sectionsOffsets = new EnumMap<>(SectionType.class);
+        sectionsOffsets.put(SectionType.TEXT, new ArrayList<>());
+        sectionsOffsets.put(SectionType.DATA, new ArrayList<>());
+        sectionsOffsets.put(SectionType.BSS, new ArrayList<>());
 
-        // 合并 text 段，记录每个 text 段的起始偏移
-        List<Integer> textOffsets = segmentsOffsets.get(Segment.TEXT);
+        // 合并 text 节，记录每个 text 节的起始偏移
+        List<Integer> textOffsets = sectionsOffsets.get(SectionType.TEXT);
         ByteArrayOutputStream mergedTextStream = new ByteArrayOutputStream();
         for (LA64Object obj : objects) {
             textOffsets.add(mergedTextStream.size());
@@ -75,8 +75,8 @@ public final class LA64Linker {
         byte[] mergedText = mergedTextStream.toByteArray();
 
         int dataBaseOffset = BitMath.alignUp(mergedText.length, 4096);
-        // 合并 data 段，记录每个 data 段的起始偏移
-        List<Integer> dataOffsets = segmentsOffsets.get(Segment.DATA);
+        // 合并 data 节，记录每个 data 节的起始偏移
+        List<Integer> dataOffsets = sectionsOffsets.get(SectionType.DATA);
         ByteArrayOutputStream mergedDataStream = new ByteArrayOutputStream();
         for (LA64Object obj : objects) {
             dataOffsets.add(dataBaseOffset + mergedDataStream.size());
@@ -89,8 +89,8 @@ public final class LA64Linker {
         byte[] mergedData = mergedDataStream.toByteArray();
 
         int bssBaseOffset = BitMath.alignUp(dataBaseOffset + mergedData.length, 4096);
-        // 合并 bss 段，记录每个 bss 段的起始偏移
-        List<Integer> bssOffsets = segmentsOffsets.get(Segment.BSS);
+        // 合并 bss 节，记录每个 bss 节的起始偏移
+        List<Integer> bssOffsets = sectionsOffsets.get(SectionType.BSS);
         int totalBssSize = 0;
         for (LA64Object obj : objects) {
             bssOffsets.add(bssBaseOffset + totalBssSize);
@@ -111,9 +111,9 @@ public final class LA64Linker {
             for (SymbolEntry sym : symbols) {
                 String symName = names.get(sym.symbolNameIndex());
 
-                // 该符号的相对虚拟地址，相对于 text 段起始
-                // = 该符号所在段的偏移 + 该符号在目标文件该段中的偏移
-                long finalAddr = segmentsOffsets.get(sym.segment()).get(i) + sym.offset();
+                // 该符号的相对虚拟地址，相对于 text 节起始
+                // = 该符号所在节的偏移 + 该符号在目标文件该节中的偏移
+                long finalAddr = sectionsOffsets.get(sym.sectionType()).get(i) + sym.offset();
 
                 // 仅对 global 符号操作
                 if (sym.isGlobal()) {
@@ -136,7 +136,7 @@ public final class LA64Linker {
         // 重定位
         for (int i = 0; i < objects.length; i++) {
             LA64Object obj = objects[i];
-            // 该目标文件 text 段的起始偏移
+            // 该目标文件 text 节的起始偏移
             int base = textOffsets.get(i);
 
             List<RelocationEntry> relocationEntries = obj.relocations();
@@ -184,8 +184,8 @@ public final class LA64Linker {
     }
 
     private int getRelocatedValue(RelocationEntry relocationEntry, int base, long targetVA, boolean isAbsolute) {
-        // 需要被修补的指令的相对地址，相对于 text 段起始
-        // = 该目标文件 text 段偏移 + 该重定位项指令在目标文件 text 段的偏移
+        // 需要被修补的指令的相对地址，相对于 text 节起始
+        // = 该目标文件 text 节偏移 + 该重定位项指令在目标文件 text 节的偏移
         long instrAddr = base + relocationEntry.textOffset();
 
         // 重定位符号的地址
