@@ -433,4 +433,14 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
         }
         return null;
     }
+
+    @Override
+    public Void visit(ConstantNode node) {
+        return null;
+    }
+
+    @Override
+    public Void visit(CastExpressionNode node) {
+        return node.exp.accept(this);
+    }
 }

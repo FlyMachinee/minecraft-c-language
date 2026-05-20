@@ -9,6 +9,8 @@ public record LA64AsmImmOperand(long value) implements LA64AsmOperand {
         this(imm.value());
     }
 
+    public static final LA64AsmImmOperand ZERO = new LA64AsmImmOperand(0);
+
     @Override
     public @NotNull String toString() {
         return String.valueOf(value);

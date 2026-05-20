@@ -92,6 +92,13 @@ public final class LA64Assembler {
                             }
                         }
                     }
+                    case "quad", "dword" -> {
+                        if (directive.argCount() != 1 && !directive.arg(0).isNum()) {
+                            throw new IllegalArgumentException(
+                                "Expected numeric argument for word/long directive, but got: " +
+                                directive.args().get(0));
+                        }
+                    }
                     case "zero" -> {
                         if (directive.argCount() != 1 && !directive.arg(0).isNum()) {
                             throw new IllegalArgumentException(
@@ -201,7 +208,7 @@ public final class LA64Assembler {
                             boolean matched = switch (expected) {
                                 case GPR -> current.isGpr();
                                 case FPR -> current.isFpr();
-                                case UI5, UI12, SI12, SI20 -> {
+                                case UI5, UI6, UI12, SI12, SI20 -> {
                                     if (!current.isImm()) {
                                         yield false;
                                     }
@@ -211,10 +218,11 @@ public final class LA64Assembler {
                                     }
                                     yield switch (expected) {
                                         case UI5 -> BitMath.isUi5((int) imm);
+                                        case UI6 -> BitMath.isUi6((int) imm);
                                         case UI12 -> BitMath.isUi12((int) imm);
                                         case SI12 -> BitMath.isSi12((int) imm);
                                         case SI20 -> BitMath.isSi20((int) imm);
-                                        default -> false;
+                                        default -> throw new IllegalStateException("Unexpected value: " + expected);
                                     };
                                 }
                                 case OFFS16, OFFS21, OFFS26 -> {
@@ -238,7 +246,7 @@ public final class LA64Assembler {
                                         case OFFS16 -> BitMath.isOffs16(imm32);
                                         case OFFS21 -> BitMath.isOffs21(imm32);
                                         case OFFS26 -> BitMath.isOffs26(imm32);
-                                        default -> false;
+                                        default -> throw new IllegalStateException("Unexpected value: " + expected);
                                     };
                                 }
                             };
@@ -295,6 +303,12 @@ public final class LA64Assembler {
                             throw new IllegalArgumentException(".word directive cannot be used in .bss section");
                         }
                         offsets.put(currentSectionType, offset + 4);
+                    }
+                    case "quad", "dword" -> {
+                        if (currentSectionType == SectionType.BSS) {
+                            throw new IllegalArgumentException(".word directive cannot be used in .bss section");
+                        }
+                        offsets.put(currentSectionType, offset + 8);
                     }
                     case "zero" -> {
                         long count = directive.arg(0).asNum();
@@ -435,6 +449,7 @@ public final class LA64Assembler {
                             (k, currentMaxAlign) -> Math.max(currentMaxAlign, align));
                     }
                     case "long", "word" -> writeIntLittleEndian(out, (int) directive.arg(0).asNum());
+                    case "quad", "dword" -> writeLongLittleEndian(out, directive.arg(0).asNum());
                     case "zero" -> {
                         int count = (int) directive.arg(0).asNum();
                         if (currentSectionType != SectionType.BSS) {
@@ -552,10 +567,10 @@ public final class LA64Assembler {
             // addi.w rd, zero, imm12
             writeFormat2RSi12(out, "addi.w", dst, GeneralPurposeRegister.ZERO, value);
         } else {
-            // lu12i.w rd, upper20
-            // ori rd, rd, lower12
-            int lower12 = value & 0xFFF;
-            int upper20 = value >>> 12;
+            // lu12i.w rd, upper20 si20
+            // ori rd, rd, lower12 ui12
+            int lower12 = BitMath.extractBits(value, 12);
+            int upper20 = BitMath.extractSignedBits(value, 12, 20);
             writeFormat1RSi20(out, "lu12i.w", dst, upper20);
             writeFormat2RUi12(out, "ori", dst, dst, lower12);
         }
@@ -570,8 +585,22 @@ public final class LA64Assembler {
             // imm64 -> imm32
             expandLiW(ops, out);
         } else {
-            // 暂时不支持
-            throw new IllegalArgumentException("Imm64 value out of range for expansion: " + value);
+            // lu12i.w   rd, hi20       si20
+            // ori       rd, rd, low12  ui12
+            // lu32i.d   rd, h_low20    si20
+            // lu52i.d   rd, rd, h_hi12 si12
+            int hi20 = (int) BitMath.extractSignedBits(value, 12, 20);
+            int low12 = (int) BitMath.extractBits(value, 12);
+            int hLow20 = (int) BitMath.extractSignedBits(value, 32, 20);
+
+            writeFormat1RSi20(out, "lu12i.w", dst, hi20);
+            writeFormat2RUi12(out, "ori", dst, dst, low12);
+            writeFormat1RSi20(out, "lu32i.d", dst, hLow20);
+
+            int hHi12 = (int) BitMath.extractSignedBits(value, 52, 12);
+            if (hHi12 != 0 && hHi12 != -1) {
+                writeFormat2RSi12(out, "lu52i.d", dst, dst, hHi12);
+            }
         }
     }
 
@@ -596,8 +625,11 @@ public final class LA64Assembler {
             // imm64 -> imm32
             return getExpandLiWSize(ops);
         } else {
-            // 暂时不支持
-            throw new IllegalArgumentException("Imm64 value out of range for expansion: " + value);
+            int hHi12 = (int) BitMath.extractSignedBits(value, 52, 12);
+            if (hHi12 != 0 && hHi12 != -1) {
+                return 16;
+            }
+            return 12;
         }
     }
 
@@ -869,5 +901,16 @@ public final class LA64Assembler {
         out.write((value >> 8) & 0xFF);
         out.write((value >> 16) & 0xFF);
         out.write((value >> 24) & 0xFF);
+    }
+
+    private static void writeLongLittleEndian(ByteArrayOutputStream out, long value) {
+        out.write((int) (value & 0xFF));
+        out.write((int) ((value >> 8) & 0xFF));
+        out.write((int) ((value >> 16) & 0xFF));
+        out.write((int) ((value >> 24) & 0xFF));
+        out.write((int) ((value >> 32) & 0xFF));
+        out.write((int) ((value >> 40) & 0xFF));
+        out.write((int) ((value >> 48) & 0xFF));
+        out.write((int) ((value >> 56) & 0xFF));
     }
 }

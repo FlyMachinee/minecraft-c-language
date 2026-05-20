@@ -40,6 +40,6 @@ public final class FunctionTypeNode extends AstNode implements TypeNode {
     public boolean hasNoParameters() {
         if (paramTypes.isEmpty()) { return true; }
         return paramTypes.size() == 1 && paramTypes.get(0) instanceof BasicTypeNode basicType &&
-               basicType.getType().getKind() == BasicType.Kind.VOID;
+               basicType.getType() == BasicType.VOID;
     }
 }

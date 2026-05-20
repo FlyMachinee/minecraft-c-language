@@ -1,40 +1,61 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.common.type;
 
-public class BasicType implements Type {
-    public enum Kind {
-        VOID,
-        INT
-    }
+import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.AsmType;
 
-    private final Kind kind;
-
-    private BasicType(Kind kind) {
-        this.kind = kind;
-    }
-
-    public Kind getKind() {
-        return kind;
-    }
+public enum BasicType implements Type {
+    VOID,
+    INT,
+    LONG;
 
     @Override
     public boolean isCompatible(Type other) {
         if (!(other instanceof BasicType)) {
             return false;
         }
-        return kind == ((BasicType) other).kind;
-    }
-
-    @Override
-    public boolean isAssignableFrom(Type other) {
-        if (!(other instanceof BasicType)) {
-            return false;
-        }
-        return kind == ((BasicType) other).kind;
+        return this == other;
     }
 
     @Override
     public boolean isComplete() {
-        return kind != Kind.VOID;
+        return this != VOID;
+    }
+
+    @Override
+    public boolean isArithmetic() {
+        return this != VOID;
+    }
+
+    @Override
+    public boolean isScalar() {
+        return this != VOID;
+    }
+
+    @Override
+    public boolean isInteger() {
+        return this != VOID;
+    }
+
+    @Override
+    public boolean isReal() {
+        return this != VOID;
+    }
+
+    @Override
+    public long sizeof() {
+        return switch (this) {
+            case VOID -> throw new UnsupportedOperationException("sizeof(void) is not defined");
+            case INT -> 4;
+            case LONG -> 8;
+        };
+    }
+
+    @Override
+    public AsmType toAsmType() {
+        return switch (this) {
+            case VOID -> throw new UnsupportedOperationException("toAsmType(void) is not defined");
+            case INT -> AsmType.WORD;
+            case LONG -> AsmType.DWORD;
+        };
     }
 
     @Override
@@ -44,17 +65,10 @@ public class BasicType implements Type {
 
     @Override
     public String toString() {
-        return kind.name().toLowerCase();
+        return name().toLowerCase();
     }
 
     public static BasicType fromString(String typeName) {
-        return switch (typeName) {
-            case "void" -> VOID;
-            case "int" -> INT;
-            default -> throw new IllegalArgumentException("Unknown basic type: " + typeName);
-        };
+        return valueOf(typeName.toUpperCase());
     }
-
-    public static BasicType VOID = new BasicType(Kind.VOID);
-    public static BasicType INT = new BasicType(Kind.INT);
 }

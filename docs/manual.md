@@ -9,6 +9,7 @@
 ### 类型
 
 - int
+- long
 
 ### 语句
 
@@ -99,7 +100,9 @@
 
 - 算术类运算
   * add.w
+  * add.d
   * sub.w
+  * sub.d
   * slt
   * sltu
   * nor
@@ -107,8 +110,11 @@
   * or
   * xor
   * mul.w
+  * mul.d
   * div.w
   * mod.w
+  * div.d
+  * mod.d
   * slti
   * sltui
   * addi.w
@@ -124,8 +130,12 @@
 - 移位类运算
   * sll.w
   * sra.w
+  * sll.d
+  * sra.d
   * slli.w
+  * slli.d
   * srai.w
+  * srai.d
 
 - 访存
   * ld.w

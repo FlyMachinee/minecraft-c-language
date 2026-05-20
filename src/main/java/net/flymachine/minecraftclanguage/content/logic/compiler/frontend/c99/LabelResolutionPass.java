@@ -1,6 +1,7 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99;
 
 import net.flymachine.minecraftclanguage.content.logger.ConsoleLogger;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.BasicType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.*;
 
@@ -8,7 +9,10 @@ import java.util.*;
 
 /**
  * 一趟扫描检查标签定义和 goto 语句的合法性，并重命名标签使之以函数名为前缀
+ * <p>
  * 为switch语句分配唯一标签，将case和default标签与最近的switch进行关联
+ * <p>
+ * 需要先进行 {@link TypeCheckingPass}
  */
 public final class LabelResolutionPass extends SemanticAnalysePass implements AstVisitor<Void> {
 
@@ -33,7 +37,7 @@ public final class LabelResolutionPass extends SemanticAnalysePass implements As
         switchStack.pop();
     }
 
-    private SwitchStatementNode getCurrentSwitchLabel() {
+    private SwitchStatementNode getCurrentSwitch() {
         if (switchStack.empty()) {
             return null;
         } else {
@@ -115,15 +119,30 @@ public final class LabelResolutionPass extends SemanticAnalysePass implements As
     }
 
     private void defineCaseLabel(StatementNode.CaseLabelInfo caseLabelInfo) {
-        SwitchStatementNode switchNode = getCurrentSwitchLabel();
+        SwitchStatementNode switchNode = getCurrentSwitch();
         if (switchNode == null) {
             // 当前没有在switch语句内
             error();
             String msg = "case label not within a switch statement";
             logErrorWithSourceLine(caseLabelInfo.caseLocation, msg);
         } else {
+            if (!(caseLabelInfo.caseValue instanceof ConstantNode)) {
+                error();
+                String msg = "case label does not reduce to an integer constant";
+                logErrorWithSourceLine(caseLabelInfo.caseLocation, msg);
+                return;
+            }
             // 在switch中，查询当前的case数值是否已定义
-            StatementNode.CaseLabelInfo definition = switchNode.caseValues.get(caseLabelInfo.caseIndex);
+            ConstantNode newConstantNode = new ConstantNode(
+                caseLabelInfo.caseValue.wholeLoc,
+                ((ConstantNode) caseLabelInfo.caseValue).value.castTo((BasicType) switchNode.exp.expType));
+            caseLabelInfo.caseValue = newConstantNode;
+
+            // switch 语句体可拥有任意数量的 case: 标号，只要所有常量表达式的值（在转换到表达式的提升后类型后）各不相同
+            // 需要进行常量转换
+            // TODO: 若以后添加枚举，则不能直接转换至 BasicType
+            long value = newConstantNode.value.toLong().value();
+            StatementNode.CaseLabelInfo definition = switchNode.caseValues.get(value);
             if (definition != null) {
                 // 已定义
                 error();
@@ -133,7 +152,7 @@ public final class LabelResolutionPass extends SemanticAnalysePass implements As
                 logNoteWithSourceLine(definition.caseLocation, msg);
             } else {
                 // 无定义，进行定义
-                switchNode.caseValues.put(caseLabelInfo.caseIndex, caseLabelInfo);
+                switchNode.caseValues.put(value, caseLabelInfo);
                 // 关联当前case标签与switch语句
                 caseLabelInfo.switchLabel = switchNode.switchLabel;
             }
@@ -141,7 +160,7 @@ public final class LabelResolutionPass extends SemanticAnalysePass implements As
     }
 
     private void defineDefaultLabel(StatementNode.DefaultLabelInfo defaultLabelInfo) {
-        SwitchStatementNode switchNode = getCurrentSwitchLabel();
+        SwitchStatementNode switchNode = getCurrentSwitch();
         if (switchNode == null) {
             // 当前没有在switch语句内
             error();
@@ -306,6 +325,16 @@ public final class LabelResolutionPass extends SemanticAnalysePass implements As
 
     @Override
     public Void visit(FunctionCallNode node) {
+        return null;
+    }
+
+    @Override
+    public Void visit(ConstantNode node) {
+        return null;
+    }
+
+    @Override
+    public Void visit(CastExpressionNode node) {
         return null;
     }
 }

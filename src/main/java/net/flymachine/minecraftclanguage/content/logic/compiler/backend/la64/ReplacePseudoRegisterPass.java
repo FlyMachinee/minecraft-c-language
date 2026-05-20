@@ -8,18 +8,17 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.hig
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.HighLevelOperand;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.Pseudo;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.Stack;
-import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.SymbolTable;
 
 import java.util.HashMap;
 import java.util.Map;
 
 public final class ReplacePseudoRegisterPass implements HighLevelVisitor<Void> {
 
-    public ReplacePseudoRegisterPass(SymbolTable symbolTable) {
-        this.symbolTable = symbolTable;
+    public ReplacePseudoRegisterPass(BackendSymbolTable backendSymbolTable) {
+        this.backendSymbolTable = backendSymbolTable;
     }
 
-    private final SymbolTable symbolTable;
+    private final BackendSymbolTable backendSymbolTable;
 
     // 指向当前已使用的元素
     // 相对于 $fp 寻址
@@ -37,7 +36,7 @@ public final class ReplacePseudoRegisterPass implements HighLevelVisitor<Void> {
         }
     }
 
-    public void runOnFunction(HighLevelFunction function) {
+    private void runOnFunction(HighLevelFunction function) {
         stackOffset = -function.savedRegisters * 8;
         for (HighLevelInstruction inst : function.insts) {
             inst.accept(this);
@@ -117,14 +116,22 @@ public final class ReplacePseudoRegisterPass implements HighLevelVisitor<Void> {
         if (operand instanceof Pseudo pseudo) {
             String id = pseudo.name();
             if (registers.containsKey(id)) {
-                return new Stack(registers.get(id));
+                return new Stack(registers.get(id), operand.asmType());
             } else {
-                SymbolTable.Entry entry = symbolTable.get(id);
-                if (entry != null && !(entry.attr instanceof SymbolTable.Entry.LocalAttr)) {
-                    return new Data(id);
+                BackendSymbolTable.Entry entry = backendSymbolTable.get(id);
+                if (entry == null || entry instanceof BackendSymbolTable.FuncEntry) {
+                    throw new IllegalStateException("Undefined symbol: " + id);
+                }
+                BackendSymbolTable.ObjectEntry objectEntry = (BackendSymbolTable.ObjectEntry) entry;
+                if (objectEntry.isStatic()) {
+                    return new Data(id, operand.asmType());
                 } else {
-                    registers.put(id, stackOffset -= 4);
-                    return new Stack(stackOffset);
+                    int alignment = operand.asmType().alignment();
+                    stackOffset -= alignment;
+                    // 向负无穷对齐至 alignment
+                    stackOffset = Math.floorDiv(stackOffset, alignment) * alignment;
+                    registers.put(id, stackOffset);
+                    return new Stack(stackOffset, operand.asmType());
                 }
             }
         }

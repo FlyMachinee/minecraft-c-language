@@ -3,7 +3,7 @@ package net.flymachine.minecraftclanguage.content.logic.architecture.la64.isa.op
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.util.BitMath;
 
 public enum LA64OperandType {
-    GPR, FPR, UI5, SI12, SI20, UI12, OFFS16, OFFS21, OFFS26;
+    GPR, FPR, UI5, UI6, SI12, SI20, UI12, OFFS16, OFFS21, OFFS26;
 
     public final static LA64OperandType[] FORMAT_3GPR_OPTYPE
         = new LA64OperandType[]{LA64OperandType.GPR, LA64OperandType.GPR, LA64OperandType.GPR};
@@ -22,7 +22,8 @@ public enum LA64OperandType {
 
     public boolean representable(int imm) {
         return switch (this) {
-            case GPR, FPR, UI5 -> (imm & 0xFFFFFFE0) == 0; // 5 bits unsigned
+            case GPR, FPR, UI5 -> BitMath.isUi5(imm);
+            case UI6 -> BitMath.isUi6(imm);
             case SI12 -> BitMath.isSi12(imm);
             case SI20 -> BitMath.isSi20(imm);
             case UI12 -> BitMath.isUi12(imm);

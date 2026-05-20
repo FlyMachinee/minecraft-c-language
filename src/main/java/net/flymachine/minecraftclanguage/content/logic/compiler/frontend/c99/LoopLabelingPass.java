@@ -8,6 +8,7 @@ import java.util.Stack;
 
 /**
  * 为每个循环语句生成一个唯一的标签，并将 break 和 continue 语句与最近的循环/switch关联起来
+ * <p>
  * 要求先进行 {@link LabelResolutionPass}
  */
 public final class LoopLabelingPass extends SemanticAnalysePass implements AstVisitor<Void> {
@@ -215,6 +216,16 @@ public final class LoopLabelingPass extends SemanticAnalysePass implements AstVi
 
     @Override
     public Void visit(FunctionCallNode node) {
+        return null;
+    }
+
+    @Override
+    public Void visit(ConstantNode node) {
+        return null;
+    }
+
+    @Override
+    public Void visit(CastExpressionNode node) {
         return null;
     }
 }

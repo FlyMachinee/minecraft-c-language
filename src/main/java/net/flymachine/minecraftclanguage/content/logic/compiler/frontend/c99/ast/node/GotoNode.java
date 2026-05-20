@@ -1,6 +1,7 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node;
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.StatementVisitor;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
 public final class GotoNode extends StatementNode {
@@ -33,5 +34,10 @@ public final class GotoNode extends StatementNode {
         stringBuilder.append("  ".repeat(indentLevel + 1)).append("target=");
         target.genFormattedString(stringBuilder, indentLevel + 1, false);
         stringBuilder.append("  ".repeat(indentLevel)).append(")\n");
+    }
+
+    @Override
+    public void accept(StatementVisitor visitor) {
+        visitor.visit(this);
     }
 }

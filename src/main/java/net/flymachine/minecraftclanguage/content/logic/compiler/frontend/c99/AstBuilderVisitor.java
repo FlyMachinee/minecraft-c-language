@@ -18,6 +18,7 @@ import org.antlr.v4.runtime.Token;
 import org.antlr.v4.runtime.tree.TerminalNode;
 import org.jetbrains.annotations.Nullable;
 
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -134,6 +135,65 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
 
     private record TypeAndSpecifiers(TypeNode t, @Nullable StorageClassSpecifierNode storageClass) { }
 
+    private class TypeCombinationHelper {
+        BasicType t;
+        SourceLocation loc;
+        int nonLongCount = 0;
+        int longCount = 0;
+
+        void append(String typeSpecifierName, SourceLocation loc) {
+            BasicType newType = BasicType.fromString(typeSpecifierName);
+            if (this.t == null) {
+                this.t = newType;
+                this.loc = loc;
+                if (newType == BasicType.LONG) {
+                    longCount++;
+                } else {
+                    nonLongCount++;
+                }
+            } else {
+                if (newType == BasicType.LONG) {
+                    switch (this.t) {
+                        case INT -> {
+                            this.t = BasicType.LONG;
+                        }
+                        case LONG -> {
+                            if (longCount >= 2) {
+                                error();
+                                String msg = "'" + logger.white("long long long") + "' is too long";
+                                logErrorWithSourceLine(loc, msg);
+                            }
+                        }
+                        case VOID -> {
+                            error();
+                            String msg = "both '" + logger.white("long") + "' and '" + logger.white("void") +
+                                         "' in declaration specifiers";
+                            logErrorWithSourceLine(loc, msg);
+                        }
+                    }
+                    ++longCount;
+                } else {
+                    // 新增为非 long
+                    if (nonLongCount > 0) {
+                        error();
+                        String msg = "two or more data types in declaration specifiers";
+                        logErrorWithSourceLine(loc, msg);
+                    } else {
+                        // nonLongCount == 0，this.t 只可能是 long
+                        if (newType == BasicType.VOID) {
+                            error();
+                            String msg = "both '" + logger.white("long") + "' and '" + logger.white("void") +
+                                         "' in declaration specifiers";
+                            logErrorWithSourceLine(loc, msg);
+                        }
+                    }
+                    ++nonLongCount;
+                }
+                this.loc = SourceLocation.concat(this.loc, loc);
+            }
+        }
+    }
+
     private TypeAndSpecifiers parseDeclarationSpecifiers(C99Parser.DeclarationSpecifiersContext ctx) {
         // declarationSpecifiers // rewrote
         //     : declarationSpecifier+
@@ -142,37 +202,31 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         //     : storageClassSpecifier
         //     | typeSpecifier
         //     ;
-        boolean reportedMultipleTypeSpecifiers = false;
+        boolean reportedMultipleStorageClasses = false;
         StorageClassSpecifierNode storageClassNode = null;
-        boolean reportedMultipleTypes = false;
-        BasicTypeNode basicTypeNode = null;
+
+        // 类型翻译
+        TypeCombinationHelper helper = new TypeCombinationHelper();
 
         for (var specifierCtx : ctx.declarationSpecifier()) {
             if (specifierCtx.typeSpecifier() != null) {
-                if (basicTypeNode == null) {
-                    BasicType basicType = BasicType.fromString(specifierCtx.typeSpecifier().getText());
-                    basicTypeNode = new BasicTypeNode(getSourceLocation(specifierCtx.typeSpecifier()), basicType);
-                } else if (!reportedMultipleTypeSpecifiers) {
-                    error();
-                    String msg = "two or more data types in declaration specifiers";
-                    logErrorWithSourceLine(getSourceLocation(specifierCtx.typeSpecifier()), msg);
-                    reportedMultipleTypeSpecifiers = true;
-                }
+                String typeSpecifierText = specifierCtx.typeSpecifier().getText();
+                helper.append(typeSpecifierText, getSourceLocation(specifierCtx.typeSpecifier()));
             } else if (specifierCtx.storageClassSpecifier() != null) {
                 if (storageClassNode == null) {
                     StorageClassSpecifier storageClass =
                         StorageClassSpecifier.fromString(specifierCtx.storageClassSpecifier().getText());
                     storageClassNode = new StorageClassSpecifierNode(
                         getSourceLocation(specifierCtx.storageClassSpecifier()), storageClass);
-                } else if (!reportedMultipleTypes) {
+                } else if (!reportedMultipleStorageClasses) {
                     error();
                     String msg = "multiple storage classes in declaration specifiers";
                     logErrorWithSourceLine(getSourceLocation(specifierCtx.storageClassSpecifier()), msg);
-                    reportedMultipleTypes = true;
+                    reportedMultipleStorageClasses = true;
                 }
             }
         }
-        return new TypeAndSpecifiers(basicTypeNode, storageClassNode);
+        return new TypeAndSpecifiers(new BasicTypeNode(helper.loc, helper.t), storageClassNode);
     }
 
     private DeclarationLikeResult parseFromDeclarator(TypeNode baseType, C99Parser.DeclaratorContext ctx) {
@@ -361,10 +415,9 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
             statement.gotoLabels.add(new StatementNode.GotoLabelInfo(new IdentifierNode(labelLocation, label)));
             return statement;
         } else if (ctx.Case() != null) {
-            int caseValue = Integer.parseInt(ctx.IntegerConstant().getText());
             SourceLocation caseLocation = getSourceLocation(ctx.Case());
-            SourceLocation indexLocation = getSourceLocation(ctx.IntegerConstant());
-            statement.caseLabels.add(new StatementNode.CaseLabelInfo(caseLocation, indexLocation, caseValue));
+            ExpressionNode caseValue = parseIntegerConstant(ctx.IntegerConstant());
+            statement.caseLabels.add(new StatementNode.CaseLabelInfo(caseLocation, caseValue));
             return statement;
         } else if (ctx.Default() != null) {
             SourceLocation defaultLocation = getSourceLocation(ctx.Default());
@@ -477,14 +530,63 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         }
     }
 
+    private ExpressionNode parseIntegerConstant(TerminalNode integerConstant) {
+        String fullText = integerConstant.getText();
+        int pos = fullText.length();
+
+        while (pos > 0) {
+            char c = fullText.charAt(pos - 1);
+            if (c == 'l' || c == 'L') {
+                pos--;
+            } else {
+                break;
+            }
+        }
+        String suffix = fullText.substring(pos).toLowerCase(); // l, ll
+        String numberPart = fullText.substring(0, pos);
+
+        int radix;
+        if (numberPart.startsWith("0x") || numberPart.startsWith("0X")) {
+            radix = 16;
+            numberPart = numberPart.substring(2);
+        } else if (numberPart.startsWith("0") && numberPart.length() > 1) {
+            radix = 8;
+        } else {
+            radix = 10;
+        }
+
+        BigInteger bigValue = new BigInteger(numberPart, radix);
+        SourceLocation loc = getSourceLocation(integerConstant);
+
+        // 必须能容纳在 64 位有符号整数中
+        if (bigValue.bitLength() > 63) {
+            error();
+            String msg = "integer constant is too large for its type";
+            logErrorWithSourceLine(loc, msg);
+            return new ConstantNode(loc, 0L);
+        }
+
+        boolean isLong = !suffix.isEmpty();
+        if (isLong) {
+            return new ConstantNode(loc, bigValue.longValue());
+        } else {
+            // 无后缀，先尝试 int
+            if (bigValue.bitLength() < 32) {
+                return new ConstantNode(loc, bigValue.intValue());
+            } else {
+                // 超出 int，放入 long
+                return new ConstantNode(loc, bigValue.longValue());
+            }
+        }
+    }
+
     @Override
     public ExpressionNode visitPrimaryExpression(C99Parser.PrimaryExpressionContext ctx) {
         if (ctx.Identifier() != null) {
             String identifier = ctx.Identifier().getText();
             return new IdentifierNode(getSourceLocation(ctx.Identifier()), identifier);
         } else if (ctx.IntegerConstant() != null) {
-            int value = Integer.parseInt(ctx.IntegerConstant().getText());
-            return new IntConstantNode(getSourceLocation(ctx.IntegerConstant()), value);
+            return parseIntegerConstant(ctx.IntegerConstant());
         } else if (ctx.LeftParen() != null) {
             return (ExpressionNode) visit(ctx.expression());
         } else {
@@ -547,6 +649,34 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         String operator = ctx.getText();
         UnaryOperator op = UnaryOperator.fromSymbol(operator);
         return new UnaryOperatorNode(getSourceLocation(ctx), op);
+    }
+
+    private TypeNode parseFromTypeName(C99Parser.TypeNameContext ctx) {
+        TypeCombinationHelper helper = new TypeCombinationHelper();
+
+        for (var specifierQualifierCtx : ctx.specifierQualifierList().specifierQualifier()) {
+            if (specifierQualifierCtx.typeSpecifier() != null) {
+                String typeSpecifierText = specifierQualifierCtx.typeSpecifier().getText();
+                helper.append(typeSpecifierText, getSourceLocation(specifierQualifierCtx.typeSpecifier()));
+            }
+        }
+
+        TypeNode type = new BasicTypeNode(helper.loc, helper.t);
+        if (ctx.abstractDeclarator() != null) {
+            type = parseFromAbstractDeclarator(type, ctx.abstractDeclarator());
+        }
+        return type;
+    }
+
+    @Override
+    public ExpressionNode visitCastExpression(C99Parser.CastExpressionContext ctx) {
+        if (ctx.unaryExpression() != null) {
+            return (ExpressionNode) visit(ctx.unaryExpression());
+        } else {
+            TypeNode type = parseFromTypeName(ctx.typeName());
+            ExpressionNode operand = (ExpressionNode) visit(ctx.castExpression());
+            return new CastExpressionNode(getSourceLocation(ctx), type, operand);
+        }
     }
 
     @Override

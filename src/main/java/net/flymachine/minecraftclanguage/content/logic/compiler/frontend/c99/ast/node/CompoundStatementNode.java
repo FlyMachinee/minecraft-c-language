@@ -1,6 +1,7 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node;
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.StatementVisitor;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
 import java.util.List;
@@ -48,5 +49,10 @@ public final class CompoundStatementNode extends StatementNode {
         }
         stringBuilder.append("  ".repeat(indentLevel + 1)).append("]\n");
         stringBuilder.append("  ".repeat(indentLevel)).append(")\n");
+    }
+
+    @Override
+    public void accept(StatementVisitor visitor) {
+        visitor.visit(this);
     }
 }

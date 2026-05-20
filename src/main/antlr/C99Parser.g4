@@ -46,6 +46,7 @@ unaryOperator
 // ISO 6.5.4, Cast Operators
 castExpression
     : unaryExpression
+    | LeftParen typeName RightParen castExpression
     ;
 
 // ISO 6.5.5, Multiplicative Operators
@@ -194,6 +195,15 @@ storageClassSpecifier
 typeSpecifier
     : Void
     | Int
+    | Long
+    ;
+
+// ISO 6.7.2.1, Structure And Union Specifiers
+specifierQualifierList // rewrote
+    : specifierQualifier+
+    ;
+specifierQualifier // added
+    : typeSpecifier
     ;
 
 // ISO 6.7.5, Declarators
@@ -217,6 +227,9 @@ parameterDeclaration
     ;
 
 // ISO 6.7.6, Type Names
+typeName
+    : specifierQualifierList abstractDeclarator?
+    ;
 abstractDeclarator
     : directAbstractDeclarator
     ;

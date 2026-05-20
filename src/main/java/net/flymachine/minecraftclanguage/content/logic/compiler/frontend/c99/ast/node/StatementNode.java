@@ -1,5 +1,6 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node;
 
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.StatementVisitor;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
 import java.util.ArrayList;
@@ -28,10 +29,12 @@ public abstract class StatementNode extends AstNode {
             stringJoiner.add("default@" + info.switchLabel);
         }
         for (CaseLabelInfo info : caseLabels) {
-            stringJoiner.add("case " + info.caseIndex + "@" + info.switchLabel);
+            stringJoiner.add("case " + info.caseValue + "@" + info.switchLabel);
         }
         stringBuilder.append(stringJoiner);
     }
+
+    public abstract void accept(StatementVisitor visitor);
 
     /**
      * 计算该语句及其子语句是否包含活跃的标签
@@ -80,14 +83,12 @@ public abstract class StatementNode extends AstNode {
 
     public static class CaseLabelInfo {
         public SourceLocation caseLocation;
-        public SourceLocation indexLocation;
-        public int caseIndex;
+        public ExpressionNode caseValue;
         public String switchLabel;
 
-        public CaseLabelInfo(SourceLocation caseLocation, SourceLocation indexLocation, int caseIndex) {
+        public CaseLabelInfo(SourceLocation caseLocation, ExpressionNode caseValue) {
             this.caseLocation = caseLocation;
-            this.indexLocation = indexLocation;
-            this.caseIndex = caseIndex;
+            this.caseValue = caseValue;
         }
     }
 }

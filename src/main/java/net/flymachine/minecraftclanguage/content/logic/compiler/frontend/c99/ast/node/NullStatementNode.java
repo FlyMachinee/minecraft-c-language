@@ -1,9 +1,10 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node;
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.StatementVisitor;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
-public class NullStatementNode extends StatementNode {
+public final class NullStatementNode extends StatementNode {
     // 其 Location 为分号的 Location
 
     public NullStatementNode(SourceLocation wholeLocation) {
@@ -27,5 +28,10 @@ public class NullStatementNode extends StatementNode {
         } else {
             stringBuilder.append("NullStatementNode()\n");
         }
+    }
+
+    @Override
+    public void accept(StatementVisitor visitor) {
+        visitor.visit(this);
     }
 }

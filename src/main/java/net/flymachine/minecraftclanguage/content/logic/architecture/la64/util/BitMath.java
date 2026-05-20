@@ -22,6 +22,24 @@ public final class BitMath {
         return (data << (32 - length)) >> (32 - length);
     }
 
+    public static long extractBits(long data, int lowBit, int length) {
+        // return (data << (32 - lowBit - length)) >>> (32 - length);
+        return (data >>> lowBit) & ((1L << length) - 1);
+    }
+
+    public static long extractBits(long data, int length) {
+        // return (data << (32 - lowBit - length)) >>> (32 - length);
+        return data & ((1L << length) - 1);
+    }
+
+    public static long extractSignedBits(long data, int lowBit, int length) {
+        return (data << (64 - lowBit - length)) >> (64 - length);
+    }
+
+    public static long extractSignedBits(long data, int length) {
+        return (data << (64 - length)) >> (64 - length);
+    }
+
 
     public static int getRd(int machineCode) {
         return extractBits(machineCode, 5);
@@ -43,37 +61,42 @@ public final class BitMath {
         return extractSignedBits(machineCode, 10, 16);
     }
 
-    public static boolean isSi12(int number) {
+    public static boolean isSi12(long number) {
         // 检查该数字是否可被 12 位的有符号数表示
         return number >= -2048 && number <= 2047;
     }
 
-    public static boolean isSi20(int number) {
+    public static boolean isSi20(long number) {
         // 检查该数字是否可被 20 位的有符号数表示
         return number >= -524288 && number <= 524287;
     }
 
-    public static boolean isUi12(int number) {
+    public static boolean isUi12(long number) {
         // 检查该数字是否可被 12 位的无符号数表示
-        return (number & 0xFFFFF000) == 0;
+        return (number & ~0xFFFL) == 0;
     }
 
-    public static boolean isUi5(int number) {
+    public static boolean isUi5(long number) {
         // 检查该数字是否可被 5 位的无符号数表示
-        return (number & 0xFFFFFFE0) == 0;
+        return (number & ~0x1FL) == 0;
     }
 
-    public static boolean isOffs16(int number) {
+    public static boolean isUi6(long number) {
+        // 检查该数字是否可被 6 位的无符号数表示
+        return (number & ~0x3FL) == 0;
+    }
+
+    public static boolean isOffs16(long number) {
         // 检查该数字是否可被 16 位的有符号数表示
         return number >= -32768 && number <= 32767;
     }
 
-    public static boolean isOffs21(int number) {
+    public static boolean isOffs21(long number) {
         // 检查该数字是否可被 21 位的有符号数表示
         return number >= -1048576 && number <= 1048575;
     }
 
-    public static boolean isOffs26(int number) {
+    public static boolean isOffs26(long number) {
         // 检查该数字是否可被 26 位的有符号数表示
         return number >= -33554432 && number <= 33554431;
     }

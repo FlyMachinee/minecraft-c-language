@@ -332,6 +332,9 @@ public final class LA64Linker {
         // 构建最终输出段列表
         List<Segment> finalSegments = new ArrayList<>();
         for (OutputSegment outSeg : sortedOutputSegments) {
+            if (outSeg.totalSize == 0) {
+                continue;
+            }
             byte[] data = outSeg.getData();
             Segment seg = new Segment(outSeg.finalAddr, data, outSeg.totalSize, outSeg.align, outSeg.perms);
             finalSegments.add(seg);

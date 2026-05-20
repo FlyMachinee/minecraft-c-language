@@ -11,10 +11,12 @@ public final class LA64Backend {
     public LA64Backend() { }
 
     public List<LA64AsmStatement> compile(C99Frontend.Result frontendResult) {
-        HighLevelProgram highLevelProgram = new TacToHighLevelAsmLowerer().lower(frontendResult.tacProgram());
+        TacToHighLevelAsmLowerer tacToHLAsm = new TacToHighLevelAsmLowerer(frontendResult.symbolTable());
+        HighLevelProgram highLevelProgram = tacToHLAsm.lower(frontendResult.tacProgram());
+        BackendSymbolTable backendSymbolTable = tacToHLAsm.getBackendSymbolTable();
         ReplacePseudoRegisterPass replacePseudoRegisterPass =
-            new ReplacePseudoRegisterPass(frontendResult.symbolTable());
+            new ReplacePseudoRegisterPass(backendSymbolTable);
         replacePseudoRegisterPass.runOnProgram(highLevelProgram);
-        return new HighLevelAsmToAsmLowerer().lower(highLevelProgram);
+        return new HighLevelAsmToAsmLowerer(backendSymbolTable).lower(highLevelProgram);
     }
 }

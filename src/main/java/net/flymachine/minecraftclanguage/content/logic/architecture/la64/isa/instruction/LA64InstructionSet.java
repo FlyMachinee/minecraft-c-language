@@ -198,6 +198,17 @@ public final class LA64InstructionSet {
                 BINARY_WORD_EXECUTOR.execute(emulator, operands, Integer::sum);
             }));
         add(LA64InstructionInfo.format3Gpr(
+            "add.d",
+            0b0000_0000_0001_0000_1,
+            (emulator, operands) -> {
+                // add.d rd, rj, rk
+                /*
+                    tmp = GR[rj][63:0] + GR[rk][63:0]
+                    GR[rd] = tmp[63:0]
+                 */
+                BINARY_DOUBLE_WORD_EXECUTOR.execute(emulator, operands, Long::sum);
+            }));
+        add(LA64InstructionInfo.format3Gpr(
             "sub.w",
             0b0000_0000_0001_0001_0,
             (emulator, operands) -> {
@@ -207,6 +218,17 @@ public final class LA64InstructionSet {
                     GR[rd] = SignExtend(tmp[31:0], GRLEN)
                  */
                 BINARY_WORD_EXECUTOR.execute(emulator, operands, (rj, rk) -> rj - rk);
+            }));
+        add(LA64InstructionInfo.format3Gpr(
+            "sub.d",
+            0b0000_0000_0001_0001_1,
+            (emulator, operands) -> {
+                // sub.d rd, rj, rk
+                /*
+                    tmp = GR[rj][63:0] - GR[rk][63:0]
+                    GR[rd] = tmp[63:0]
+                 */
+                BINARY_DOUBLE_WORD_EXECUTOR.execute(emulator, operands, (rj, rk) -> rj - rk);
             }));
         add(LA64InstructionInfo.format3Gpr(
             "slt",
@@ -293,6 +315,26 @@ public final class LA64InstructionSet {
                 BINARY_WORD_EXECUTOR.execute(emulator, operands, (rj, rk) -> rj >> (rk & 0b11111));
             }));
         add(LA64InstructionInfo.format3Gpr(
+            "sll.d",
+            0b0000_0000_0001_1000_1,
+            (emulator, operands) -> {
+                // sll.d rd, rj, rk
+                /*
+                    GR[rd] = SLL(GR[rj][63:0], GR[rk][5:0])
+                 */
+                BINARY_DOUBLE_WORD_EXECUTOR.execute(emulator, operands, (rj, rk) -> rj << (rk & 0b111111));
+            }));
+        add(LA64InstructionInfo.format3Gpr(
+            "sra.d",
+            0b0000_0000_0001_1001_1,
+            (emulator, operands) -> {
+                // sra.d rd, rj, rk
+                /*
+                    GR[rd] = SRA(GR[rj][63:0], GR[rk][5:0])
+                 */
+                BINARY_DOUBLE_WORD_EXECUTOR.execute(emulator, operands, (rj, rk) -> rj >> (rk & 0b111111));
+            }));
+        add(LA64InstructionInfo.format3Gpr(
             "mul.w",
             0b0000_0000_0001_1100_0,
             (emulator, operands) -> {
@@ -302,6 +344,17 @@ public final class LA64InstructionSet {
                     GR[rd] = SignExtend(product[31:0], GRLEN)
                  */
                 BINARY_WORD_EXECUTOR.execute(emulator, operands, (rj, rk) -> rj * rk);
+            }));
+        add(LA64InstructionInfo.format3Gpr(
+            "mul.d",
+            0b0000_0000_0001_1101_1,
+            (emulator, operands) -> {
+                // mul.d rd, rj, rk
+                /*
+                    product = signed(GR[rj][63:0]) * signed(GR[rk][63:0])
+                    GR[rd] = product[63:0]
+                 */
+                BINARY_DOUBLE_WORD_EXECUTOR.execute(emulator, operands, (rj, rk) -> rj * rk);
             }));
         add(LA64InstructionInfo.format3Gpr(
             "div.w",
@@ -325,6 +378,26 @@ public final class LA64InstructionSet {
                  */
                 BINARY_WORD_EXECUTOR.execute(emulator, operands, (rj, rk) -> rj % rk);
             }));
+        add(LA64InstructionInfo.format3Gpr(
+            "div.d",
+            0b0000_0000_0010_0010_0,
+            (emulator, operands) -> {
+                // div.d rd, rj, rk
+                /*
+                    GR[rd] = signed(GR[rj][63:0]) / signed(GR[rk][63:0])
+                 */
+                BINARY_DOUBLE_WORD_EXECUTOR.execute(emulator, operands, (rj, rk) -> rj / rk);
+            }));
+        add(LA64InstructionInfo.format3Gpr(
+            "mod.d",
+            0b0000_0000_0010_0010_1,
+            (emulator, operands) -> {
+                // mod.d rd, rj, rk
+                /*
+                    GR[rd] = signed(GR[rj][63:0]) % signed(GR[rk][63:0])
+                 */
+                BINARY_DOUBLE_WORD_EXECUTOR.execute(emulator, operands, (rj, rk) -> rj % rk);
+            }));
         add(new LA64InstructionInfo(
             "slli.w",
             0b0000_0000_0100_0000_1,
@@ -345,6 +418,39 @@ public final class LA64InstructionSet {
                 cpuState.pcNext();
             }));
         add(new LA64InstructionInfo(
+            "slli.d",
+            0b0000_0000_0100_0001,
+            16,
+            LA64InstructionFormat.MISCELLANEOUS,
+            new LA64OperandType[]{LA64OperandType.GPR, LA64OperandType.GPR, LA64OperandType.UI6},
+            (info, ops) -> {
+                // rd, rj, ui6
+                int rd = ops[0].value();
+                int rj = ops[1].value();
+                int ui6 = ops[2].value();
+                return (info.opcode() << 16) | (ui6 << 10) | (rj << 5) | rd;
+            },
+            (machineCode) -> {
+                // rd, rj, ui6
+                int rd = BitMath.getRd(machineCode);
+                int rj = BitMath.getRj(machineCode);
+                int ui6 = BitMath.extractBits(machineCode, 10, 6);
+                return new LA64Operand[]{
+                    LA64Operand.gpr(rd), LA64Operand.gpr(rj), LA64Operand.ui6(ui6)
+                };
+            },
+            (emulator, operands) -> {
+                // slli.d rd, rj, ui6
+                /*
+                    GR[rd] = SLL(GR[rj][63:0], ui6)
+                 */
+                LA64CpuState cpuState = emulator.getCpuState();
+                long rjValue = cpuState.getGr(operands[1].value());
+                int ui6Value = operands[2].value();
+                cpuState.setGr(operands[0].value(), rjValue << ui6Value);
+                cpuState.pcNext();
+            }));
+        add(new LA64InstructionInfo(
             "srai.w",
             0b0000_0000_0100_1000_1,
             17,
@@ -361,6 +467,39 @@ public final class LA64InstructionSet {
                 int ui5Value = operands[2].value();
                 int temp = rjValue >> ui5Value;
                 cpuState.setGr(operands[0].value(), temp);
+                cpuState.pcNext();
+            }));
+        add(new LA64InstructionInfo(
+            "srai.d",
+            0b0000_0000_0100_1001,
+            16,
+            LA64InstructionFormat.MISCELLANEOUS,
+            new LA64OperandType[]{LA64OperandType.GPR, LA64OperandType.GPR, LA64OperandType.UI6},
+            (info, ops) -> {
+                // rd, rj, ui6
+                int rd = ops[0].value();
+                int rj = ops[1].value();
+                int ui6 = ops[2].value();
+                return (info.opcode() << 16) | (ui6 << 10) | (rj << 5) | rd;
+            },
+            (machineCode) -> {
+                // rd, rj, ui6
+                int rd = BitMath.getRd(machineCode);
+                int rj = BitMath.getRj(machineCode);
+                int ui6 = BitMath.extractBits(machineCode, 10, 6);
+                return new LA64Operand[]{
+                    LA64Operand.gpr(rd), LA64Operand.gpr(rj), LA64Operand.ui6(ui6)
+                };
+            },
+            (emulator, operands) -> {
+                // srai.d rd, rj, ui6
+                /*
+                    GR[rd] = SRA(GR[rj][63:0], ui6)
+                 */
+                LA64CpuState cpuState = emulator.getCpuState();
+                long rjValue = cpuState.getGr(operands[1].value());
+                int ui6Value = operands[2].value();
+                cpuState.setGr(operands[0].value(), rjValue >> ui6Value);
                 cpuState.pcNext();
             }));
         add(LA64InstructionInfo.format2GprSi12(

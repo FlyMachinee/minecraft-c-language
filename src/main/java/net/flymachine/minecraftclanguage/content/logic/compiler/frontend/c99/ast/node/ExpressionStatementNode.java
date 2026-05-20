@@ -1,8 +1,9 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node;
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.StatementVisitor;
 
-public class ExpressionStatementNode extends StatementNode {
+public final class ExpressionStatementNode extends StatementNode {
     public ExpressionNode exp;
 
     public ExpressionStatementNode(ExpressionNode exp) {
@@ -29,5 +30,10 @@ public class ExpressionStatementNode extends StatementNode {
         stringBuilder.append("  ".repeat(indentLevel + 1)).append("exp=");
         exp.genFormattedString(stringBuilder, indentLevel + 1, false);
         stringBuilder.append("  ".repeat(indentLevel)).append(")\n");
+    }
+
+    @Override
+    public void accept(StatementVisitor visitor) {
+        visitor.visit(this);
     }
 }

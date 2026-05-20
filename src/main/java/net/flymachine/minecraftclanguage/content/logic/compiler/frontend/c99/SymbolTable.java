@@ -1,5 +1,9 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99;
 
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.IntInit;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.LongInit;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.StaticInit;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.IdentifierNode;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.TypeNode;
 
@@ -39,11 +43,13 @@ public final class SymbolTable {
 
     public static final class Entry {
         public IdentifierNode id;
-        public TypeNode type;
+        TypeNode typeNode; // 仅用于信息打印
+        public Type type;
         public IdentifierAttr attr;
 
-        public Entry(IdentifierNode id, TypeNode type, IdentifierAttr attr) {
+        public Entry(IdentifierNode id, TypeNode typeNode, Type type, IdentifierAttr attr) {
             this.id = id;
+            this.typeNode = typeNode;
             this.type = type;
             this.attr = attr;
         }
@@ -113,8 +119,9 @@ public final class SymbolTable {
                 public static final NoInitializer INSTANCE = new NoInitializer();
             }
 
-            public record Initial(int value) implements InitialValue {
-                public static final Initial ZERO = new Initial(0);
+            public record Initial(StaticInit init) implements InitialValue {
+                public static final Initial INT_ZERO = new Initial(IntInit.ZERO);
+                public static final Initial LONG_ZERO = new Initial(LongInit.ZERO);
             }
         }
 

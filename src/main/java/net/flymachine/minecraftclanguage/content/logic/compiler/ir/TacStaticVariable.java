@@ -1,14 +1,19 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.ir;
 
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.StaticInit;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
+
 public class TacStaticVariable implements TacTopLevel {
     public String name;
     public boolean global;
-    public int initValue;
+    public Type type;
+    public StaticInit init;
 
-    public TacStaticVariable(String name, boolean global, int initValue) {
+    public TacStaticVariable(String name, boolean global, Type type, StaticInit initValue) {
         this.name = name;
         this.global = global;
-        this.initValue = initValue;
+        this.type = type;
+        this.init = initValue;
     }
 
     @Override
@@ -20,8 +25,10 @@ public class TacStaticVariable implements TacTopLevel {
                      .append(name)
                      .append(", global=")
                      .append(global)
+                     .append(", type=")
+                     .append(type)
                      .append(", initValue=")
-                     .append(initValue)
+                     .append(init)
                      .append(")");
     }
 }

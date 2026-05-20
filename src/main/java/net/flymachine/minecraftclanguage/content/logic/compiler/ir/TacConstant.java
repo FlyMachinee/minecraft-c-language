@@ -1,9 +1,11 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.ir;
 
-public class TacIntConstant implements TacValue {
-    public int value;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.Constant;
 
-    public TacIntConstant(int value) {
+public class TacConstant implements TacValue {
+    public Constant value;
+
+    public TacConstant(Constant value) {
         this.value = value;
     }
 

@@ -13,6 +13,7 @@ For: 'for';
 Goto: 'goto';
 If: 'if';
 Int: 'int';
+Long: 'long';
 Return: 'return';
 Static: 'static';
 Switch: 'switch';
@@ -29,13 +30,22 @@ fragment Digit: [0-9];
 
 // Constants
 
-IntegerConstant:
-    DecimalConstant
-    | '0';
+IntegerConstant
+    : (DecimalConstant | OctalConstant | HexadecimalConstant) IntegerSuffix?;
 
 fragment DecimalConstant: NonzeroDigit Digit*;
-
+fragment OctalConstant: '0' OctalDegit*;
+fragment HexadecimalConstant: HexadecimalPrefix HexadecimalDigit+;
+fragment HexadecimalPrefix: '0' [xX];
 fragment NonzeroDigit: [1-9];
+fragment OctalDegit: [0-7];
+fragment HexadecimalDigit: [0-9a-fA-F];
+fragment IntegerSuffix
+    : LongSuffix
+    | LongLongSuffix
+    ;
+fragment LongSuffix: 'l' | 'L';
+fragment LongLongSuffix: 'll' | 'LL';
 
 // Operators
 

@@ -20,4 +20,8 @@ public interface TacVisitor<T> {
     T visit(TacJumpIfComparison inst);
 
     T visit(TacFunctionCall inst);
+
+    T visit(TacSignExtend inst);
+
+    T visit(TacTruncate inst);
 }

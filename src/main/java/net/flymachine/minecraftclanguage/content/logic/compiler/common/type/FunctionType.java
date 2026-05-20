@@ -1,5 +1,6 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.common.type;
 
+import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.AsmType;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
@@ -28,14 +29,43 @@ public record FunctionType(Type returnType, List<Type> parameterTypes) implement
         return true;
     }
 
-    @Override
-    public boolean isAssignableFrom(Type other) {
-        return false;
+    public Type parameterType(int i) {
+        return parameterTypes.get(i);
     }
 
     @Override
     public boolean isComplete() {
         return true;
+    }
+
+    @Override
+    public boolean isArithmetic() {
+        return false;
+    }
+
+    @Override
+    public boolean isScalar() {
+        return false;
+    }
+
+    @Override
+    public boolean isInteger() {
+        return false;
+    }
+
+    @Override
+    public boolean isReal() {
+        return false;
+    }
+
+    @Override
+    public long sizeof() {
+        throw new UnsupportedOperationException("sizeof(function) is not defined");
+    }
+
+    @Override
+    public AsmType toAsmType() {
+        throw new UnsupportedOperationException("toAsmType(function) is not defined");
     }
 
     @Override
@@ -64,7 +94,7 @@ public record FunctionType(Type returnType, List<Type> parameterTypes) implement
         if (parameterTypes.size() == 1) {
             Type paramType = parameterTypes.get(0);
             if (paramType instanceof BasicType basicType) {
-                return basicType.getKind() == BasicType.Kind.VOID;
+                return basicType == BasicType.VOID;
             }
         }
         return false;

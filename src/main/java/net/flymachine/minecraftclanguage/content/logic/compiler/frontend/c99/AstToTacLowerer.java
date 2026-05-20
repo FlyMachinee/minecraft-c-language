@@ -4,14 +4,23 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.Assignmen
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.BinaryOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.Comparison;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.UnaryOperator;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.Constant;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.ConstantInt;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.ConstantLong;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.IntInit;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.LongInit;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.BasicType;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.ExpressionBoolVisitor;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.ExpressionVisitor;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.StatementVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.*;
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.*;
-import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public final class AstToTacLowerer {
+public final class AstToTacLowerer implements StatementVisitor, ExpressionVisitor, ExpressionBoolVisitor {
 
     public AstToTacLowerer(SymbolTable symbolTable) {
         this.symbolTable = symbolTable;
@@ -32,9 +41,17 @@ public final class AstToTacLowerer {
             if (attr instanceof SymbolTable.Entry.StaticAttr staticAttr) {
                 SymbolTable.Entry.StaticAttr.InitialValue initialValue = staticAttr.initialValue;
                 if (initialValue instanceof SymbolTable.Entry.StaticAttr.Initial initial) {
-                    topLevels.add(new TacStaticVariable(entry.id.id, staticAttr.global, initial.value()));
+                    topLevels.add(new TacStaticVariable(
+                        entry.id.id, staticAttr.global, entry.type, initial.init()));
                 } else if (initialValue instanceof SymbolTable.Entry.StaticAttr.Tentative) {
-                    topLevels.add(new TacStaticVariable(entry.id.id, staticAttr.global, 0));
+                    BasicType bt = (BasicType) entry.type;
+                    switch (bt) {
+                        case INT -> topLevels.add(new TacStaticVariable(
+                            entry.id.id, staticAttr.global, BasicType.INT, IntInit.ZERO));
+                        case LONG -> topLevels.add(new TacStaticVariable(
+                            entry.id.id, staticAttr.global, BasicType.LONG, LongInit.ZERO));
+                        default -> throw new IllegalStateException("Unexpected value: " + bt);
+                    }
                 }
             }
         }
@@ -43,8 +60,14 @@ public final class AstToTacLowerer {
 
     private int tempVarCounter = 0;
 
-    private String makeTempVar() {
-        return "tmp." + (tempVarCounter++);
+    private TacVariable makeTempVar(Type type) {
+        String name = "tmp." + (tempVarCounter++);
+        TacVariable var = new TacVariable(name);
+        symbolTable.put(
+            name, new SymbolTable.Entry(
+                new IdentifierNode(null, name), null, type,
+                SymbolTable.Entry.LocalAttr.INSTANCE));
+        return var;
     }
 
     private int labelCounter = 0;
@@ -66,8 +89,8 @@ public final class AstToTacLowerer {
 
     private TacFunction lowerFunc(FunctionDefinitionNode funcDef) {
         instructions = new ArrayList<>();
-        lowerStmt(funcDef.body);
-        emitTac(new TacReturn(new TacIntConstant(0)));
+        funcDef.body.accept(this);
+        emitTac(new TacReturn(new TacConstant(ConstantInt.ZERO)));
         boolean global = symbolTable.get(funcDef.id.id).attr.isGlobal();
         FunctionTypeNode functionType = (FunctionTypeNode) funcDef.funcType;
         if (functionType.hasNoParameters()) {
@@ -80,7 +103,7 @@ public final class AstToTacLowerer {
 
     private void lowerBlockItem(BlockItemNode blockItem) {
         if (blockItem instanceof StatementBlockItemNode stmt) {
-            lowerStmt(stmt.stmt);
+            stmt.stmt.accept(this);
         } else if (blockItem instanceof DeclarationBlockItemNode decl) {
             lowerDecl(decl.decl);
         } else {
@@ -92,12 +115,12 @@ public final class AstToTacLowerer {
         // 一定为块作用域
         // 无存储类且有初始化时，生成初始化三地址码
         if (decl.init != null && decl.storageClass == null) {
-            TacValue initValue = lowerExp(decl.init);
+            TacValue initValue = decl.init.accept(this);
             emitTac(new TacCopy(initValue, new TacVariable(decl.id.id)));
         }
     }
 
-    private void lowerStmt(StatementNode stmt) {
+    private void visitBefore(StatementNode stmt) {
         // 为活跃的 goto 标签生成标签
         for (int i = stmt.gotoLabels.size() - 1; i >= 0; i--) {
             StatementNode.GotoLabelInfo info = stmt.gotoLabels.get(i);
@@ -109,659 +132,699 @@ public final class AstToTacLowerer {
         // case 和 default
         for (int i = stmt.caseLabels.size() - 1; i >= 0; i--) {
             StatementNode.CaseLabelInfo info = stmt.caseLabels.get(i);
-            emitTac(new TacLabel("case_" + info.caseIndex + "_" + info.switchLabel));
+            emitTac(new TacLabel("case_" + info.caseValue + "_" + info.switchLabel));
         }
         if (!stmt.defaultLabels.isEmpty()) {
             StatementNode.DefaultLabelInfo info = stmt.defaultLabels.get(0);
             emitTac(new TacLabel("default_" + info.switchLabel));
         }
+    }
 
-        if (stmt instanceof ReturnNode ret) {
-            TacValue returnValue = lowerExp(ret.exp);
-            emitTac(new TacReturn(returnValue));
-        } else if (stmt instanceof ExpressionStatementNode expStmt) {
-            lowerExp(expStmt.exp);
-        } else if (stmt instanceof IfStatementNode ifStmt) {
-            if (ifStmt.elseStmt != null) {
-                // if (cond) thenStmt else elseStmt
-                // =>
-                // if (!cond) goto else
-                // thenStmt
-                // goto end
-                // else:
-                // elseStmt
-                // end:
-                String labelElse = makeLabel("else");
-                switch (lowerBool(ifStmt.cond, labelElse, true)) {
-                    case ALWAYS_JUMP -> {
-                        if (!ifStmt.thenStmt.containsActiveLabel()) {
-                            // 当 then 子语句没有活跃的 goto 标签，将其优化
-                            emitTac(new TacLabel(labelElse));
-                            lowerStmt(ifStmt.elseStmt);
-                            return;
-                        }
-                        // 否则生成无条件跳转
-                        emitTac(new TacJump(labelElse));
-                    }
-                    case NEVER_JUMP -> {
-                        if (!ifStmt.elseStmt.containsActiveLabel()) {
-                            // 当 else 子语句没有活跃的 goto 标签，将其优化
-                            lowerStmt(ifStmt.thenStmt);
-                            emitTac(new TacLabel(labelElse));
-                            return;
-                        }
-                    }
-                }
-                String labelEndIf = makeLabel("endif");
-                lowerStmt(ifStmt.thenStmt);
-                emitTac(new TacJump(labelEndIf));
-                emitTac(new TacLabel(labelElse));
-                lowerStmt(ifStmt.elseStmt);
-                emitTac(new TacLabel(labelEndIf));
-            } else {
-                // if (cond) thenStmt
-                // =>
-                // if (!cond) goto end
-                // thenStmt
-                // end:
-                String labelEndIf = makeLabel("endif");
-                if (lowerBool(ifStmt.cond, labelEndIf, true) == BoolGenResult.ALWAYS_JUMP) {
+    @Override
+    public void visit(ReturnNode ret) {
+        visitBefore(ret);
+        TacValue returnValue = ret.exp.accept(this);
+        emitTac(new TacReturn(returnValue));
+    }
+
+    @Override
+    public void visit(ExpressionStatementNode expStmt) {
+        visitBefore(expStmt);
+        expStmt.exp.accept(this);
+    }
+
+    @Override
+    public void visit(IfStatementNode ifStmt) {
+        visitBefore(ifStmt);
+        if (ifStmt.elseStmt != null) {
+            // if (cond) thenStmt else elseStmt
+            // =>
+            // if (!cond) goto else
+            // thenStmt
+            // goto end
+            // else:
+            // elseStmt
+            // end:
+            String labelElse = makeLabel("else");
+            switch (ifStmt.cond.accept(this, labelElse, true)) {
+                case ALWAYS_JUMP -> {
                     if (!ifStmt.thenStmt.containsActiveLabel()) {
                         // 当 then 子语句没有活跃的 goto 标签，将其优化
-                        emitTac(new TacLabel(labelEndIf));
+                        emitTac(new TacLabel(labelElse));
+                        ifStmt.elseStmt.accept(this);
                         return;
                     }
                     // 否则生成无条件跳转
-                    emitTac(new TacJump(labelEndIf));
+                    emitTac(new TacJump(labelElse));
                 }
-                lowerStmt(ifStmt.thenStmt);
-                emitTac(new TacLabel(labelEndIf));
+                case NEVER_JUMP -> {
+                    if (!ifStmt.elseStmt.containsActiveLabel()) {
+                        // 当 else 子语句没有活跃的 goto 标签，将其优化
+                        ifStmt.thenStmt.accept(this);
+                        emitTac(new TacLabel(labelElse));
+                        return;
+                    }
+                }
             }
-        } else if (stmt instanceof GotoNode gotoNode) {
-            // 为 goto 语句生成无条件跳转
-            emitTac(new TacJump(gotoNode.target.id));
-        } else if (stmt instanceof CompoundStatementNode compoundStmt) {
-            for (BlockItemNode item : compoundStmt.blockItems) {
-                lowerBlockItem(item);
-            }
-        } else if (stmt instanceof BreakNode breakNode) {
-            emitTac(new TacJump("break_" + breakNode.loopOrSwitchLabel));
-        } else if (stmt instanceof ContinueNode continueNode) {
-            emitTac(new TacJump("continue_" + continueNode.loopLabel));
-        } else if (stmt instanceof WhileLoopNode whileLoop) {
-            // while (cond) body
+            String labelEndIf = makeLabel("endif");
+            ifStmt.thenStmt.accept(this);
+            emitTac(new TacJump(labelEndIf));
+            emitTac(new TacLabel(labelElse));
+            ifStmt.elseStmt.accept(this);
+            emitTac(new TacLabel(labelEndIf));
+        } else {
+            // if (cond) thenStmt
             // =>
-            //   goto continue_label <=====
-            // begin:
-            //   body
-            // continue_label:
-            //   if (cond) goto begin:
-            // break_label:
-
-            // do body while (cond);
-            // =>
-            // begin:
-            //   body
-            // continue_label:
-            //   if (cond) goto begin:
-            // break_label:
-
-            String labelBegin = makeLabel(whileLoop.isDoWhile ? "do_while_begin" : "while_begin");
-            String labelContinue = "continue_" + whileLoop.loopLabel;
-            String labelBreak = "break_" + whileLoop.loopLabel;
-
-            if (!whileLoop.isDoWhile) {
-                // while 循环需要在循环前生成跳转到条件判断的指令
-                emitTac(new TacJump(labelContinue));
+            // if (!cond) goto end
+            // thenStmt
+            // end:
+            String labelEndIf = makeLabel("endif");
+            if (ifStmt.cond.accept(this, labelEndIf, true) == BoolGenResult.ALWAYS_JUMP) {
+                if (!ifStmt.thenStmt.containsActiveLabel()) {
+                    // 当 then 子语句没有活跃的 goto 标签，将其优化
+                    emitTac(new TacLabel(labelEndIf));
+                    return;
+                }
+                // 否则生成无条件跳转
+                emitTac(new TacJump(labelEndIf));
             }
-            emitTac(new TacLabel(labelBegin));
-            lowerStmt(whileLoop.body);
-            emitTac(new TacLabel(labelContinue));
-            if (lowerBool(whileLoop.cond, labelBegin, false) == BoolGenResult.ALWAYS_JUMP) {
+            ifStmt.thenStmt.accept(this);
+            emitTac(new TacLabel(labelEndIf));
+        }
+    }
+
+    @Override
+    public void visit(GotoNode gotoStmt) {
+        visitBefore(gotoStmt);
+        // 为 goto 语句生成无条件跳转
+        emitTac(new TacJump(gotoStmt.target.id));
+    }
+
+    @Override
+    public void visit(CompoundStatementNode compoundStmt) {
+        visitBefore(compoundStmt);
+        for (BlockItemNode item : compoundStmt.blockItems) {
+            lowerBlockItem(item);
+        }
+    }
+
+    @Override
+    public void visit(BreakNode breakStmt) {
+        visitBefore(breakStmt);
+        emitTac(new TacJump("break_" + breakStmt.loopOrSwitchLabel));
+    }
+
+    @Override
+    public void visit(ContinueNode continueStmt) {
+        visitBefore(continueStmt);
+        emitTac(new TacJump("continue_" + continueStmt.loopLabel));
+    }
+
+    @Override
+    public void visit(WhileLoopNode whileLoop) {
+        visitBefore(whileLoop);
+        // while (cond) body
+        // =>
+        //   goto continue_label <=====
+        // begin:
+        //   body
+        // continue_label:
+        //   if (cond) goto begin:
+        // break_label:
+
+        // do body while (cond);
+        // =>
+        // begin:
+        //   body
+        // continue_label:
+        //   if (cond) goto begin:
+        // break_label:
+
+        String labelBegin = makeLabel(whileLoop.isDoWhile ? "do_while_begin" : "while_begin");
+        String labelContinue = "continue_" + whileLoop.loopLabel;
+        String labelBreak = "break_" + whileLoop.loopLabel;
+
+        if (!whileLoop.isDoWhile) {
+            // while 循环需要在循环前生成跳转到条件判断的指令
+            emitTac(new TacJump(labelContinue));
+        }
+        emitTac(new TacLabel(labelBegin));
+        whileLoop.body.accept(this);
+        emitTac(new TacLabel(labelContinue));
+        if (whileLoop.cond.accept(this, labelBegin, false) == BoolGenResult.ALWAYS_JUMP) {
+            // 始终跳转，生成无条件跳转
+            emitTac(new TacJump(labelBegin));
+        }
+        emitTac(new TacLabel(labelBreak));
+    }
+
+    @Override
+    public void visit(ForLoopNode forLoop) {
+        visitBefore(forLoop);
+        // for (init; cond; step) body
+        // =>
+        //   init
+        //   goto cond
+        // begin:
+        //   body
+        // continue_label:
+        //   step
+        // cond:
+        //   if (cond) goto begin
+        // break_label:
+        String labelBegin = makeLabel("for_begin");
+        String labelContinue = "continue_" + forLoop.loopLabel;
+        String labelBreak = "break_" + forLoop.loopLabel;
+        String labelCond = makeLabel("for_cond");
+
+        if (forLoop.init != null) {
+            if (forLoop.init instanceof ForInitDeclarationNode decl) {
+                lowerDecl(decl.decl);
+            } else if (forLoop.init instanceof ForInitExpressionNode expr) {
+                expr.exp.accept(this);
+            } else {
+                throw new RuntimeException("unexpected init node in for loop: " + forLoop.init.getClass());
+            }
+        }
+        emitTac(new TacJump(labelCond));
+        emitTac(new TacLabel(labelBegin));
+        forLoop.body.accept(this);
+        emitTac(new TacLabel(labelContinue));
+        if (forLoop.step != null) {
+            forLoop.step.accept(this);
+        }
+        emitTac(new TacLabel(labelCond));
+        if (forLoop.cond != null) {
+            if (forLoop.cond.accept(this, labelBegin, false) == BoolGenResult.ALWAYS_JUMP) {
                 // 始终跳转，生成无条件跳转
                 emitTac(new TacJump(labelBegin));
             }
-            emitTac(new TacLabel(labelBreak));
+        } else {
+            // 条件缺省，视为始终为真
+            emitTac(new TacJump(labelBegin));
+        }
+        emitTac(new TacLabel(labelBreak));
+    }
 
-        } else if (stmt instanceof ForLoopNode forLoop) {
-            // for (init; cond; step) body
-            // =>
-            //   init
-            //   goto cond
-            // begin:
-            //   body
-            // continue_label:
-            //   step
-            // cond:
-            //   if (cond) goto begin
-            // break_label:
-            String labelBegin = makeLabel("for_begin");
-            String labelContinue = "continue_" + forLoop.loopLabel;
-            String labelBreak = "break_" + forLoop.loopLabel;
-            String labelCond = makeLabel("for_cond");
+    @Override
+    public void visit(SwitchStatementNode switchStmt) {
+        visitBefore(switchStmt);
+        // switch (exp) body   {case: [0, 1, 2, ...], default=yes/no}
+        // =>
+        //   tmp = exp
+        //   if (tmp == 0) goto case0
+        //   if (tmp == 1) goto case1
+        //   goto default (if default=yes)
+        //   goto break (if default=no)
+        //   body
+        // break:
+        String labelBreak = "break_" + switchStmt.switchLabel;
+        String defaultLabel = "default_" + switchStmt.switchLabel;
 
-            if (forLoop.init != null) {
-                if (forLoop.init instanceof ForInitDeclarationNode decl) {
-                    lowerDecl(decl.decl);
-                } else if (forLoop.init instanceof ForInitExpressionNode expr) {
-                    lowerExp(expr.exp);
-                } else {
-                    throw new RuntimeException("unexpected init node in for loop: " + forLoop.init.getClass());
-                }
-            }
-            emitTac(new TacJump(labelCond));
-            emitTac(new TacLabel(labelBegin));
-            lowerStmt(forLoop.body);
-            emitTac(new TacLabel(labelContinue));
-            if (forLoop.step != null) {
-                lowerExp(forLoop.step);
-            }
-            emitTac(new TacLabel(labelCond));
-            if (forLoop.cond != null) {
-                if (lowerBool(forLoop.cond, labelBegin, false) == BoolGenResult.ALWAYS_JUMP) {
-                    // 始终跳转，生成无条件跳转
-                    emitTac(new TacJump(labelBegin));
-                }
+        TacValue res = switchStmt.exp.accept(this);
+        if (res instanceof TacConstant constant) {
+            // 常量，进行优化
+            long value = constant.value.toLong().value();
+            if (switchStmt.caseValues.containsKey(value)) {
+                // 匹配到 case 标签
+                emitTac(new TacJump("case_" + value + "_" + switchStmt.switchLabel));
+            } else if (switchStmt.defaultLabel != null) {
+                // 没有匹配到 case 标签但有 default 标签
+                emitTac(new TacJump(defaultLabel));
             } else {
-                // 条件缺省，视为始终为真
-                emitTac(new TacJump(labelBegin));
+                // 没有匹配到 case 标签且没有 default 标签，直接跳转到 break
+
+                // 如果此时 body 没有可能跳入的 goto 标签，则可以优化掉 body 和 break 标签
+                if (!switchStmt.body.containsActiveLabel()) {
+                    return;
+                }
+                emitTac(new TacJump(labelBreak));
             }
-            emitTac(new TacLabel(labelBreak));
+        } else {
+            // 非常量，生成比较指令
+            for (SwitchStatementNode.CaseLabelInfo caseInfo : switchStmt.caseValues.values()) {
+                String caseLabel = "case_" + caseInfo.caseValue + "_" + switchStmt.switchLabel;
+                TacValue caseValue = new TacConstant(((ConstantNode) caseInfo.caseValue).value);
+                emitTac(new TacJumpIfComparison(Comparison.EQUAL, res, caseValue, caseLabel));
+            }
+            if (switchStmt.defaultLabel != null) {
+                emitTac(new TacJump(defaultLabel));
+            } else {
+                emitTac(new TacJump(labelBreak));
+            }
+        }
+        switchStmt.body.accept(this);
+        emitTac(new TacLabel(labelBreak));
 
-        } else if (stmt instanceof SwitchStatementNode switchNode) {
-            // switch (exp) body   {case: [0, 1, 2, ...], default=yes/no}
-            // =>
-            //   tmp = exp
-            //   if (tmp == 0) goto case0
-            //   if (tmp == 1) goto case1
-            //   goto default (if default=yes)
-            //   goto break (if default=no)
-            //   body
-            // break:
-            String labelBreak = "break_" + switchNode.switchLabel;
-            String defaultLabel = "default_" + switchNode.switchLabel;
+    }
 
-            TacValue res = lowerExp(switchNode.exp);
-            if (res instanceof TacIntConstant intConstant) {
-                // 常量，进行优化
-                int value = intConstant.value;
-                if (switchNode.caseValues.containsKey(value)) {
-                    // 匹配到 case 标签
-                    emitTac(new TacJump("case_" + value + "_" + switchNode.switchLabel));
-                } else if (switchNode.defaultLabel != null) {
-                    // 没有匹配到 case 标签但有 default 标签
-                    emitTac(new TacJump(defaultLabel));
-                } else {
-                    // 没有匹配到 case 标签且没有 default 标签，直接跳转到 break
+    @Override
+    public void visit(NullStatementNode nullStmt) {
+        visitBefore(nullStmt);
+    }
 
-                    // 如果此时 body 没有可能跳入的 goto 标签，则可以优化掉 body 和 break 标签
-                    if (!switchNode.body.containsActiveLabel()) {
-                        return;
+    @Override
+    public TacValue visit(ConstantNode constant) {
+        return new TacConstant(constant.value);
+    }
+
+    @Override
+    public TacValue visit(UnaryExpressionNode unaryExp) {
+        TacValue src = unaryExp.exp.accept(this);
+        if (src instanceof TacConstant constant) {
+            return new TacConstant(constant.value.apply(unaryExp.op.op));
+        }
+        TacVariable dst = makeTempVar(unaryExp.expType);
+        emitTac(new TacUnaryOperation(unaryExp.op.op, src, dst));
+        return dst;
+    }
+
+    @Override
+    public TacValue visit(BinaryExpressionNode binaryExp) {
+        // 短路求值
+        switch (binaryExp.op.op) {
+            case LOGICAL_AND -> {
+                // 短路与求值
+                // if (a && b) yield 1; else yield 0;
+                // =>
+                // if (!a) goto zero
+                // if (!b) goto zero
+                // tmp = 1
+                // goto end
+                // zero:
+                // tmp = 0
+                // end:
+                // yield tmp
+                String labelFalse = makeLabel("and_false");
+
+                // 注意短路语义，即使右操作数为0，左操作数也要求值
+                // 显然左操作数永远都需要求值
+                switch (binaryExp.lhs.accept(this, labelFalse, true)) {
+                    case VARIOUS -> {
+                        // a 未知
+                        if (binaryExp.rhs.accept(this, labelFalse, true) == BoolGenResult.ALWAYS_JUMP) {
+                            // if (!b) goto zero 始终跳转，即 b=0
+                            // 推导出值为0
+                            emitTac(new TacLabel(labelFalse));
+                            return new TacConstant(ConstantInt.ZERO);
+                        }
+                        // 其他情况都不能断言结果值
                     }
-                    emitTac(new TacJump(labelBreak));
+                    case ALWAYS_JUMP -> {
+                        // if (!a) goto zero 始终跳转，即 a=0
+                        // 显然值为0，由于短路语义，右操作数永远不求值，可以优化
+                        emitTac(new TacLabel(labelFalse));
+                        return new TacConstant(ConstantInt.ZERO);
+                    }
+                    case NEVER_JUMP -> {
+                        // if (!a) goto zero 永不跳转，即 a=1
+                        // 得继续求值
+                        switch (binaryExp.rhs.accept(this, labelFalse, true)) {
+                            case ALWAYS_JUMP -> {
+                                // b=0 => 推导值为0
+                                emitTac(new TacLabel(labelFalse));
+                                return new TacConstant(ConstantInt.ZERO);
+                            }
+                            case NEVER_JUMP -> {
+                                // b=1 => 推导值为1
+                                emitTac(new TacLabel(labelFalse));
+                                return new TacConstant(ConstantInt.ONE);
+                            }
+                        }
+                        // b 未知，无法断言
+                    }
                 }
-            } else {
-                // 非常量，生成比较指令
-                for (SwitchStatementNode.CaseLabelInfo caseInfo : switchNode.caseValues.values()) {
-                    String caseLabel = "case_" + caseInfo.caseIndex + "_" + switchNode.switchLabel;
-                    emitTac(new TacJumpIfComparison(
-                        Comparison.EQUAL, res, new TacIntConstant(caseInfo.caseIndex), caseLabel));
-                }
-                if (switchNode.defaultLabel != null) {
-                    emitTac(new TacJump(defaultLabel));
-                } else {
-                    emitTac(new TacJump(labelBreak));
-                }
-            }
-            lowerStmt(switchNode.body);
-            emitTac(new TacLabel(labelBreak));
 
-        } else if (!(stmt instanceof NullStatementNode)) {
-            throw new UnsupportedOperationException(
-                "Unsupported statement type: " + stmt.getClass().getSimpleName());
+                // 无法断言的情况，需要生成指令来进行求值
+                String labelEvalEnd = makeLabel("eval_end");
+                TacVariable dst = makeTempVar(binaryExp.expType);
+                emitTac(new TacCopy(new TacConstant(ConstantInt.ONE), dst));
+                emitTac(new TacJump(labelEvalEnd));
+                emitTac(new TacLabel(labelFalse));
+                emitTac(new TacCopy(new TacConstant(ConstantInt.ZERO), dst));
+                emitTac(new TacLabel(labelEvalEnd));
+                return dst;
+            }
+            case LOGICAL_OR -> {
+                // 短路或求值
+                // if (a || b) yield 1; else yield 0;
+                // =>
+                // if (a) goto one
+                // if (b) goto one
+                // tmp = 0
+                // goto end
+                // one:
+                // tmp = 1
+                // end:
+                // yield tmp
+                String labelTrue = makeLabel("or_true");
+
+                // 注意短路语义，即使右操作数为1，左操作数也要求值
+                // 显然左操作数永远都需要求值
+                switch (binaryExp.lhs.accept(this, labelTrue, false)) {
+                    case VARIOUS -> {
+                        // a 未知
+                        if (binaryExp.rhs.accept(this, labelTrue, false) == BoolGenResult.ALWAYS_JUMP) {
+                            // if (b) goto one 始终跳转，即 b=1
+                            // 推导出值为0
+                            emitTac(new TacLabel(labelTrue));
+                            return new TacConstant(ConstantInt.ONE);
+                        }
+                        // 其他情况都不能断言结果值
+                    }
+                    case ALWAYS_JUMP -> {
+                        // if (a) goto one 始终跳转，即 a=1
+                        // 显然值为1，由于短路语义，右操作数永远不求值，可以优化
+                        emitTac(new TacLabel(labelTrue));
+                        return new TacConstant(ConstantInt.ONE);
+                    }
+                    case NEVER_JUMP -> {
+                        // if (a) goto one 永不跳转，即 a=0
+                        // 得继续求值
+                        switch (binaryExp.rhs.accept(this, labelTrue, false)) {
+                            case ALWAYS_JUMP -> {
+                                // b=1 => 推导值为1
+                                emitTac(new TacLabel(labelTrue));
+                                return new TacConstant(ConstantInt.ONE);
+                            }
+                            case NEVER_JUMP -> {
+                                // b=0 => 推导值为0
+                                emitTac(new TacLabel(labelTrue));
+                                return new TacConstant(ConstantInt.ZERO);
+                            }
+                        }
+                        // b 未知，无法断言
+                    }
+                }
+
+                // 无法断言的情况，需要生成指令来进行求值
+                String labelEvalEnd = makeLabel("eval_end");
+                TacVariable dst = makeTempVar(binaryExp.expType);
+                emitTac(new TacCopy(new TacConstant(ConstantInt.ZERO), dst));
+                emitTac(new TacJump(labelEvalEnd));
+                emitTac(new TacLabel(labelTrue));
+                emitTac(new TacCopy(new TacConstant(ConstantInt.ONE), dst));
+                emitTac(new TacLabel(labelEvalEnd));
+                return dst;
+            }
+        }
+        // 普通求值
+        TacValue lhs = binaryExp.lhs.accept(this);
+        TacValue rhs = binaryExp.rhs.accept(this);
+        if (lhs instanceof TacConstant lhsConst && rhs instanceof TacConstant rhsConst) {
+            Constant reduced = lhsConst.value.apply(binaryExp.op.op, rhsConst.value);
+            return new TacConstant(reduced);
+        }
+        TacVariable dst = makeTempVar(binaryExp.expType);
+        emitTac(new TacBinaryOperation(binaryExp.op.op, lhs, rhs, dst));
+        return dst;
+    }
+
+    @Override
+    public TacValue visit(AssignmentNode assignment) {
+        // 赋值表达式
+        TacValue rhs = assignment.rhs.accept(this);
+        TacVariable dst = new TacVariable(((IdentifierNode) assignment.lhs).id);
+        if (assignment.op.op == AssignmentOperator.ASSIGN) {
+            // 普通赋值
+            emitTac(new TacCopy(rhs, dst));
+            if (rhs instanceof TacConstant intConstant) {
+                return intConstant;
+            }
+        } else {
+            // 复合赋值
+            emitTac(new TacBinaryOperation(assignment.op.op.getBinaryOperator(), dst, rhs, dst));
+        }
+        return dst;
+    }
+
+    @Override
+    public TacValue visit(IdentifierNode identifier) {
+        return new TacVariable(identifier.id);
+    }
+
+    @Override
+    public TacValue visit(IncrementDecrementNode incrementDecrement) {
+        // 自增自减表达式
+        BinaryOperator op = incrementDecrement.isIncrement ? BinaryOperator.ADD : BinaryOperator.SUBTRACT;
+        TacVariable dst = new TacVariable(((IdentifierNode) incrementDecrement.operand).id);
+
+        BasicType bt = (BasicType) incrementDecrement.expType;
+        Constant one = switch (bt) {
+            case INT -> ConstantInt.ONE;
+            case LONG -> ConstantLong.ONE;
+            default -> throw new IllegalStateException("Unexpected value: " + bt);
+        };
+
+        if (incrementDecrement.isPrefix) {
+            // ++/--a => a = a +/- 1; yield a;
+            emitTac(new TacBinaryOperation(op, dst, new TacConstant(one), dst));
+            return dst;
+        } else {
+            // a++/-- => temp = a; a = a +/- 1; yield temp;
+            TacVariable temp = makeTempVar(incrementDecrement.expType);
+            emitTac(new TacCopy(dst, temp));
+            emitTac(new TacBinaryOperation(op, dst, new TacConstant(one), dst));
+            return temp;
         }
     }
 
-    /**
-     * 对表达式进行求值，可能会因为求值而生成求值过程的三地址码，返回表达式的值
-     *
-     * @param exp 将要求值的表达式
-     * @return 表达式的求值结果
-     */
-    private TacValue lowerExp(ExpressionNode exp) {
-        if (exp instanceof IntConstantNode intConstant) {
-            return new TacIntConstant(intConstant.value);
-        } else if (exp instanceof UnaryExpressionNode unaryExp) {
-            TacValue src = lowerExp(unaryExp.exp);
-            if (src instanceof TacIntConstant intConstant) {
-                int res = switch (unaryExp.op.op) {
-                    case COMPLEMENT -> ~intConstant.value;
-                    case NEGATE -> -intConstant.value;
-                    case NOT -> (intConstant.value == 0) ? 1 : 0;
-                };
-                return new TacIntConstant(res);
-            }
-            TacVariable dst = new TacVariable(makeTempVar());
-            emitTac(new TacUnaryOperation(unaryExp.op.op, src, dst));
-            return dst;
-        } else if (exp instanceof BinaryExpressionNode binaryExp) {
-            // 短路求值
-            switch (binaryExp.op.op) {
-                case LOGICAL_AND -> {
-                    // 短路与求值
-                    // if (a && b) yield 1; else yield 0;
-                    // =>
-                    // if (!a) goto zero
-                    // if (!b) goto zero
-                    // tmp = 1
-                    // goto end
-                    // zero:
-                    // tmp = 0
-                    // end:
-                    // yield tmp
-                    String labelFalse = makeLabel("and_false");
+    @Override
+    public TacValue visit(ConditionalExpressionNode condExp) {
+        // 条件表达式
+        // cond ? a : b
+        // =>
+        // if (!cond) goto false
+        // tmp = a
+        // goto end
+        // false:
+        // tmp = b
+        // end:
+        // yield tmp
+        String labelCondFalse = makeLabel("cond_false");
 
-                    // 注意短路语义，即使右操作数为0，左操作数也要求值
-                    // 显然左操作数永远都需要求值
-                    switch (lowerBool(binaryExp.lhs, labelFalse, true)) {
+        // 条件表达式也有求值顺序要求，先求条件值
+        switch (condExp.cond.accept(this, labelCondFalse, true)) {
+            case ALWAYS_JUMP -> {
+                // cond=0，只需求假分支即可
+                emitTac(new TacLabel(labelCondFalse));
+                return condExp.elseExp.accept(this);
+            }
+            case NEVER_JUMP -> {
+                // cond=1，只需求真分支即可
+                TacValue ret = condExp.thenExp.accept(this);
+                emitTac(new TacLabel(labelCondFalse));
+                return ret;
+            }
+        }
+        String labelCondEnd = makeLabel("cond_end");
+        TacValue thenValue = condExp.thenExp.accept(this);
+        TacVariable dst = makeTempVar(condExp.expType);
+        emitTac(new TacCopy(thenValue, dst));
+        emitTac(new TacJump(labelCondEnd));
+        emitTac(new TacLabel(labelCondFalse));
+        TacValue elseValue = condExp.elseExp.accept(this);
+        emitTac(new TacCopy(elseValue, dst));
+        emitTac(new TacLabel(labelCondEnd));
+        return dst;
+    }
+
+    @Override
+    public TacValue visit(FunctionCallNode funcCall) {
+        // 函数调用
+        // func(arg0, arg1, ...)
+        // =>
+        // res0 = <eval arg0>
+        // res1 = <eval arg1>
+        // ...
+        // dst = invoke(func, [res0, res1,...])
+        // yield dst
+
+        IdentifierNode funcId = (IdentifierNode) funcCall.func;
+        List<TacValue> args = new ArrayList<>();
+        for (ExpressionNode arg : funcCall.args) {
+            args.add(arg.accept(this));
+        }
+        TacVariable dst = makeTempVar(funcCall.expType);
+        emitTac(new TacFunctionCall(funcId.id, args, dst));
+        return dst;
+    }
+
+    @Override
+    public TacValue visit(CastExpressionNode castExp) {
+        TacValue toCast = castExp.exp.accept(this);
+        Type targetType = castExp.targetType.getType();
+
+        if (targetType.isCompatible(castExp.exp.expType)) {
+            return toCast;
+        }
+        if (toCast instanceof TacConstant constant) {
+            return new TacConstant(constant.value.castTo((BasicType) targetType));
+        }
+        TacVariable dst = makeTempVar(castExp.expType);
+        if (targetType == BasicType.LONG) {
+            emitTac(new TacSignExtend(toCast, dst));
+        } else {
+            emitTac(new TacTruncate(toCast, dst));
+        }
+        return dst;
+    }
+
+    @Override
+    public BoolGenResult visit(ConstantNode constant, String jumpTarget, boolean inverse) {
+        // 常量，生成无条件跳转
+        if ((!constant.value.isZero()) ^ inverse) {
+            return BoolGenResult.ALWAYS_JUMP;
+        } else {
+            return BoolGenResult.NEVER_JUMP;
+        }
+    }
+
+    @Override
+    public BoolGenResult visit(BinaryExpressionNode binaryExp, String jumpTarget, boolean inverse) {
+        switch (binaryExp.op.op) {
+            case LOGICAL_AND -> {
+                if (inverse) {
+                    // if (!(a && b)) jump => if (!a) jump ; if (!b) jump
+                    switch (binaryExp.lhs.accept(this, jumpTarget, true)) {
                         case VARIOUS -> {
                             // a 未知
-                            if (lowerBool(binaryExp.rhs, labelFalse, true) == BoolGenResult.ALWAYS_JUMP) {
-                                // if (!b) goto zero 始终跳转，即 b=0
-                                // 推导出值为0
-                                emitTac(new TacLabel(labelFalse));
-                                return new TacIntConstant(0);
+                            if (binaryExp.rhs.accept(this, jumpTarget, true) == BoolGenResult.ALWAYS_JUMP) {
+                                // b=0 => !(a && b) = 1
+                                return BoolGenResult.ALWAYS_JUMP;
+                            } else {
+                                // 无法断言
+                                return BoolGenResult.VARIOUS;
                             }
-                            // 其他情况都不能断言结果值
                         }
                         case ALWAYS_JUMP -> {
-                            // if (!a) goto zero 始终跳转，即 a=0
-                            // 显然值为0，由于短路语义，右操作数永远不求值，可以优化
-                            emitTac(new TacLabel(labelFalse));
-                            return new TacIntConstant(0);
+                            // a=0 => !(a && b) = 1
+                            return BoolGenResult.ALWAYS_JUMP;
                         }
                         case NEVER_JUMP -> {
-                            // if (!a) goto zero 永不跳转，即 a=1
-                            // 得继续求值
-                            switch (lowerBool(binaryExp.rhs, labelFalse, true)) {
-                                case ALWAYS_JUMP -> {
-                                    // b=0 => 推导值为0
-                                    emitTac(new TacLabel(labelFalse));
-                                    return new TacIntConstant(0);
-                                }
-                                case NEVER_JUMP -> {
-                                    // b=1 => 推导值为1
-                                    emitTac(new TacLabel(labelFalse));
-                                    return new TacIntConstant(1);
-                                }
-                            }
-                            // b 未知，无法断言
+                            // a=1 => if (!b) jump;
+                            return binaryExp.rhs.accept(this, jumpTarget, true);
                         }
                     }
-
-                    // 无法断言的情况，需要生成指令来进行求值
-                    String labelEvalEnd = makeLabel("eval_end");
-                    TacVariable dst = new TacVariable(makeTempVar());
-                    emitTac(new TacCopy(new TacIntConstant(1), dst));
-                    emitTac(new TacJump(labelEvalEnd));
-                    emitTac(new TacLabel(labelFalse));
-                    emitTac(new TacCopy(new TacIntConstant(0), dst));
-                    emitTac(new TacLabel(labelEvalEnd));
-                    return dst;
-                }
-                case LOGICAL_OR -> {
-                    // 短路或求值
-                    // if (a || b) yield 1; else yield 0;
-                    // =>
-                    // if (a) goto one
-                    // if (b) goto one
-                    // tmp = 0
-                    // goto end
-                    // one:
-                    // tmp = 1
-                    // end:
-                    // yield tmp
-                    String labelTrue = makeLabel("or_true");
-
-                    // 注意短路语义，即使右操作数为1，左操作数也要求值
-                    // 显然左操作数永远都需要求值
-                    switch (lowerBool(binaryExp.lhs, labelTrue, false)) {
+                } else {
+                    // if (a && b) jump => if (!a) jump false ; if (b) jump; false:
+                    String label = makeLabel("and_false");
+                    BoolGenResult ret = BoolGenResult.VARIOUS;
+                    switch (binaryExp.lhs.accept(this, label, true)) {
                         case VARIOUS -> {
                             // a 未知
-                            if (lowerBool(binaryExp.rhs, labelTrue, false) == BoolGenResult.ALWAYS_JUMP) {
-                                // if (b) goto one 始终跳转，即 b=1
-                                // 推导出值为0
-                                emitTac(new TacLabel(labelTrue));
-                                return new TacIntConstant(1);
+                            if (binaryExp.rhs.accept(this, jumpTarget, false) == BoolGenResult.NEVER_JUMP) {
+                                // b=0 => a && b = 0
+                                ret = BoolGenResult.NEVER_JUMP;
                             }
-                            // 其他情况都不能断言结果值
+                            // 无法断言
                         }
                         case ALWAYS_JUMP -> {
-                            // if (a) goto one 始终跳转，即 a=1
-                            // 显然值为1，由于短路语义，右操作数永远不求值，可以优化
-                            emitTac(new TacLabel(labelTrue));
-                            return new TacIntConstant(1);
+                            // a=0 => a && b = 0
+                            ret = BoolGenResult.NEVER_JUMP;
                         }
                         case NEVER_JUMP -> {
-                            // if (a) goto one 永不跳转，即 a=0
-                            // 得继续求值
-                            switch (lowerBool(binaryExp.rhs, labelTrue, false)) {
-                                case ALWAYS_JUMP -> {
-                                    // b=1 => 推导值为1
-                                    emitTac(new TacLabel(labelTrue));
-                                    return new TacIntConstant(1);
-                                }
-                                case NEVER_JUMP -> {
-                                    // b=0 => 推导值为0
-                                    emitTac(new TacLabel(labelTrue));
-                                    return new TacIntConstant(0);
-                                }
-                            }
-                            // b 未知，无法断言
+                            // a=1 => if (b) jump;
+                            ret = binaryExp.rhs.accept(this, jumpTarget, false);
                         }
                     }
-
-                    // 无法断言的情况，需要生成指令来进行求值
-                    String labelEvalEnd = makeLabel("eval_end");
-                    TacVariable dst = new TacVariable(makeTempVar());
-                    emitTac(new TacCopy(new TacIntConstant(0), dst));
-                    emitTac(new TacJump(labelEvalEnd));
-                    emitTac(new TacLabel(labelTrue));
-                    emitTac(new TacCopy(new TacIntConstant(1), dst));
-                    emitTac(new TacLabel(labelEvalEnd));
-                    return dst;
-                }
-            }
-            // 普通求值
-            TacValue lhs = lowerExp(binaryExp.lhs);
-            TacValue rhs = lowerExp(binaryExp.rhs);
-            // TODO: 提取公共函数
-            if (lhs instanceof TacIntConstant lhsInt && rhs instanceof TacIntConstant rhsInt) {
-                int res = switch (binaryExp.op.op) {
-                    case ADD -> lhsInt.value + rhsInt.value;
-                    case SUBTRACT -> lhsInt.value - rhsInt.value;
-                    case MULTIPLY -> lhsInt.value * rhsInt.value;
-                    case DIVIDE -> lhsInt.value / rhsInt.value;
-                    case MODULO -> lhsInt.value % rhsInt.value;
-                    case LEFT_SHIFT -> lhsInt.value << rhsInt.value;
-                    case RIGHT_SHIFT -> lhsInt.value >> rhsInt.value;
-                    case BITWISE_AND -> lhsInt.value & rhsInt.value;
-                    case BITWISE_OR -> lhsInt.value | rhsInt.value;
-                    case BITWISE_XOR -> lhsInt.value ^ rhsInt.value;
-                    case EQUAL -> (lhsInt.value == rhsInt.value) ? 1 : 0;
-                    case NOT_EQUAL -> (lhsInt.value != rhsInt.value) ? 1 : 0;
-                    case LESS_THAN -> (lhsInt.value < rhsInt.value) ? 1 : 0;
-                    case LESS_OR_EQUAL -> (lhsInt.value <= rhsInt.value) ? 1 : 0;
-                    case GREATER_THAN -> (lhsInt.value > rhsInt.value) ? 1 : 0;
-                    case GREATER_OR_EQUAL -> (lhsInt.value >= rhsInt.value) ? 1 : 0;
-                    default -> throw new IllegalStateException("Control should never reach here");
-                };
-                return new TacIntConstant(res);
-            }
-            TacVariable dst = new TacVariable(makeTempVar());
-            emitTac(new TacBinaryOperation(binaryExp.op.op, lhs, rhs, dst));
-            return dst;
-        } else if (exp instanceof AssignmentNode assignment) {
-            // 赋值表达式
-            TacValue rhs = lowerExp(assignment.rhs);
-            TacVariable dst = new TacVariable(((IdentifierNode) assignment.lhs).id);
-            if (assignment.op.op == AssignmentOperator.ASSIGN) {
-                // 普通赋值
-                emitTac(new TacCopy(rhs, dst));
-                if (rhs instanceof TacIntConstant intConstant) {
-                    return intConstant;
-                }
-            } else {
-                // 复合赋值
-                emitTac(new TacBinaryOperation(assignment.op.op.getBinaryOperator(), dst, rhs, dst));
-            }
-            return dst;
-        } else if (exp instanceof IdentifierNode identifier) {
-            return new TacVariable(identifier.id);
-        } else if (exp instanceof IncrementDecrementNode incrementDecrement) {
-            // 自增自减表达式
-            BinaryOperator op = incrementDecrement.isIncrement ? BinaryOperator.ADD : BinaryOperator.SUBTRACT;
-            TacVariable dst = new TacVariable(((IdentifierNode) incrementDecrement.operand).id);
-            if (incrementDecrement.isPrefix) {
-                // ++/--a => a = a +/- 1; yield a;
-                emitTac(new TacBinaryOperation(op, dst, new TacIntConstant(1), dst));
-                return dst;
-            } else {
-                // a++/-- => temp = a; a = a +/- 1; yield temp;
-                TacVariable temp = new TacVariable(makeTempVar());
-                emitTac(new TacCopy(dst, temp));
-                emitTac(new TacBinaryOperation(op, dst, new TacIntConstant(1), dst));
-                return temp;
-            }
-        } else if (exp instanceof ConditionalExpressionNode condExp) {
-            // 条件表达式
-            // cond ? a : b
-            // =>
-            // if (!cond) goto false
-            // tmp = a
-            // goto end
-            // false:
-            // tmp = b
-            // end:
-            // yield tmp
-            String labelCondFalse = makeLabel("cond_false");
-
-            // 条件表达式也有求值顺序要求，先求条件值
-            switch (lowerBool(condExp.cond, labelCondFalse, true)) {
-                case ALWAYS_JUMP -> {
-                    // cond=0，只需求假分支即可
-                    emitTac(new TacLabel(labelCondFalse));
-                    return lowerExp(condExp.elseExp);
-                }
-                case NEVER_JUMP -> {
-                    // cond=1，只需求真分支即可
-                    TacValue ret = lowerExp(condExp.thenExp);
-                    emitTac(new TacLabel(labelCondFalse));
+                    // 保证标签有定义
+                    emitTac(new TacLabel(label));
                     return ret;
                 }
             }
-            String labelCondEnd = makeLabel("cond_end");
-            TacValue thenValue = lowerExp(condExp.thenExp);
-            TacVariable dst = new TacVariable(makeTempVar());
-            emitTac(new TacCopy(thenValue, dst));
-            emitTac(new TacJump(labelCondEnd));
-            emitTac(new TacLabel(labelCondFalse));
-            TacValue elseValue = lowerExp(condExp.elseExp);
-            emitTac(new TacCopy(elseValue, dst));
-            emitTac(new TacLabel(labelCondEnd));
-            return dst;
-        } else if (exp instanceof FunctionCallNode funcCall) {
-            // 函数调用
-            // func(arg0, arg1, ...)
-            // =>
-            // res0 = <eval arg0>
-            // res1 = <eval arg1>
-            // ...
-            // dst = invoke(func, [res0, res1,...])
-            // yield dst
-
-            IdentifierNode funcId = (IdentifierNode) funcCall.func;
-            List<TacValue> args = new ArrayList<>();
-            for (ExpressionNode arg : funcCall.args) {
-                args.add(lowerExp(arg));
+            case LOGICAL_OR -> {
+                if (inverse) {
+                    // if (!(a || b)) jump => if (a) jump false ; if (!b) jump; false:
+                    String label = makeLabel("or_false");
+                    BoolGenResult ret = BoolGenResult.VARIOUS;
+                    switch (binaryExp.lhs.accept(this, label, false)) {
+                        case VARIOUS -> {
+                            // a 未知
+                            if (binaryExp.rhs.accept(this, jumpTarget, true) == BoolGenResult.NEVER_JUMP) {
+                                // b=1 => !(a || b) = 0
+                                ret = BoolGenResult.NEVER_JUMP;
+                            }
+                            // 无法断言
+                        }
+                        case ALWAYS_JUMP -> {
+                            // a=1 => !(a || b) = 0
+                            ret = BoolGenResult.NEVER_JUMP;
+                        }
+                        case NEVER_JUMP -> {
+                            // a=0 => if (!b) jump;
+                            ret = binaryExp.rhs.accept(this, jumpTarget, true);
+                        }
+                    }
+                    // 保证标签有定义
+                    emitTac(new TacLabel(label));
+                    return ret;
+                } else {
+                    // if (a || b) jump => if (a) jump ; if (b) jump
+                    switch (binaryExp.lhs.accept(this, jumpTarget, false)) {
+                        case VARIOUS -> {
+                            // a 未知
+                            if (binaryExp.rhs.accept(this, jumpTarget, false) == BoolGenResult.ALWAYS_JUMP) {
+                                // b=1 => a || b = 1
+                                return BoolGenResult.ALWAYS_JUMP;
+                            } else {
+                                // 无法断言
+                                return BoolGenResult.VARIOUS;
+                            }
+                        }
+                        case ALWAYS_JUMP -> {
+                            // a=1 => a || b = 1
+                            return BoolGenResult.ALWAYS_JUMP;
+                        }
+                        case NEVER_JUMP -> {
+                            // a=0 => if (b) jump;
+                            return binaryExp.rhs.accept(this, jumpTarget, false);
+                        }
+                    }
+                }
             }
-            TacVariable dst = new TacVariable(makeTempVar());
-            emitTac(new TacFunctionCall(funcId.id, args, dst));
-            return dst;
+            case EQUAL, NOT_EQUAL, LESS_THAN, LESS_OR_EQUAL, GREATER_THAN, GREATER_OR_EQUAL -> {
+                // 直接生成比较跳转指令，而不是比较置位指令
+                Comparison cond = switch (binaryExp.op.op) {
+                    case EQUAL -> inverse ? Comparison.NOT_EQUAL : Comparison.EQUAL;
+                    case NOT_EQUAL -> inverse ? Comparison.EQUAL : Comparison.NOT_EQUAL;
+                    case LESS_THAN -> inverse ? Comparison.GREATER_EQUAL : Comparison.LESS;
+                    case LESS_OR_EQUAL -> inverse ? Comparison.GREATER : Comparison.LESS_EQUAL;
+                    case GREATER_THAN -> inverse ? Comparison.LESS_EQUAL : Comparison.GREATER;
+                    case GREATER_OR_EQUAL -> inverse ? Comparison.LESS : Comparison.GREATER_EQUAL;
+                    default -> throw new IllegalStateException("Control should never reach here");
+                };
+
+                TacValue lhs = binaryExp.lhs.accept(this);
+                TacValue rhs = binaryExp.rhs.accept(this);
+                if (lhs instanceof TacConstant lhsConst && rhs instanceof TacConstant rhsConst) {
+                    if (lhsConst.value.apply(cond, rhsConst.value).isZero()) {
+                        return BoolGenResult.NEVER_JUMP;
+                    } else {
+                        return BoolGenResult.ALWAYS_JUMP;
+                    }
+                }
+                emitTac(new TacJumpIfComparison(cond, lhs, rhs, jumpTarget));
+                return BoolGenResult.VARIOUS;
+            }
         }
-        throw new UnsupportedOperationException(
-            "Unsupported expression type: " + exp.getClass().getSimpleName());
+        return visitFallback(binaryExp, jumpTarget, inverse);
     }
 
-    /**
-     * 对表达式进行求值，在求值末尾处生成“若求值结果为真”则跳转的指令
-     * <p>
-     * 需要保证传入的标签始终有定义，即使该方法最终断言始终跳转或永不跳转也不例外
-     *
-     * @param exp        要求值的表达式
-     * @param jumpTarget 生成跳转指令的跳转目标
-     * @param inverse    是否将表达式条件取反
-     * @return 如果生成的跳转指令无条件跳转则返回 {@link BoolGenResult#ALWAYS_JUMP}，如果永不跳转则返回
-     * {@link BoolGenResult#NEVER_JUMP}，否则返回 {@link BoolGenResult#VARIOUS}。
-     * 返回 {@link BoolGenResult#ALWAYS_JUMP} 或 {@link BoolGenResult#NEVER_JUMP} 时将不生成任何跳转指令
-     */
-    private @NotNull AstToTacLowerer.BoolGenResult lowerBool(ExpressionNode exp, String jumpTarget, boolean inverse) {
 
-        if (exp instanceof IntConstantNode intConstant) {
-            // 常量，生成无条件跳转
-            if ((intConstant.value != 0) ^ inverse) {
-                return BoolGenResult.ALWAYS_JUMP;
-            } else {
-                return BoolGenResult.NEVER_JUMP;
-            }
+    @Override
+    public BoolGenResult visit(UnaryExpressionNode unaryExp, String jumpTarget, boolean inverse) {
+        if (unaryExp.op.op == UnaryOperator.NOT) {
+            return unaryExp.exp.accept(this, jumpTarget, !inverse);
         }
+        return visitFallback(unaryExp, jumpTarget, inverse);
+    }
 
-        if (exp instanceof BinaryExpressionNode binaryExp) {
-            switch (binaryExp.op.op) {
-                case LOGICAL_AND -> {
-                    if (inverse) {
-                        // if (!(a && b)) jump => if (!a) jump ; if (!b) jump
-                        switch (lowerBool(binaryExp.lhs, jumpTarget, true)) {
-                            case VARIOUS -> {
-                                // a 未知
-                                if (lowerBool(binaryExp.rhs, jumpTarget, true) == BoolGenResult.ALWAYS_JUMP) {
-                                    // b=0 => !(a && b) = 1
-                                    return BoolGenResult.ALWAYS_JUMP;
-                                } else {
-                                    // 无法断言
-                                    return BoolGenResult.VARIOUS;
-                                }
-                            }
-                            case ALWAYS_JUMP -> {
-                                // a=0 => !(a && b) = 1
-                                return BoolGenResult.ALWAYS_JUMP;
-                            }
-                            case NEVER_JUMP -> {
-                                // a=1 => if (!b) jump;
-                                return lowerBool(binaryExp.rhs, jumpTarget, true);
-                            }
-                        }
-                    } else {
-                        // if (a && b) jump => if (!a) jump false ; if (b) jump; false:
-                        String label = makeLabel("and_false");
-                        BoolGenResult ret = BoolGenResult.VARIOUS;
-                        switch (lowerBool(binaryExp.lhs, label, true)) {
-                            case VARIOUS -> {
-                                // a 未知
-                                if (lowerBool(binaryExp.rhs, jumpTarget, false) == BoolGenResult.NEVER_JUMP) {
-                                    // b=0 => a && b = 0
-                                    ret = BoolGenResult.NEVER_JUMP;
-                                }
-                                // 无法断言
-                            }
-                            case ALWAYS_JUMP -> {
-                                // a=0 => a && b = 0
-                                ret = BoolGenResult.NEVER_JUMP;
-                            }
-                            case NEVER_JUMP -> {
-                                // a=1 => if (b) jump;
-                                ret = lowerBool(binaryExp.rhs, jumpTarget, false);
-                            }
-                        }
-                        // 保证标签有定义
-                        emitTac(new TacLabel(label));
-                        return ret;
-                    }
-                }
-                case LOGICAL_OR -> {
-                    if (inverse) {
-                        // if (!(a || b)) jump => if (a) jump false ; if (!b) jump; false:
-                        String label = makeLabel("or_false");
-                        BoolGenResult ret = BoolGenResult.VARIOUS;
-                        switch (lowerBool(binaryExp.lhs, label, false)) {
-                            case VARIOUS -> {
-                                // a 未知
-                                if (lowerBool(binaryExp.rhs, jumpTarget, true) == BoolGenResult.NEVER_JUMP) {
-                                    // b=1 => !(a || b) = 0
-                                    ret = BoolGenResult.NEVER_JUMP;
-                                }
-                                // 无法断言
-                            }
-                            case ALWAYS_JUMP -> {
-                                // a=1 => !(a || b) = 0
-                                ret = BoolGenResult.NEVER_JUMP;
-                            }
-                            case NEVER_JUMP -> {
-                                // a=0 => if (!b) jump;
-                                ret = lowerBool(binaryExp.rhs, jumpTarget, true);
-                            }
-                        }
-                        // 保证标签有定义
-                        emitTac(new TacLabel(label));
-                        return ret;
-                    } else {
-                        // if (a || b) jump => if (a) jump ; if (b) jump
-                        switch (lowerBool(binaryExp.lhs, jumpTarget, false)) {
-                            case VARIOUS -> {
-                                // a 未知
-                                if (lowerBool(binaryExp.rhs, jumpTarget, false) == BoolGenResult.ALWAYS_JUMP) {
-                                    // b=1 => a || b = 1
-                                    return BoolGenResult.ALWAYS_JUMP;
-                                } else {
-                                    // 无法断言
-                                    return BoolGenResult.VARIOUS;
-                                }
-                            }
-                            case ALWAYS_JUMP -> {
-                                // a=1 => a || b = 1
-                                return BoolGenResult.ALWAYS_JUMP;
-                            }
-                            case NEVER_JUMP -> {
-                                // a=0 => if (b) jump;
-                                return lowerBool(binaryExp.rhs, jumpTarget, false);
-                            }
-                        }
-                    }
-                }
-                case EQUAL, NOT_EQUAL, LESS_THAN, LESS_OR_EQUAL, GREATER_THAN, GREATER_OR_EQUAL -> {
-                    // 直接生成比较跳转指令，而不是比较置位指令
-                    Comparison cond = switch (binaryExp.op.op) {
-                        case EQUAL -> inverse ? Comparison.NOT_EQUAL : Comparison.EQUAL;
-                        case NOT_EQUAL -> inverse ? Comparison.EQUAL : Comparison.NOT_EQUAL;
-                        case LESS_THAN -> inverse ? Comparison.GREATER_EQUAL : Comparison.LESS;
-                        case LESS_OR_EQUAL -> inverse ? Comparison.GREATER : Comparison.LESS_EQUAL;
-                        case GREATER_THAN -> inverse ? Comparison.LESS_EQUAL : Comparison.GREATER;
-                        case GREATER_OR_EQUAL -> inverse ? Comparison.LESS : Comparison.GREATER_EQUAL;
-                        default -> throw new IllegalStateException("Control should never reach here");
-                    };
-
-                    TacValue lhs = lowerExp(binaryExp.lhs);
-                    TacValue rhs = lowerExp(binaryExp.rhs);
-                    // TODO: 提取函数
-                    if (lhs instanceof TacIntConstant lhsInt && rhs instanceof TacIntConstant rhsInt) {
-                        boolean isJump = switch (cond) {
-                            case EQUAL -> lhsInt.value == rhsInt.value;
-                            case NOT_EQUAL -> lhsInt.value != rhsInt.value;
-                            case LESS -> lhsInt.value < rhsInt.value;
-                            case LESS_EQUAL -> lhsInt.value <= rhsInt.value;
-                            case GREATER -> lhsInt.value > rhsInt.value;
-                            case GREATER_EQUAL -> lhsInt.value >= rhsInt.value;
-                        };
-                        if (isJump) {
-                            return BoolGenResult.ALWAYS_JUMP;
-                        } else {
-                            return BoolGenResult.NEVER_JUMP;
-                        }
-                    }
-                    emitTac(new TacJumpIfComparison(cond, lhs, rhs, jumpTarget));
-                    return BoolGenResult.VARIOUS;
-                }
-            }
-        } else if (exp instanceof UnaryExpressionNode unaryExp) {
-            if (unaryExp.op.op == UnaryOperator.NOT) {
-                return lowerBool(unaryExp.exp, jumpTarget, !inverse);
-            }
-        }
-
+    private BoolGenResult visitFallback(ExpressionNode exp, String jumpTarget, boolean inverse) {
         // 其他表达式，先求值再与 0 比较跳转
-        TacValue value = lowerExp(exp);
-        if (value instanceof TacIntConstant intConstant) {
-            if ((intConstant.value != 0) ^ inverse) {
+        TacValue value = exp.accept(this);
+        if (value instanceof TacConstant constant) {
+            if ((!constant.value.isZero()) ^ inverse) {
                 return BoolGenResult.ALWAYS_JUMP;
             } else {
                 return BoolGenResult.NEVER_JUMP;
@@ -775,23 +838,33 @@ public final class AstToTacLowerer {
         return BoolGenResult.VARIOUS;
     }
 
-    /**
-     * 作为 {@link #lowerBool(ExpressionNode, String, boolean)} 的返回值
-     */
-    private enum BoolGenResult {
-        /**
-         * 跳转指令的跳转结果在该阶段无法断言
-         */
-        VARIOUS,
+    @Override
+    public BoolGenResult visit(IdentifierNode identifier, String jumpTarget, boolean inverse) {
+        return visitFallback(identifier, jumpTarget, inverse);
+    }
 
-        /**
-         * 断言跳转指令无条件跳转
-         */
-        ALWAYS_JUMP,
+    @Override
+    public BoolGenResult visit(AssignmentNode assignment, String jumpTarget, boolean inverse) {
+        return visitFallback(assignment, jumpTarget, inverse);
+    }
 
-        /**
-         * 断言跳转指令永不跳转
-         */
-        NEVER_JUMP
+    @Override
+    public BoolGenResult visit(IncrementDecrementNode incrementDecrement, String jumpTarget, boolean inverse) {
+        return visitFallback(incrementDecrement, jumpTarget, inverse);
+    }
+
+    @Override
+    public BoolGenResult visit(ConditionalExpressionNode condExp, String jumpTarget, boolean inverse) {
+        return visitFallback(condExp, jumpTarget, inverse);
+    }
+
+    @Override
+    public BoolGenResult visit(FunctionCallNode funcCall, String jumpTarget, boolean inverse) {
+        return visitFallback(funcCall, jumpTarget, inverse);
+    }
+
+    @Override
+    public BoolGenResult visit(CastExpressionNode castExp, String jumpTarget, boolean inverse) {
+        return visitFallback(castExp, jumpTarget, inverse);
     }
 }

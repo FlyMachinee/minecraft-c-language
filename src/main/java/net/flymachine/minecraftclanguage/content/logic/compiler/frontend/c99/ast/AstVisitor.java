@@ -44,4 +44,8 @@ public interface AstVisitor<T> {
     T visit(SwitchStatementNode node);
 
     T visit(FunctionCallNode node);
+
+    T visit(ConstantNode node);
+
+    T visit(CastExpressionNode node);
 }
