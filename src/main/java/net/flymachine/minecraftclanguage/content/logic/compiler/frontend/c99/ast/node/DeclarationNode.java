@@ -4,6 +4,8 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 import org.jetbrains.annotations.Nullable;
 
+import java.io.PrintStream;
+
 public final class DeclarationNode extends AstNode implements ExternalDeclarationNode {
     public @Nullable StorageClassSpecifierNode storageClass;
     public TypeNode type;
@@ -46,26 +48,42 @@ public final class DeclarationNode extends AstNode implements ExternalDeclaratio
     }
 
     @Override
-    public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
-        if (indentFirstLine) { stringBuilder.append("  ".repeat(indentLevel)); }
-        stringBuilder.append("DeclarationNode(\n");
-        stringBuilder.append("  ".repeat(indentLevel + 1)).append("storage=");
+    public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            indent(stream, indentLevel);
+        }
+
+        stream.println("DeclarationNode(");
+
+        indent(stream, indentLevel + 1);
+        stream.print("storageClass=");
         if (storageClass != null) {
-            storageClass.genFormattedString(stringBuilder, indentLevel + 1, false);
-            stringBuilder.append("\n");
+            storageClass.dump(stream);
+            stream.println(',');
         } else {
-            stringBuilder.append("null\n");
+            stream.println("null,");
         }
-        stringBuilder.append("  ".repeat(indentLevel + 1)).append("type=");
-        type.genFormattedString(stringBuilder);
-        stringBuilder.append(",\n");
-        stringBuilder.append("  ".repeat(indentLevel + 1)).append("id=\"").append(id.id).append("\",\n");
-        stringBuilder.append("  ".repeat(indentLevel + 1)).append("init=");
+
+        indent(stream, indentLevel + 1);
+        stream.print("type=");
+        type.dump(stream);
+        stream.println(',');
+
+        indent(stream, indentLevel + 1);
+        stream.print("id=");
+        id.dump(stream);
+        stream.println(',');
+
+        indent(stream, indentLevel + 1);
+        stream.print("init=");
         if (init != null) {
-            init.genFormattedString(stringBuilder, indentLevel + 1, false);
+            init.dump(stream, indentLevel + 1, false);
+            stream.println(',');
         } else {
-            stringBuilder.append("null\n");
+            stream.println("null,");
         }
-        stringBuilder.append("  ".repeat(indentLevel)).append(")\n");
+
+        indent(stream, indentLevel);
+        stream.print(')');
     }
 }

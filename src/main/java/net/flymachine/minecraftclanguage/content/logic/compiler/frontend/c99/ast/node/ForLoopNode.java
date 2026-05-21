@@ -5,6 +5,8 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 import org.jetbrains.annotations.Nullable;
 
+import java.io.PrintStream;
+
 public final class ForLoopNode extends StatementNode {
     public @Nullable ForInitNode init;
     public @Nullable ExpressionNode cond;
@@ -36,27 +38,44 @@ public final class ForLoopNode extends StatementNode {
     }
 
     @Override
-    public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
-        if (indentFirstLine) { stringBuilder.append("  ".repeat(indentLevel)); }
-        stringBuilder.append("ForLoopNode(\n");
+    public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            indent(stream, indentLevel);
+        }
+
+        stream.println("ForLoopNode(");
+
         if (loopLabel != null) {
-            stringBuilder.append("  ".repeat(indentLevel + 1)).append("loop=").append(loopLabel).append(",\n");
+            indent(stream, indentLevel + 1);
+            stream.append("loop=").append(loopLabel).append(',');
+            stream.println();
         }
         if (init != null) {
-            stringBuilder.append("  ".repeat(indentLevel + 1)).append("init=");
-            init.genFormattedString(stringBuilder, indentLevel + 1, false);
+            indent(stream, indentLevel + 1);
+            stream.print("init=");
+            init.dump(stream, indentLevel + 1, false);
+            stream.println(',');
         }
         if (cond != null) {
-            stringBuilder.append("  ".repeat(indentLevel + 1)).append("cond=");
-            cond.genFormattedString(stringBuilder, indentLevel + 1, false);
+            indent(stream, indentLevel + 1);
+            stream.print("cond=");
+            cond.dump(stream, indentLevel + 1, false);
+            stream.println(',');
         }
         if (step != null) {
-            stringBuilder.append("  ".repeat(indentLevel + 1)).append("step=");
-            step.genFormattedString(stringBuilder, indentLevel + 1, false);
+            indent(stream, indentLevel + 1);
+            stream.print("step=");
+            step.dump(stream, indentLevel + 1, false);
+            stream.println(',');
         }
-        stringBuilder.append("  ".repeat(indentLevel + 1)).append("body=");
-        body.genFormattedString(stringBuilder, indentLevel + 1, false);
-        stringBuilder.append("  ".repeat(indentLevel)).append(")\n");
+
+        indent(stream, indentLevel + 1);
+        stream.print("body=");
+        body.dump(stream, indentLevel + 1, false);
+        stream.println(',');
+
+        indent(stream, indentLevel);
+        stream.print(')');
     }
 
     @Override

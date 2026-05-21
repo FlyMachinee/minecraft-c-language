@@ -4,6 +4,8 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.StatementVisitor;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
+import java.io.PrintStream;
+
 public final class NullStatementNode extends StatementNode {
     // 其 Location 为分号的 Location
 
@@ -17,16 +19,16 @@ public final class NullStatementNode extends StatementNode {
     }
 
     @Override
-    public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
+    public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stringBuilder.append("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
         if (isLabeled()) {
-            stringBuilder.append("NullStatementNode(");
-            genFormatedStringForLabels(stringBuilder);
-            stringBuilder.append(")\n");
+            stream.print("NullStatementNode(");
+            dumpLabels(stream);
+            stream.print(')');
         } else {
-            stringBuilder.append("NullStatementNode()\n");
+            stream.print("NullStatementNode()");
         }
     }
 

@@ -2,6 +2,8 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.as
 
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
+import java.io.PrintStream;
+
 public abstract class AstNode implements AstInterface {
     public final SourceLocation wholeLoc;
 
@@ -12,5 +14,11 @@ public abstract class AstNode implements AstInterface {
 
     protected AstNode(SourceLocation wholeLoc) {
         this.wholeLoc = wholeLoc;
+    }
+
+    protected void indent(PrintStream stream, int indentLevel) {
+        for (int i = 0; i < indentLevel; i++) {
+            stream.print("  ");
+        }
     }
 }

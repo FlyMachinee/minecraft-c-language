@@ -2,6 +2,8 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.as
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
 
+import java.io.PrintStream;
+
 public final class DeclarationBlockItemNode extends AstNode implements BlockItemNode {
     public DeclarationNode decl;
 
@@ -16,7 +18,7 @@ public final class DeclarationBlockItemNode extends AstNode implements BlockItem
     }
 
     @Override
-    public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
-        decl.genFormattedString(stringBuilder, indentLevel, indentFirstLine);
+    public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        decl.dump(stream, indentLevel, indentFirstLine);
     }
 }

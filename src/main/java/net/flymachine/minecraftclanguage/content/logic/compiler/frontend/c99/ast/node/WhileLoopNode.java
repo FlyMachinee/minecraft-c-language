@@ -4,6 +4,8 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.StatementVisitor;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
+import java.io.PrintStream;
+
 public final class WhileLoopNode extends StatementNode {
     public ExpressionNode cond;
     public StatementNode body;
@@ -38,24 +40,44 @@ public final class WhileLoopNode extends StatementNode {
     }
 
     @Override
-    public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
-        if (indentFirstLine) { stringBuilder.append("  ".repeat(indentLevel)); }
-        stringBuilder.append(isDoWhile ? "DoWhileLoopNode(\n" : "WhileLoopNode(\n");
+    public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            indent(stream, indentLevel);
+        }
+
+        stream.println(isDoWhile ? "DoWhileLoopNode(" : "WhileLoopNode(");
+
         if (loopLabel != null) {
-            stringBuilder.append("  ".repeat(indentLevel + 1)).append("loop=").append(loopLabel).append(",\n");
+            indent(stream, indentLevel + 1);
+            stream.print("loop=");
+            stream.print(loopLabel);
+            stream.println(',');
         }
+
         if (isDoWhile) {
-            stringBuilder.append("  ".repeat(indentLevel + 1)).append("body=");
-            body.genFormattedString(stringBuilder, indentLevel + 1, false);
-            stringBuilder.append("  ".repeat(indentLevel + 1)).append("cond=");
-            cond.genFormattedString(stringBuilder, indentLevel + 1, false);
+            indent(stream, indentLevel + 1);
+            stream.print("body=");
+            body.dump(stream, indentLevel + 1, false);
+            stream.println(',');
+
+            indent(stream, indentLevel + 1);
+            stream.print("cond=");
+            cond.dump(stream, indentLevel + 1, false);
+            stream.println(',');
         } else {
-            stringBuilder.append("  ".repeat(indentLevel + 1)).append("cond=");
-            cond.genFormattedString(stringBuilder, indentLevel + 1, false);
-            stringBuilder.append("  ".repeat(indentLevel + 1)).append("body=");
-            body.genFormattedString(stringBuilder, indentLevel + 1, false);
+            indent(stream, indentLevel + 1);
+            stream.print("cond=");
+            cond.dump(stream, indentLevel + 1, false);
+            stream.println(',');
+
+            indent(stream, indentLevel + 1);
+            stream.print("body=");
+            body.dump(stream, indentLevel + 1, false);
+            stream.println(',');
         }
-        stringBuilder.append("  ".repeat(indentLevel)).append(")\n");
+
+        indent(stream, indentLevel);
+        stream.print(')');
     }
 
     @Override

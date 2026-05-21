@@ -4,6 +4,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.StatementVisitor;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
+import java.io.PrintStream;
 import java.util.List;
 
 public final class CompoundStatementNode extends StatementNode {
@@ -33,22 +34,32 @@ public final class CompoundStatementNode extends StatementNode {
     }
 
     @Override
-    public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
-        if (indentFirstLine) { stringBuilder.append("  ".repeat(indentLevel)); }
-        stringBuilder.append("CompoundStatementNode(\n");
+    public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            indent(stream, indentLevel);
+        }
+
+        stream.println("CompoundStatementNode(");
+
         if (isLabeled()) {
-            stringBuilder.append("  ".repeat(indentLevel + 1));
-            genFormatedStringForLabels(stringBuilder);
-            stringBuilder.append(",\n");
+            indent(stream, indentLevel + 1);
+            dumpLabels(stream);
+            stream.println(',');
         }
-        stringBuilder.append("  ".repeat(indentLevel + 1));
-        stringBuilder.append("blockItems=[\n");
+
+        indent(stream, indentLevel + 1);
+        stream.println("blockItems=[");
+
         for (BlockItemNode item : blockItems) {
-            item.genFormattedString(stringBuilder, indentLevel + 2, true);
-            stringBuilder.append("  ".repeat(indentLevel + 2)).append(",\n");
+            // item.genFormattedString(stringBuilder, indentLevel + 2, true);
+            item.dump(stream, indentLevel + 2, true);
+            stream.println(',');
         }
-        stringBuilder.append("  ".repeat(indentLevel + 1)).append("]\n");
-        stringBuilder.append("  ".repeat(indentLevel)).append(")\n");
+
+        indent(stream, indentLevel + 1);
+        stream.println("],");
+        indent(stream, indentLevel);
+        stream.print(')');
     }
 
     @Override

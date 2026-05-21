@@ -6,6 +6,8 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.TacValue;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
+import java.io.PrintStream;
+
 public abstract class ExpressionNode extends AstNode {
     public Type expType = null;
 
@@ -17,5 +19,16 @@ public abstract class ExpressionNode extends AstNode {
 
     public abstract ExpressionBoolVisitor.BoolGenResult accept(
         ExpressionBoolVisitor visitor, String jumpTarget, boolean inverse);
+
+    /**
+     * 会在结尾加换行
+     */
+    protected void dumpExpType(PrintStream stream, int indentLevel) {
+        if (expType != null) {
+            indent(stream, indentLevel);
+            stream.append("expType=").append(expType.toString()).append(',');
+            stream.println();
+        }
+    }
 }
 

@@ -4,6 +4,8 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.BinaryOpe
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
+import java.io.PrintStream;
+
 public final class BinaryOperatorNode extends AstNode {
     public BinaryOperator op;
 
@@ -18,7 +20,7 @@ public final class BinaryOperatorNode extends AstNode {
     }
 
     @Override
-    public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
-        stringBuilder.append(op);
+    public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        stream.print(op);
     }
 }

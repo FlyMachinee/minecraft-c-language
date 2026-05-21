@@ -5,6 +5,8 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 import org.jetbrains.annotations.Nullable;
 
+import java.io.PrintStream;
+
 public final class IfStatementNode extends StatementNode {
     public ExpressionNode cond;
     public StatementNode thenStmt;
@@ -36,23 +38,38 @@ public final class IfStatementNode extends StatementNode {
     }
 
     @Override
-    public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
-        if (indentFirstLine) { stringBuilder.append("  ".repeat(indentLevel)); }
-        stringBuilder.append("IfStatementNode(\n");
+    public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            indent(stream, indentLevel);
+        }
+
+        stream.println("IfStatementNode(");
+
         if (isLabeled()) {
-            stringBuilder.append("  ".repeat(indentLevel + 1));
-            genFormatedStringForLabels(stringBuilder);
-            stringBuilder.append(",\n");
+            indent(stream, indentLevel + 1);
+            dumpLabels(stream);
+            stream.println(',');
         }
-        stringBuilder.append("  ".repeat(indentLevel + 1)).append("cond=");
-        cond.genFormattedString(stringBuilder, indentLevel + 1, false);
-        stringBuilder.append("  ".repeat(indentLevel + 1)).append("thenStmt=");
-        thenStmt.genFormattedString(stringBuilder, indentLevel + 1, false);
+
+        indent(stream, indentLevel + 1);
+        stream.print("cond=");
+        cond.dump(stream, indentLevel + 1, false);
+        stream.println(',');
+
+        indent(stream, indentLevel + 1);
+        stream.print("thenStmt=");
+        thenStmt.dump(stream, indentLevel + 1, false);
+        stream.println(',');
+
         if (elseStmt != null) {
-            stringBuilder.append("  ".repeat(indentLevel + 1)).append("elseStmt=");
-            elseStmt.genFormattedString(stringBuilder, indentLevel + 1, false);
+            indent(stream, indentLevel + 1);
+            stream.print("elseStmt=");
+            elseStmt.dump(stream, indentLevel + 1, false);
+            stream.println(',');
         }
-        stringBuilder.append("  ".repeat(indentLevel)).append(")\n");
+
+        indent(stream, indentLevel);
+        stream.print(')');
     }
 
     @Override

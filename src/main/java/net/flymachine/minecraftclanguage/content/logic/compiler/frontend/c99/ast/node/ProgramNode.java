@@ -4,6 +4,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
 import java.util.List;
+import java.io.PrintStream;
 
 public final class ProgramNode extends AstNode {
     public List<ExternalDeclarationNode> extDecls;
@@ -19,13 +20,18 @@ public final class ProgramNode extends AstNode {
     }
 
     @Override
-    public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
-        if (indentFirstLine) { stringBuilder.append("  ".repeat(indentLevel)); }
-        stringBuilder.append("ProgramNode(externalDecls=[\n");
-        for (ExternalDeclarationNode declaration : extDecls) {
-            declaration.genFormattedString(stringBuilder, indentLevel + 1, true);
-            stringBuilder.append("  ".repeat(indentLevel + 1)).append(",\n");
+    public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) { indent(stream, indentLevel);
         }
-        stringBuilder.append("])\n");
+
+        stream.println("ProgramNode(extDecls=[");
+
+        for (ExternalDeclarationNode declaration : extDecls) {
+            declaration.dump(stream, indentLevel + 1, true);
+            stream.println(',');
+        }
+
+        indent(stream, indentLevel);
+        stream.print("])");
     }
 }

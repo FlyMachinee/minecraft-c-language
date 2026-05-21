@@ -6,6 +6,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.TacValue;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
+import java.io.PrintStream;
 import java.util.List;
 
 public final class FunctionCallNode extends ExpressionNode {
@@ -24,21 +25,35 @@ public final class FunctionCallNode extends ExpressionNode {
     }
 
     @Override
-    public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
-        if (indentFirstLine) { stringBuilder.append("  ".repeat(indentLevel)); }
-        stringBuilder.append("FunctionCallNode(\n");
-        stringBuilder.append("  ".repeat(indentLevel + 1)).append("function=");
-        func.genFormattedString(stringBuilder, indentLevel + 1, false);
-        stringBuilder.append("  ".repeat(indentLevel + 1)).append("arguments=[\n");
-        for (ExpressionNode argument : args) {
-            argument.genFormattedString(stringBuilder, indentLevel + 2, true);
-            stringBuilder.append("  ".repeat(indentLevel + 2)).append(",\n");
+    public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            indent(stream, indentLevel);
         }
-        stringBuilder.append("  ".repeat(indentLevel + 1)).append("]\n");
-        if (expType != null) {
-            stringBuilder.append("  ".repeat(indentLevel + 1)).append("expType=").append(expType).append("\n");
+
+        stream.println("FunctionCallNode(");
+
+        indent(stream, indentLevel + 1);
+        stream.print("func=");
+        func.dump(stream, indentLevel + 1, false);
+        stream.println(',');
+
+        indent(stream, indentLevel + 1);
+        if (!args.isEmpty()) {
+            stream.println("args=[");
+            for (ExpressionNode argument : args) {
+                argument.dump(stream, indentLevel + 2, true);
+                stream.println(',');
+            }
+            indent(stream, indentLevel + 1);
+            stream.println("],");
+        } else {
+            stream.println("args=[],");
         }
-        stringBuilder.append("  ".repeat(indentLevel)).append(")\n");
+
+        dumpExpType(stream, indentLevel + 1);
+
+        indent(stream, indentLevel);
+        stream.print(')');
     }
 
     @Override

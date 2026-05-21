@@ -6,6 +6,8 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.TacValue;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
+import java.io.PrintStream;
+
 public final class CastExpressionNode extends ExpressionNode {
     public TypeNode targetType;
     public ExpressionNode exp;
@@ -22,17 +24,27 @@ public final class CastExpressionNode extends ExpressionNode {
     }
 
     @Override
-    public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
+    public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stringBuilder.append("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
-        stringBuilder.append("CastNode(\n");
-        stringBuilder.append("  ".repeat(indentLevel + 1)).append("targetType=");
-        targetType.genFormattedString(stringBuilder);
-        stringBuilder.append(",\n");
-        stringBuilder.append("  ".repeat(indentLevel + 1)).append("exp=");
-        exp.genFormattedString(stringBuilder, indentLevel + 1, false);
-        stringBuilder.append("  ".repeat(indentLevel)).append(")\n");
+
+        stream.println("CastNode(");
+
+        indent(stream, indentLevel + 1);
+        stream.print("targetType=");
+        targetType.dump(stream);
+        stream.println(',');
+
+        indent(stream, indentLevel + 1);
+        stream.print("exp=");
+        exp.dump(stream, indentLevel + 1, false);
+        stream.println(',');
+
+        dumpExpType(stream, indentLevel + 1);
+
+        indent(stream, indentLevel);
+        stream.print(')');
     }
 
     @Override

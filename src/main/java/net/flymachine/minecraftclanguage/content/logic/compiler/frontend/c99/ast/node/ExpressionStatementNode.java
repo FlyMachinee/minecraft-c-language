@@ -3,6 +3,8 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.as
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.StatementVisitor;
 
+import java.io.PrintStream;
+
 public final class ExpressionStatementNode extends StatementNode {
     public ExpressionNode exp;
 
@@ -17,19 +19,26 @@ public final class ExpressionStatementNode extends StatementNode {
     }
 
     @Override
-    public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
+    public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stringBuilder.append("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
-        stringBuilder.append("ExpressionStatementNode(\n");
+
+        stream.println("ExpressionStatementNode(");
+
         if (isLabeled()) {
-            stringBuilder.append("  ".repeat(indentLevel + 1));
-            genFormatedStringForLabels(stringBuilder);
-            stringBuilder.append(",\n");
+            indent(stream, indentLevel + 1);
+            dumpLabels(stream);
+            stream.println(',');
         }
-        stringBuilder.append("  ".repeat(indentLevel + 1)).append("exp=");
-        exp.genFormattedString(stringBuilder, indentLevel + 1, false);
-        stringBuilder.append("  ".repeat(indentLevel)).append(")\n");
+
+        indent(stream, indentLevel + 1);
+        stream.print("exp=");
+        exp.dump(stream, indentLevel + 1, false);
+        stream.println(',');
+
+        indent(stream, indentLevel);
+        stream.print(')');
     }
 
     @Override

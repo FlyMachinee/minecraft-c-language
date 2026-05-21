@@ -33,9 +33,6 @@ public final class C99ToLA64Compiler {
         if (frontendResult == null) {
             return null;
         }
-        // StringBuilder sb = new StringBuilder();
-        // frontendResult.tacProgram().genFormattedString(sb);
-        // System.out.println(sb);
         TacProgram optimizedTacProgram = new TacOptimizer().optimize(frontendResult.tacProgram());
         String newName = charStream.getSourceName().replaceAll("\\.[^.]+$", "") + ".s";
         List<LA64AsmStatement> asm = new LA64Backend().compile(

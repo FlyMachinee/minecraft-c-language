@@ -4,6 +4,8 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.StatementVisitor;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
+import java.io.PrintStream;
+
 public final class BreakNode extends StatementNode {
     public String loopOrSwitchLabel;
 
@@ -17,12 +19,14 @@ public final class BreakNode extends StatementNode {
     }
 
     @Override
-    public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
-        if (indentFirstLine) { stringBuilder.append("  ".repeat(indentLevel)); }
+    public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            indent(stream, indentLevel);
+        }
         if (loopOrSwitchLabel != null) {
-            stringBuilder.append("BreakNode(loop/switch=").append(loopOrSwitchLabel).append(")\n");
+            stream.append("BreakNode(loop/switch=").append(loopOrSwitchLabel).append(')');
         } else {
-            stringBuilder.append("BreakNode()\n");
+            stream.print("BreakNode()");
         }
     }
 

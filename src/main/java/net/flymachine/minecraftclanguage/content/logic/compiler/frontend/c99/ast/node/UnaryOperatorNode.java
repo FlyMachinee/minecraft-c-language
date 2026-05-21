@@ -4,6 +4,8 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.UnaryOper
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
+import java.io.PrintStream;
+
 public final class UnaryOperatorNode extends AstNode {
     public UnaryOperator op;
 
@@ -18,7 +20,7 @@ public final class UnaryOperatorNode extends AstNode {
     }
 
     @Override
-    public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
-        stringBuilder.append(op);
+    public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        stream.print(op);
     }
 }

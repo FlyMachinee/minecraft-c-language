@@ -6,6 +6,8 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.StatementVisitor;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
+import java.io.PrintStream;
+
 public final class SwitchStatementNode extends StatementNode {
     public ExpressionNode exp;
     public StatementNode body;
@@ -25,17 +27,32 @@ public final class SwitchStatementNode extends StatementNode {
     }
 
     @Override
-    public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
-        if (indentFirstLine) { stringBuilder.append("  ".repeat(indentLevel)); }
-        stringBuilder.append("SwitchStatementNode(\n");
-        if (switchLabel != null) {
-            stringBuilder.append("  ".repeat(indentLevel + 1)).append("label=").append(switchLabel).append(",\n");
+    public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            indent(stream, indentLevel);
         }
-        stringBuilder.append("  ".repeat(indentLevel + 1)).append("exp=");
-        exp.genFormattedString(stringBuilder, indentLevel + 1, false);
-        stringBuilder.append("  ".repeat(indentLevel + 1)).append("body=");
-        body.genFormattedString(stringBuilder, indentLevel + 1, false);
-        stringBuilder.append("  ".repeat(indentLevel)).append(")\n");
+
+        stream.println("SwitchStatementNode(");
+
+        if (switchLabel != null) {
+            indent(stream, indentLevel + 1);
+            stream.print("switch=");
+            stream.print(switchLabel);
+            stream.println(',');
+        }
+
+        indent(stream, indentLevel + 1);
+        stream.print("exp=");
+        exp.dump(stream, indentLevel + 1, false);
+        stream.println(',');
+
+        indent(stream, indentLevel + 1);
+        stream.print("body=");
+        body.dump(stream, indentLevel + 1, false);
+        stream.println(',');
+
+        indent(stream, indentLevel);
+        stream.print(')');
     }
 
     @Override

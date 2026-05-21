@@ -4,6 +4,8 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 import org.jetbrains.annotations.Nullable;
 
+import java.io.PrintStream;
+
 public final class FunctionDefinitionNode extends AstNode implements ExternalDeclarationNode {
     public IdentifierNode id;
     public TypeNode funcType;
@@ -27,23 +29,38 @@ public final class FunctionDefinitionNode extends AstNode implements ExternalDec
     }
 
     @Override
-    public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
-        if (indentFirstLine) { stringBuilder.append("  ".repeat(indentLevel)); }
-        stringBuilder.append("FunctionDefinitionNode(\n");
-        stringBuilder.append("  ".repeat(indentLevel + 1));
-        stringBuilder.append("name=\"").append(id.id).append("\",\n");
-        stringBuilder.append("  ".repeat(indentLevel + 1)).append("type=");
-        funcType.genFormattedString(stringBuilder);
-        stringBuilder.append(",\n");
-        stringBuilder.append("  ".repeat(indentLevel + 1)).append("storage=");
-        if (storageClass != null) {
-            storageClass.genFormattedString(stringBuilder, indentLevel + 1, false);
-            stringBuilder.append("\n");
-        } else {
-            stringBuilder.append("null\n");
+    public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            indent(stream, indentLevel);
         }
-        stringBuilder.append("  ".repeat(indentLevel + 1)).append("body=");
-        body.genFormattedString(stringBuilder, indentLevel + 1, false);
-        stringBuilder.append("  ".repeat(indentLevel)).append(")\n");
+
+        stream.println("FunctionDefinitionNode(");
+
+        indent(stream, indentLevel + 1);
+        stream.print("name=");
+        id.dump(stream);
+        stream.println(',');
+
+        indent(stream, indentLevel + 1);
+        stream.print("type=");
+        funcType.dump(stream);
+        stream.println(',');
+
+        indent(stream, indentLevel + 1);
+        stream.print("storageClass=");
+        if (storageClass != null) {
+            storageClass.dump(stream);
+            stream.println(',');
+        } else {
+            stream.println("null,");
+        }
+
+        indent(stream, indentLevel + 1);
+        stream.print("body=");
+        body.dump(stream, indentLevel + 1, false);
+        stream.println(',');
+
+        indent(stream, indentLevel);
+        stream.print(')');
     }
 }

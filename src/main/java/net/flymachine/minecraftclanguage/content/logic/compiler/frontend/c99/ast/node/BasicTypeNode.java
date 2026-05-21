@@ -4,6 +4,8 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Basi
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
+import java.io.PrintStream;
+
 public final class BasicTypeNode extends AstNode implements TypeNode {
     public BasicType type;
 
@@ -18,8 +20,8 @@ public final class BasicTypeNode extends AstNode implements TypeNode {
     }
 
     @Override
-    public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
-        stringBuilder.append(type);
+    public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        stream.print(type);
     }
 
     @Override

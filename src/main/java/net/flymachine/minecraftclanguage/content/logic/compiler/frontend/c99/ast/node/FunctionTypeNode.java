@@ -5,6 +5,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Func
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
+import java.io.PrintStream;
 import java.util.List;
 
 public final class FunctionTypeNode extends AstNode implements TypeNode {
@@ -28,8 +29,8 @@ public final class FunctionTypeNode extends AstNode implements TypeNode {
     }
 
     @Override
-    public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
-        stringBuilder.append(getType());
+    public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        stream.print(getType());
     }
 
     @Override

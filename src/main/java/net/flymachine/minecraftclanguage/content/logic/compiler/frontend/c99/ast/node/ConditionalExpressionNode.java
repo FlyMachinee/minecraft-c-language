@@ -6,6 +6,8 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.TacValue;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
+import java.io.PrintStream;
+
 public final class ConditionalExpressionNode extends ExpressionNode {
     public ExpressionNode cond;
     public ExpressionNode thenExp;
@@ -24,21 +26,32 @@ public final class ConditionalExpressionNode extends ExpressionNode {
     }
 
     @Override
-    public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
+    public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stringBuilder.append("    ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
-        stringBuilder.append("ConditionalExpressionNode(\n");
-        stringBuilder.append("  ".repeat(indentLevel + 1)).append("cond=");
-        cond.genFormattedString(stringBuilder, indentLevel + 1, false);
-        stringBuilder.append("  ".repeat(indentLevel + 1)).append("thenExpr=");
-        thenExp.genFormattedString(stringBuilder, indentLevel + 1, false);
-        stringBuilder.append("  ".repeat(indentLevel + 1)).append("elseExpr=");
-        elseExp.genFormattedString(stringBuilder, indentLevel + 1, false);
-        if (expType != null) {
-            stringBuilder.append("  ".repeat(indentLevel + 1)).append("expType=").append(expType).append("\n");
-        }
-        stringBuilder.append("  ".repeat(indentLevel)).append(")\n");
+
+        stream.println("ConditionalExpressionNode(");
+
+        indent(stream, indentLevel + 1);
+        stream.print("cond=");
+        cond.dump(stream, indentLevel + 1, false);
+        stream.println(',');
+
+        indent(stream, indentLevel + 1);
+        stream.println("thenExp=");
+        thenExp.dump(stream, indentLevel + 1, false);
+        stream.println(',');
+
+        indent(stream, indentLevel + 1);
+        stream.println("elseExp=");
+        elseExp.dump(stream, indentLevel + 1, false);
+        stream.println(',');
+
+        dumpExpType(stream, indentLevel + 1);
+
+        indent(stream, indentLevel);
+        stream.print(')');
     }
 
     @Override

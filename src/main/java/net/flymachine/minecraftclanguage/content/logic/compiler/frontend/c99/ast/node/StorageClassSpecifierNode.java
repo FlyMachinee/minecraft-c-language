@@ -4,6 +4,8 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.StorageCl
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
+import java.io.PrintStream;
+
 public class StorageClassSpecifierNode extends AstNode {
     public StorageClassSpecifier storageClass;
 
@@ -18,7 +20,7 @@ public class StorageClassSpecifierNode extends AstNode {
     }
 
     @Override
-    public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
-        stringBuilder.append(storageClass);
+    public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        stream.print(storageClass);
     }
 }

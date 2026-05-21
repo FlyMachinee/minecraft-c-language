@@ -9,6 +9,8 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.TacValue;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
+import java.io.PrintStream;
+
 public final class ConstantNode extends ExpressionNode {
     public Constant value;
 
@@ -33,13 +35,16 @@ public final class ConstantNode extends ExpressionNode {
     }
 
     @Override
-    public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
-        if (indentFirstLine) { stringBuilder.append("  ".repeat(indentLevel)); }
-        stringBuilder.append("ConstantNode(value=").append(value);
+    public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            indent(stream, indentLevel);
+        }
+
+        stream.append("ConstantNode(value=").append(value.toString());
         if (expType != null) {
-            stringBuilder.append(", expType=").append(expType).append(")\n");
+            stream.append(", expType=").append(expType.toString()).append(')');
         } else {
-            stringBuilder.append(")\n");
+            stream.print(')');
         }
     }
 

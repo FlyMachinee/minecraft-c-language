@@ -4,6 +4,8 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.StatementVisitor;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
+import java.io.PrintStream;
+
 public final class ContinueNode extends StatementNode {
     public String loopLabel;
 
@@ -17,12 +19,14 @@ public final class ContinueNode extends StatementNode {
     }
 
     @Override
-    public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
-        if (indentFirstLine) { stringBuilder.append("  ".repeat(indentLevel)); }
+    public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            indent(stream, indentLevel);
+        }
         if (loopLabel != null) {
-            stringBuilder.append("ContinueNode(loop=").append(loopLabel).append(")\n");
+            stream.append("ContinueNode(loop=").append(loopLabel).append(')');
         } else {
-            stringBuilder.append("ContinueNode()\n");
+            stream.print("ContinueNode()");
         }
     }
 

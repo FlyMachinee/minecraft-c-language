@@ -6,6 +6,8 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.TacValue;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
+import java.io.PrintStream;
+
 public final class IdentifierNode extends ExpressionNode {
     public String id;
 
@@ -20,14 +22,17 @@ public final class IdentifierNode extends ExpressionNode {
     }
 
     @Override
-    public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
-        if (indentFirstLine) { stringBuilder.append("  ".repeat(indentLevel)); }
-        stringBuilder.append("IdentifierNode(id=\"").append(id);
-        if (expType != null) {
-            stringBuilder.append("\", expType=").append(expType).append(")\n");
-        } else {
-            stringBuilder.append("\")\n");
+    public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            indent(stream, indentLevel);
         }
+        stream.print("IdentifierNode(id=");
+        stream.print(id);
+        if (expType != null) {
+            stream.print(", expType=");
+            stream.print(expType);
+        }
+        stream.print(')');
     }
 
     @Override

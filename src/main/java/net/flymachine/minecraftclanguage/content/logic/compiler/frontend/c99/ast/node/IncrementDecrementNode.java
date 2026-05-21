@@ -6,6 +6,8 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.TacValue;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
+import java.io.PrintStream;
+
 public final class IncrementDecrementNode extends ExpressionNode {
     public boolean isIncrement;
     public boolean isPrefix;
@@ -28,18 +30,27 @@ public final class IncrementDecrementNode extends ExpressionNode {
     }
 
     @Override
-    public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
+    public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stringBuilder.append("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
-        stringBuilder.append(isIncrement ? "IncrementNode(\n" : "DecrementNode(\n");
-        stringBuilder.append("  ".repeat(indentLevel + 1)).append("prefix=").append(isPrefix).append("\n");
-        stringBuilder.append("  ".repeat(indentLevel + 1)).append("operand=");
-        operand.genFormattedString(stringBuilder, indentLevel + 1, false);
-        if (expType != null) {
-            stringBuilder.append("  ".repeat(indentLevel + 1)).append("expType=").append(expType).append("\n");
-        }
-        stringBuilder.append("  ".repeat(indentLevel)).append(")\n");
+
+        stream.println(isIncrement ? "IncrementNode(" : "DecrementNode(");
+
+        indent(stream, indentLevel + 1);
+        stream.print("prefix=");
+        stream.print(isPrefix);
+        stream.println(',');
+
+        indent(stream, indentLevel + 1);
+        stream.print("operand=");
+        operand.dump(stream, indentLevel + 1, false);
+        stream.println(',');
+
+        dumpExpType(stream, indentLevel + 1);
+
+        indent(stream, indentLevel);
+        stream.print(')');
     }
 
     @Override

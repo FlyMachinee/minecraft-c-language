@@ -6,6 +6,8 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.TacValue;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
+import java.io.PrintStream;
+
 public final class UnaryExpressionNode extends ExpressionNode {
     public UnaryOperatorNode op;
     public ExpressionNode exp;
@@ -22,16 +24,27 @@ public final class UnaryExpressionNode extends ExpressionNode {
     }
 
     @Override
-    public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
-        if (indentFirstLine) { stringBuilder.append("  ".repeat(indentLevel)); }
-        stringBuilder.append("UnaryExpressionNode(\n").append("  ".repeat(indentLevel + 1)).append("op=");
-        op.genFormattedString(stringBuilder);
-        stringBuilder.append(",\n").append("  ".repeat(indentLevel + 1)).append("exp=");
-        exp.genFormattedString(stringBuilder, indentLevel + 1, false);
-        if (expType != null) {
-            stringBuilder.append("  ".repeat(indentLevel + 1)).append("expType=").append(expType).append(",\n");
+    public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            indent(stream, indentLevel);
         }
-        stringBuilder.append("  ".repeat(indentLevel)).append(")\n");
+
+        stream.println("UnaryExpressionNode(");
+
+        indent(stream, indentLevel + 1);
+        stream.print("op=");
+        op.dump(stream);
+        stream.println(',');
+
+        indent(stream, indentLevel + 1);
+        stream.print("exp=");
+        exp.dump(stream, indentLevel + 1, false);
+        stream.println(',');
+
+        dumpExpType(stream, indentLevel + 1);
+
+        indent(stream, indentLevel);
+        stream.print(')');
     }
 
     @Override

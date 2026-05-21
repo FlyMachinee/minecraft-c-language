@@ -3,6 +3,7 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.as
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.StatementVisitor;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
+import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.StringJoiner;
@@ -20,7 +21,10 @@ public abstract class StatementNode extends AstNode {
         return !gotoLabels.isEmpty() || !defaultLabels.isEmpty() || !caseLabels.isEmpty();
     }
 
-    public void genFormatedStringForLabels(StringBuilder stringBuilder) {
+    /**
+     * 不会生成换行符
+     */
+    protected void dumpLabels(PrintStream stream) {
         StringJoiner stringJoiner = new StringJoiner(", ", "labels=[", "]");
         for (GotoLabelInfo info : gotoLabels) {
             stringJoiner.add(info.label.id);
@@ -31,7 +35,7 @@ public abstract class StatementNode extends AstNode {
         for (CaseLabelInfo info : caseLabels) {
             stringJoiner.add("case " + info.caseValue + "@" + info.switchLabel);
         }
-        stringBuilder.append(stringJoiner);
+        stream.append(stringJoiner.toString());
     }
 
     public abstract void accept(StatementVisitor visitor);
