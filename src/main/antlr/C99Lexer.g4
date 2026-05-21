@@ -42,10 +42,8 @@ fragment OctalDegit: [0-7];
 fragment HexadecimalDigit: [0-9a-fA-F];
 fragment IntegerSuffix
     : LongSuffix
-    | LongLongSuffix
     ;
 fragment LongSuffix: 'l' | 'L';
-fragment LongLongSuffix: 'll' | 'LL';
 
 // Operators
 

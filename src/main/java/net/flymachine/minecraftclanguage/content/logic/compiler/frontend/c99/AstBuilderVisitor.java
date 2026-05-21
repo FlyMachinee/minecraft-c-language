@@ -158,9 +158,9 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
                             this.t = BasicType.LONG;
                         }
                         case LONG -> {
-                            if (longCount >= 2) {
+                            if (longCount >= 1) {
                                 error();
-                                String msg = "'" + logger.white("long long long") + "' is too long";
+                                String msg = "'" + logger.white("long long") + "' is too long";
                                 logErrorWithSourceLine(loc, msg);
                             }
                         }
