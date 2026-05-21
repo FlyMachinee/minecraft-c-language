@@ -23,7 +23,7 @@ public final class WhileLoopNode extends StatementNode {
         super(wholeLocation);
         this.cond = cond;
         this.body = body;
-        this.isDoWhile = true;
+        this.isDoWhile = isDoWhile;
     }
 
     @Override
