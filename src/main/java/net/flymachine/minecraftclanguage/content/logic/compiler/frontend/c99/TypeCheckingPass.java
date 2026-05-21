@@ -3,9 +3,7 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99;
 import net.flymachine.minecraftclanguage.content.logger.ConsoleLogger;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.AssignmentOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.StorageClassSpecifier;
-import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.Constant;
-import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.ConstantInt;
-import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.ConstantLong;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.*;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.BasicType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.ErrorType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.FunctionType;
@@ -928,6 +926,10 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             node.expType = BasicType.INT;
         } else if (value instanceof ConstantLong) {
             node.expType = BasicType.LONG;
+        } else if (value instanceof ConstantUnsignedInt) {
+            node.expType = BasicType.UNSIGNED_INT;
+        } else if (value instanceof ConstantUnsignedLong) {
+            node.expType = BasicType.UNSIGNED_LONG;
         } else {
             throw new IllegalStateException("unexpected constant type: " + value);
         }

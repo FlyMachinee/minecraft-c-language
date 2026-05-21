@@ -40,7 +40,7 @@ public final class ErrorType implements Type {
 
     @Override
     public long sizeof() {
-        throw new UnsupportedOperationException("sizeof(error) is not defined");
+        return -1;
     }
 
     @Override

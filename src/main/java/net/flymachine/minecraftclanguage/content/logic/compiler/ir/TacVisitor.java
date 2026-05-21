@@ -24,4 +24,6 @@ public interface TacVisitor<T> {
     T visit(TacSignExtend inst);
 
     T visit(TacTruncate inst);
+
+    T visit(TacZeroExtend inst);
 }

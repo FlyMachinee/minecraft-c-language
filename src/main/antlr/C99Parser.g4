@@ -196,6 +196,8 @@ typeSpecifier
     : Void
     | Int
     | Long
+    | Signed
+    | Unsigned
     ;
 
 // ISO 6.7.2.1, Structure And Union Specifiers

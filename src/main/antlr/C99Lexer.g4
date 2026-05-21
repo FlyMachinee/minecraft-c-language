@@ -15,8 +15,10 @@ If: 'if';
 Int: 'int';
 Long: 'long';
 Return: 'return';
+Signed: 'signed';
 Static: 'static';
 Switch: 'switch';
+Unsigned: 'unsigned';
 Void: 'void';
 While: 'while';
 
@@ -41,8 +43,10 @@ fragment NonzeroDigit: [1-9];
 fragment OctalDegit: [0-7];
 fragment HexadecimalDigit: [0-9a-fA-F];
 fragment IntegerSuffix
-    : LongSuffix
+    : UnsignedSuffix LongSuffix?
+    | LongSuffix UnsignedSuffix?
     ;
+fragment UnsignedSuffix: 'u' | 'U';
 fragment LongSuffix: 'l' | 'L';
 
 // Operators

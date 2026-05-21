@@ -1,13 +1,15 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit;
 
-import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.Constant;
-import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.ConstantInt;
-import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.ConstantLong;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.*;
 
-public sealed interface StaticInit permits IntInit, LongInit {
+public sealed interface StaticInit permits IntInit, LongInit, UnsignedIntInit, UnsignedLongInit {
     Constant toConstant();
 
     ConstantInt toConstantInt();
 
     ConstantLong toConstantLong();
+
+    ConstantUnsignedInt toConstantUnsignedInt();
+
+    ConstantUnsignedLong toConstantUnsignedLong();
 }

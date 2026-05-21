@@ -60,7 +60,7 @@ public record FunctionType(Type returnType, List<Type> parameterTypes) implement
 
     @Override
     public long sizeof() {
-        throw new UnsupportedOperationException("sizeof(function) is not defined");
+        return -1;
     }
 
     @Override

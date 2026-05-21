@@ -1,8 +1,6 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node;
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.Constant;
-import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.ConstantInt;
-import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.ConstantLong;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.ExpressionBoolVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.ExpressionVisitor;
@@ -17,16 +15,6 @@ public final class ConstantNode extends ExpressionNode {
     public ConstantNode(SourceLocation wholeLocation, Constant value) {
         super(wholeLocation);
         this.value = value;
-    }
-
-    public ConstantNode(SourceLocation wholeLocation, int intValue) {
-        super(wholeLocation);
-        this.value = new ConstantInt(intValue);
-    }
-
-    public ConstantNode(SourceLocation wholeLocation, long longValue) {
-        super(wholeLocation);
-        this.value = new ConstantLong(longValue);
     }
 
     @Override

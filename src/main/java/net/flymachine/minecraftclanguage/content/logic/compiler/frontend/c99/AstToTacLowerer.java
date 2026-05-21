@@ -4,11 +4,11 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.Assignmen
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.BinaryOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.Comparison;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.UnaryOperator;
-import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.Constant;
-import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.ConstantInt;
-import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.ConstantLong;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.*;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.IntInit;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.LongInit;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.UnsignedIntInit;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.UnsignedLongInit;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.BasicType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.ExpressionBoolVisitor;
@@ -50,6 +50,10 @@ public final class AstToTacLowerer implements StatementVisitor, ExpressionVisito
                             entry.id.id, staticAttr.global, BasicType.INT, IntInit.ZERO));
                         case LONG -> topLevels.add(new TacStaticVariable(
                             entry.id.id, staticAttr.global, BasicType.LONG, LongInit.ZERO));
+                        case UNSIGNED_INT -> topLevels.add(new TacStaticVariable(
+                            entry.id.id, staticAttr.global, BasicType.UNSIGNED_INT, UnsignedIntInit.ZERO));
+                        case UNSIGNED_LONG -> topLevels.add(new TacStaticVariable(
+                            entry.id.id, staticAttr.global, BasicType.UNSIGNED_LONG, UnsignedLongInit.ZERO));
                         default -> throw new IllegalStateException("Unexpected value: " + bt);
                     }
                 }
@@ -573,6 +577,8 @@ public final class AstToTacLowerer implements StatementVisitor, ExpressionVisito
         Constant one = switch (bt) {
             case INT -> ConstantInt.ONE;
             case LONG -> ConstantLong.ONE;
+            case UNSIGNED_INT -> ConstantUnsignedInt.ONE;
+            case UNSIGNED_LONG -> ConstantUnsignedLong.ONE;
             default -> throw new IllegalStateException("Unexpected value: " + bt);
         };
 
@@ -662,10 +668,14 @@ public final class AstToTacLowerer implements StatementVisitor, ExpressionVisito
             return new TacConstant(constant.value.castTo((BasicType) targetType));
         }
         TacVariable dst = makeTempVar(castExp.expType);
-        if (targetType == BasicType.LONG) {
+        if (targetType.sizeof() == castExp.exp.expType.sizeof()) {
+            emitTac(new TacCopy(toCast, dst));
+        } else if (targetType.sizeof() < castExp.exp.expType.sizeof()) {
+            emitTac(new TacTruncate(toCast, dst));
+        } else if (((BasicType) castExp.exp.expType).isSigned()) {
             emitTac(new TacSignExtend(toCast, dst));
         } else {
-            emitTac(new TacTruncate(toCast, dst));
+            emitTac(new TacZeroExtend(toCast, dst));
         }
         return dst;
     }

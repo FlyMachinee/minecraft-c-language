@@ -5,7 +5,6 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.BinaryOpe
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.Comparison;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.UnaryOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.IntInit;
-import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.StaticInit;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.BasicType;
 import org.jetbrains.annotations.NotNull;
 
@@ -30,7 +29,17 @@ public record ConstantInt(int value) implements Constant {
     }
 
     @Override
-    public StaticInit toStaticInit() {
+    public ConstantUnsignedInt toUnsignedInt() {
+        return new ConstantUnsignedInt(value);
+    }
+
+    @Override
+    public ConstantUnsignedLong toUnsignedLong() {
+        return new ConstantUnsignedLong(value);
+    }
+
+    @Override
+    public IntInit toStaticInit() {
         return new IntInit(value);
     }
 
@@ -49,6 +58,10 @@ public record ConstantInt(int value) implements Constant {
             return apply(op, intRhs);
         } else if (rhs instanceof ConstantLong longRhs) {
             return toLong().apply(op, longRhs);
+        } else if (rhs instanceof ConstantUnsignedInt unsignedIntRhs) {
+            return toUnsignedInt().apply(op, unsignedIntRhs);
+        } else if (rhs instanceof ConstantUnsignedLong unsignedLongRhs) {
+            return toUnsignedLong().apply(op, unsignedLongRhs);
         }
         throw new IllegalStateException("Unsupported constant type: " + rhs.getClass());
     }
@@ -59,6 +72,10 @@ public record ConstantInt(int value) implements Constant {
             return apply(cmp, intRhs);
         } else if (rhs instanceof ConstantLong longRhs) {
             return toLong().apply(cmp, longRhs);
+        } else if (rhs instanceof ConstantUnsignedInt unsignedIntRhs) {
+            return toUnsignedInt().apply(cmp, unsignedIntRhs);
+        } else if (rhs instanceof ConstantUnsignedLong unsignedLongRhs) {
+            return toUnsignedLong().apply(cmp, unsignedLongRhs);
         }
         throw new IllegalStateException("Unsupported constant type: " + rhs.getClass());
     }

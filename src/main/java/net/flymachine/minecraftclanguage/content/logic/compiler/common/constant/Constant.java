@@ -8,15 +8,21 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticIni
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.BasicType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
 
-public sealed interface Constant permits ConstantInt, ConstantLong {
+public sealed interface Constant permits ConstantInt, ConstantLong, ConstantUnsignedInt, ConstantUnsignedLong {
     ConstantInt toInt();
 
     ConstantLong toLong();
+
+    ConstantUnsignedInt toUnsignedInt();
+
+    ConstantUnsignedLong toUnsignedLong();
 
     default Constant castTo(BasicType type) {
         return switch (type) {
             case INT -> toInt();
             case LONG -> toLong();
+            case UNSIGNED_INT -> toUnsignedInt();
+            case UNSIGNED_LONG -> toUnsignedLong();
             default -> throw new IllegalStateException("Unsupported type for constant cast: " + type);
         };
     }

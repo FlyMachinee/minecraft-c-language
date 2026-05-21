@@ -3,37 +3,37 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.common.staticIn
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.*;
 import org.jetbrains.annotations.NotNull;
 
-public record LongInit(long value) implements StaticInit {
+public record UnsignedIntInit(int value) implements StaticInit {
 
-    public static final LongInit ZERO = new LongInit(0L);
+    public static final UnsignedIntInit ZERO = new UnsignedIntInit(0);
 
     @Override
     public @NotNull String toString() {
-        return value + "LL";
+        return Integer.toUnsignedString(value) + "U";
     }
 
     @Override
     public Constant toConstant() {
-        return toConstantLong();
+        return toConstantUnsignedInt();
     }
 
     @Override
     public ConstantInt toConstantInt() {
-        return new ConstantInt((int) value);
+        return new ConstantInt(value);
     }
 
     @Override
     public ConstantLong toConstantLong() {
-        return new ConstantLong(value);
+        return new ConstantLong(0xFFFFFFFFL & value);
     }
 
     @Override
     public ConstantUnsignedInt toConstantUnsignedInt() {
-        return new ConstantUnsignedInt((int) value);
+        return new ConstantUnsignedInt(value);
     }
 
     @Override
     public ConstantUnsignedLong toConstantUnsignedLong() {
-        return new ConstantUnsignedLong(value);
+        return new ConstantUnsignedLong(0xFFFFFFFFL & value);
     }
 }

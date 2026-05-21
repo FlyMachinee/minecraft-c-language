@@ -6,6 +6,10 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.Assignmen
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.BinaryOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.StorageClassSpecifier;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.UnaryOperator;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.ConstantInt;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.ConstantLong;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.ConstantUnsignedInt;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.ConstantUnsignedLong;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.BasicType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.antlr.C99Parser;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.antlr.C99ParserBaseVisitor;
@@ -136,60 +140,114 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
     private record TypeAndSpecifiers(TypeNode t, @Nullable StorageClassSpecifierNode storageClass) { }
 
     private class TypeCombinationHelper {
-        BasicType t;
-        SourceLocation loc;
-        int nonLongCount = 0;
-        int longCount = 0;
+        private BasicType t;
+        private SourceLocation loc;
+        private int nonLongCount = 0;
+        private int longCount = 0;
+        private Signedness signedness = Signedness.NONE;
+
+        private enum Signedness {
+            SIGNED, UNSIGNED, NONE
+        }
 
         void append(String typeSpecifierName, SourceLocation loc) {
-            BasicType newType = BasicType.fromString(typeSpecifierName);
-            if (this.t == null) {
-                this.t = newType;
+            if (t == null) {
                 this.loc = loc;
-                if (newType == BasicType.LONG) {
-                    longCount++;
-                } else {
-                    nonLongCount++;
+                switch (typeSpecifierName) {
+                    case "int", "void" -> {
+                        t = BasicType.fromString(typeSpecifierName);
+                        nonLongCount++;
+                    }
+                    case "long" -> {
+                        t = BasicType.LONG;
+                        longCount++;
+                    }
+                    case "signed" -> {
+                        t = BasicType.INT;
+                        signedness = Signedness.SIGNED;
+                    }
+                    case "unsigned" -> {
+                        t = BasicType.UNSIGNED_INT;
+                        signedness = Signedness.UNSIGNED;
+                    }
+                    default -> throw new IllegalStateException("Unknown type specifier: " + typeSpecifierName);
                 }
             } else {
-                if (newType == BasicType.LONG) {
-                    switch (this.t) {
-                        case INT -> {
-                            this.t = BasicType.LONG;
+                this.loc = SourceLocation.concat(this.loc, loc);
+                switch (typeSpecifierName) {
+                    case "int" -> {
+                        if (nonLongCount > 0) {
+                            error();
+                            String msg = "two or more data types in declaration specifiers";
+                            logErrorWithSourceLine(loc, msg);
                         }
-                        case LONG -> {
-                            if (longCount >= 1) {
+                        // nonLongCount 为 0，可能是 long/signed/unsigned，都不需要变化
+                        nonLongCount++;
+                    }
+                    case "void" -> {
+                        error();
+                        String previous;
+                        if (longCount > 0) {
+                            previous = "long";
+                        } else if (signedness != Signedness.NONE) {
+                            previous = signedness.name().toLowerCase();
+                        } else {
+                            previous = t.toString();
+                        }
+                        String msg = "both '" + logger.white("void") + "' and '" +
+                                     logger.white(previous) + "' in declaration specifiers";
+                        logErrorWithSourceLine(loc, msg);
+                        nonLongCount++;
+                    }
+                    case "long" -> {
+                        switch (t) {
+                            case INT -> t = BasicType.LONG;
+                            case UNSIGNED_INT -> t = BasicType.UNSIGNED_LONG;
+                            case LONG, UNSIGNED_LONG -> {
                                 error();
                                 String msg = "'" + logger.white("long long") + "' is too long";
                                 logErrorWithSourceLine(loc, msg);
                             }
+                            case VOID -> {
+                                error();
+                                String msg = "both '" + logger.white("long") + "' and '" + logger.white("void") +
+                                             "' in declaration specifiers";
+                                logErrorWithSourceLine(loc, msg);
+                            }
                         }
-                        case VOID -> {
+                        ++longCount;
+                    }
+                    case "signed", "unsigned" -> {
+                        Signedness newSignedness = Signedness.valueOf(typeSpecifierName.toUpperCase());
+                        if (signedness == newSignedness) {
                             error();
-                            String msg = "both '" + logger.white("long") + "' and '" + logger.white("void") +
-                                         "' in declaration specifiers";
+                            String msg = "duplicate '" + logger.white(typeSpecifierName) + "'";
                             logErrorWithSourceLine(loc, msg);
+                        } else if (signedness != Signedness.NONE) {
+                            error();
+                            String msg =
+                                "both '" + logger.white(typeSpecifierName) + "' and '" +
+                                logger.white(signedness.name().toLowerCase()) + "' in declaration specifiers";
+                            logErrorWithSourceLine(loc, msg);
+                        } else {
+                            // Signedness.NONE
+                            switch (t) {
+                                case INT, LONG -> {
+                                    signedness = newSignedness;
+                                    if (newSignedness == Signedness.UNSIGNED) {
+                                        t = t == BasicType.INT ? BasicType.UNSIGNED_INT : BasicType.UNSIGNED_LONG;
+                                    }
+                                }
+                                case VOID -> {
+                                    error();
+                                    String msg = "both '" + logger.white(typeSpecifierName) + "' and '" +
+                                                 logger.white("void") + "' in declaration specifiers";
+                                    logErrorWithSourceLine(loc, msg);
+                                }
+                            }
                         }
                     }
-                    ++longCount;
-                } else {
-                    // 新增为非 long
-                    if (nonLongCount > 0) {
-                        error();
-                        String msg = "two or more data types in declaration specifiers";
-                        logErrorWithSourceLine(loc, msg);
-                    } else {
-                        // nonLongCount == 0，this.t 只可能是 long
-                        if (newType == BasicType.VOID) {
-                            error();
-                            String msg = "both '" + logger.white("long") + "' and '" + logger.white("void") +
-                                         "' in declaration specifiers";
-                            logErrorWithSourceLine(loc, msg);
-                        }
-                    }
-                    ++nonLongCount;
                 }
-                this.loc = SourceLocation.concat(this.loc, loc);
             }
         }
     }
@@ -534,15 +592,20 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         String fullText = integerConstant.getText();
         int pos = fullText.length();
 
+        boolean isUnsigned = false;
+        boolean isLong = false;
         while (pos > 0) {
             char c = fullText.charAt(pos - 1);
             if (c == 'l' || c == 'L') {
+                isLong = true;
+                pos--;
+            } else if (c == 'u' || c == 'U') {
+                isUnsigned = true;
                 pos--;
             } else {
                 break;
             }
         }
-        String suffix = fullText.substring(pos).toLowerCase(); // l, ll
         String numberPart = fullText.substring(0, pos);
 
         int radix;
@@ -554,30 +617,56 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         } else {
             radix = 10;
         }
+        boolean isDecimal = radix == 10;
 
         BigInteger bigValue = new BigInteger(numberPart, radix);
         SourceLocation loc = getSourceLocation(integerConstant);
 
-        // 必须能容纳在 64 位有符号整数中
-        if (bigValue.bitLength() > 63) {
-            error();
-            String msg = "integer constant is too large for its type";
-            logErrorWithSourceLine(loc, msg);
-            return new ConstantNode(loc, 0L);
+        // deci     none    => int < long < error                   == 1 0 1 0
+        // bi/hex   none    => int < uint < long < ulong < error    == 1 1 1 1
+        // deci     u       => uint < ulong < error                 == 0 1 0 1
+        // bi/hex   u       => uint < ulong < error                 == 0 1 0 1
+        // deci     l       => long < error                         == 0 0 1 0
+        // bi/hex   l       => long < ulong < error                 == 0 0 1 1
+        // deci     ul      => ulong < error                        == 0 0 0 1
+        // bi/hex   ul      => ulong < error                        == 0 0 0 1
+
+        int bitLength = bigValue.bitLength();
+
+        // int check
+        if (!isUnsigned && !isLong && bitLength <= 31) {
+            return new ConstantNode(loc, new ConstantInt(bigValue.intValue()));
         }
 
-        boolean isLong = !suffix.isEmpty();
-        if (isLong) {
-            return new ConstantNode(loc, bigValue.longValue());
-        } else {
-            // 无后缀，先尝试 int
-            if (bigValue.bitLength() < 32) {
-                return new ConstantNode(loc, bigValue.intValue());
-            } else {
-                // 超出 int，放入 long
-                return new ConstantNode(loc, bigValue.longValue());
+        // uint check
+        if (((isUnsigned || !isDecimal) && !isLong) && bitLength <= 32) {
+            return new ConstantNode(loc, new ConstantUnsignedInt(bigValue.intValue()));
+        }
+
+        // long check
+        if (!isUnsigned && bitLength <= 63) {
+            return new ConstantNode(loc, new ConstantLong(bigValue.longValue()));
+        }
+
+        boolean maxIsUnsignedLong = false;
+
+        // ulong check
+        if (!isDecimal || isUnsigned) {
+            maxIsUnsignedLong = true;
+            if (bitLength <= 64) {
+                return new ConstantNode(loc, new ConstantUnsignedLong(bigValue.longValue()));
             }
         }
+
+        error();
+        String msg;
+        if (maxIsUnsignedLong || bitLength > 64) {
+            msg = "integer constant is too large for its type";
+        } else {
+            msg = "integer constant is so large that it is unsigned";
+        }
+        logErrorWithSourceLine(loc, msg);
+        return new ConstantNode(loc, new ConstantInt(0));
     }
 
     @Override
