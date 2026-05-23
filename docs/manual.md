@@ -115,8 +115,12 @@
   * mul.d
   * div.w
   * mod.w
+  * div.wu
+  * mod.wu
   * div.d
   * mod.d
+  * div.du
+  * mod.du
   * slti
   * sltui
   * addi.w
@@ -131,11 +135,15 @@
 
 - 移位类运算
   * sll.w
+  * srl.w
   * sra.w
   * sll.d
+  * srl.d
   * sra.d
   * slli.w
   * slli.d
+  * srli.w
+  * srli.d
   * srai.w
   * srai.d
 
@@ -154,6 +162,8 @@
   * bne
   * blt
   * bge
+  * bltu
+  * bgeu
 
 ## 宏指令
 
@@ -189,30 +199,25 @@
   * 将寄存器 rj 的值复制到寄存器 rd 中
   * 该宏指令被展开为 or rd, rj, zero
 
-- bgt
-  * bgt rj, rd, offs16
-  * 如果寄存器 rj 的值大于寄存器 rd 的值，则跳转到 pc + (offs16 << 2) 处
-  * 该宏指令被展开为 blt rd, rj, offs16
-
-- ble
-  * ble rj, rd, offs16
-  * 如果寄存器 rj 的值小于或等于寄存器 rd 的值，则跳转到 pc + (offs16 << 2) 处
-  * 该宏指令被展开为 bge rd, rj, offs16
-
 - sle
   * sle rd, rj, rk
   * 如果寄存器 rj 的值小于或等于寄存器 rk 的值，则将寄存器 rd 的值设置为 1，否则设置为 0
   * 该宏指令被展开为 slt rd, rk, rj; xori rd, rd, 1
 
-- sgt
-  * sgt rd, rj, rk
-  * 如果寄存器 rj 的值大于寄存器 rk 的值，则将寄存器 rd 的值设置为 1，否则设置为 0
-  * 该宏指令被展开为 slt rd, rk, rj
-
 - sge
   * sge rd, rj, rk
   * 如果寄存器 rj 的值大于或等于寄存器 rk 的值，则将寄存器 rd 的值设置为 1，否则设置为 0
   * 该宏指令被展开为 slt rd, rj, rk; xori rd, rd, 1
+
+- sleu
+    * sleu rd, rj, rk
+    * 如果寄存器 rj 的值无符号小于或等于寄存器 rk 的值，则将寄存器 rd 的值设置为 1，否则设置为 0
+    * 该宏指令被展开为 sltu rd, rk, rj; xori rd, rd, 1
+
+- sgeu
+    * sgeu rd, rj, rk
+    * 如果寄存器 rj 的值无符号大于或等于寄存器 rk 的值，则将寄存器 rd 的值设置为 1，否则设置为 0
+    * 该宏指令被展开为 sltu rd, rj, rk; xori rd, rd, 1
 
 - seq
   * seq rd, rj, rk

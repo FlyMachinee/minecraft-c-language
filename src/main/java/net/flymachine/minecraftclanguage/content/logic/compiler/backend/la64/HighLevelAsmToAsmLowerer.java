@@ -414,12 +414,11 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
         }
 
         // 通用处理
-        String suffix = isUnsigned ? "u" : "";
         String mnemonic = switch (op) {
             case EQUAL -> "seq";
             case NOT_EQUAL -> "sne";
-            case LESS -> (isUnsigned ? "sltu" : "slt") + suffix;
-            case LESS_EQUAL -> (isUnsigned ? "sleu" : "sle") + suffix;
+            case LESS -> (isUnsigned ? "sltu" : "slt");
+            case LESS_EQUAL -> (isUnsigned ? "sleu" : "sle");
             default -> throw new IllegalStateException("Unexpected comparison operator: " + op);
         };
 

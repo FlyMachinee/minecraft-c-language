@@ -116,12 +116,7 @@ public final class LA64Assembler {
             }
 
             // 标签处理
-            if (statement instanceof LA64AsmLabel label) {
-                String labelName = label.name();
-                // 不能是寄存器名
-                if (resolver.isRegisterName(labelName)) {
-                    throw new IllegalArgumentException("Label cannot be a register name: " + labelName);
-                }
+            if (statement instanceof LA64AsmLabel) {
                 continue;
             }
 
@@ -156,7 +151,7 @@ public final class LA64Assembler {
                                 "Expected no operand for ret, but got: " + ops);
                         }
                     }
-                    case "sle", "sge", "sgt", "seq", "sne" -> {
+                    case "sle", "sge", "sleu", "sgeu", "seq", "sne" -> {
                         // xxx rd, rj, rk
                         if (ops.size() != 3 || !ops.get(0).isGpr() || !ops.get(1).isGpr() || !ops.get(2).isGpr()) {
                             throw new IllegalArgumentException(
@@ -345,7 +340,7 @@ public final class LA64Assembler {
                 int offsetIncrease = switch (instruction.mnemonic()) {
                     case "li.w" -> getExpandLiWSize(ops);
                     case "li.d" -> getExpandLiDSize(ops);
-                    case "sle", "sge", "seq", "sne" -> 8;
+                    case "sle", "sge", "sleu", "sgeu", "seq", "sne" -> 8;
                     case "la.abs" -> 16;
                     case "la.local", "la.pcrel" -> {
                         if (ops.size() == 2) {
@@ -481,11 +476,10 @@ public final class LA64Assembler {
                     case "li.d" -> expandLiD(ops, out);
                     case "ret" -> expandRet(out);
                     case "move" -> expandMove(ops, out);
-                    case "bgt" -> expandBgt(currentSectionType, ops, offset, out, relocs);
-                    case "ble" -> expandBle(currentSectionType, ops, offset, out, relocs);
                     case "sle" -> expandSle(ops, out);
-                    case "sgt" -> expandSgt(ops, out);
                     case "sge" -> expandSge(ops, out);
+                    case "sleu" -> expandSleu(ops, out);
+                    case "sgeu" -> expandSgeu(ops, out);
                     case "seq" -> expandSeq(ops, out);
                     case "sne" -> expandSne(ops, out);
                     case "la.abs" -> expandLaAbs(ops, out, offset, relocs);
@@ -648,36 +642,6 @@ public final class LA64Assembler {
         writeFormat3R(out, "or", dst, src, GeneralPurposeRegister.ZERO);
     }
 
-    private void expandBgt(
-        SectionType currentSectionType, List<LA64AsmOperand> ops, int offset, ByteArrayOutputStream out,
-        List<RelocationEntry> relocList) {
-        // bgt rj, rd, offs16
-        LA64Register rj = ops.get(0).asGpr();
-        LA64Register rd = ops.get(1).asGpr();
-        // => blt rd, rj, offs16
-        if (ops.get(2) instanceof LA64AsmSymOperand sym) {
-            int offs16 = getPcOffs16Offset(sym, currentSectionType, offset, relocList);
-            writeFormat2ROffs16(out, "blt", rd, rj, offs16);
-        } else {
-            throw new IllegalArgumentException("Expected sym, but got " + ops.get(2));
-        }
-    }
-
-    private void expandBle(
-        SectionType currentSectionType, List<LA64AsmOperand> ops, int offset, ByteArrayOutputStream out,
-        List<RelocationEntry> relocList) {
-        // ble rj, rd, offs16
-        LA64Register rj = ops.get(0).asGpr();
-        LA64Register rd = ops.get(1).asGpr();
-        // => bge rd, rj, offs16
-        if (ops.get(2) instanceof LA64AsmSymOperand sym) {
-            int offs16 = getPcOffs16Offset(sym, currentSectionType, offset, relocList);
-            writeFormat2ROffs16(out, "bge", rd, rj, offs16);
-        } else {
-            throw new IllegalArgumentException("Expected sym, but got " + ops.get(2));
-        }
-    }
-
     private void expandSle(List<LA64AsmOperand> ops, ByteArrayOutputStream out) {
         // sle rd, rj, rk
         // (a <= b) => !(b < a)
@@ -691,17 +655,6 @@ public final class LA64Assembler {
         writeFormat2RUi12(out, "xori", rd, rd, 1);
     }
 
-    private void expandSgt(List<LA64AsmOperand> ops, ByteArrayOutputStream out) {
-        // sgt rd, rj, rk
-        // (a > b) => (b < a)
-        // slt rd, rk, rj
-        LA64Register rd = ops.get(0).asGpr();
-        LA64Register rj = ops.get(1).asGpr();
-        LA64Register rk = ops.get(2).asGpr();
-
-        writeFormat3R(out, "slt", rd, rk, rj);
-    }
-
     private void expandSge(List<LA64AsmOperand> ops, ByteArrayOutputStream out) {
         // sge rd, rj, rk
         // (a >= b) => !(a < b)
@@ -712,6 +665,32 @@ public final class LA64Assembler {
         LA64Register rk = ops.get(2).asGpr();
 
         writeFormat3R(out, "slt", rd, rj, rk);
+        writeFormat2RUi12(out, "xori", rd, rd, 1);
+    }
+
+    private void expandSleu(List<LA64AsmOperand> ops, ByteArrayOutputStream out) {
+        // sleu rd, rj, rk
+        // (a <= b) => !(b < a)
+        // sltu rd, rk, rj
+        // xori rd, rd, 1
+        LA64Register rd = ops.get(0).asGpr();
+        LA64Register rj = ops.get(1).asGpr();
+        LA64Register rk = ops.get(2).asGpr();
+
+        writeFormat3R(out, "sltu", rd, rk, rj);
+        writeFormat2RUi12(out, "xori", rd, rd, 1);
+    }
+
+    private void expandSgeu(List<LA64AsmOperand> ops, ByteArrayOutputStream out) {
+        // sgeu rd, rj, rk
+        // (a >= b) => !(a < b)
+        // sltu rd, rj, rk
+        // xori rd, rd, 1
+        LA64Register rd = ops.get(0).asGpr();
+        LA64Register rj = ops.get(1).asGpr();
+        LA64Register rk = ops.get(2).asGpr();
+
+        writeFormat3R(out, "sltu", rd, rj, rk);
         writeFormat2RUi12(out, "xori", rd, rd, 1);
     }
 
@@ -818,13 +797,6 @@ public final class LA64Assembler {
             }
             return value;
         }
-    }
-
-    private int getPcOffs16Offset(
-        LA64AsmSymOperand symbol, SectionType currentSectionType, int currentOffset, List<RelocationEntry> relocList) {
-        return getPcRelOffset(
-            symbol, currentSectionType, currentOffset,
-            LA64InstructionSet.getByMnemonic("blt").orElseThrow(), LA64OperandType.OFFS16, relocList);
     }
 
     private static void writeFormat3R(
