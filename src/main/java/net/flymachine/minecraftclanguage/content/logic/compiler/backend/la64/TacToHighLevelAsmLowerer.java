@@ -3,9 +3,16 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64;
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.register.GeneralPurposeRegister;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.*;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.instruction.*;
-import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.*;
+import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.HighLevelOperand;
+import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.Immediate;
+import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.Pseudo;
+import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.Stack;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.BinaryOperator;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.Comparison;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.Constant;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.BasicType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.FunctionType;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.SymbolTable;
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.*;
 
@@ -42,9 +49,10 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
             if (entry.type instanceof FunctionType) {
                 backendSymbolTable.put(entry.id.id, new BackendSymbolTable.FuncEntry(entry.attr.isDefinition()));
             } else {
+                AsmType asmType = symbolTable.get(entry.id.id).type.toAsmType();
                 backendSymbolTable.put(
                     entry.id.id,
-                    new BackendSymbolTable.ObjectEntry(entry.attr instanceof SymbolTable.Entry.StaticAttr));
+                    new BackendSymbolTable.ObjectEntry(asmType, entry.attr instanceof SymbolTable.Entry.StaticAttr));
             }
         }
         return new HighLevelProgram(topLevels);
@@ -56,12 +64,8 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
 
     private int maxCallStackArgSize;
 
-    private Pseudo pseudo(String name) {
-        return new Pseudo(name, symbolTable.get(name).type.toAsmType());
-    }
-
     private Immediate immediate(Constant constant) {
-        return new Immediate(constant.toLong().value(), constant.getType().toAsmType());
+        return new Immediate(constant.toLong().value());
     }
 
     private HighLevelFunction lowerFunction(TacFunction tacFunction) {
@@ -73,7 +77,7 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
         while (argIndex < Math.min(ARG_REGS.length, tacFunction.params.size())) {
             String name = tacFunction.params.get(argIndex);
             AsmType asmType = symbolTable.get(name).type.toAsmType();
-            target.add(new Move(new Reg(ARG_REGS[argIndex], asmType), pseudo(name)));
+            target.add(new Move(asmType, ARG_REGS[argIndex], new Pseudo(name)));
             argIndex++;
         }
 
@@ -81,7 +85,7 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
         while (argIndex < tacFunction.params.size()) {
             String name = tacFunction.params.get(argIndex);
             AsmType asmType = symbolTable.get(name).type.toAsmType();
-            target.add(new Move(new Stack(stackOffset, asmType, true), pseudo(name)));
+            target.add(new Move(asmType, new Stack(stackOffset, true), new Pseudo(name)));
             stackOffset += 8;
             argIndex++;
         }
@@ -98,7 +102,8 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
     @Override
     public Void visit(TacReturn inst) {
         HighLevelOperand src = lowerValue(inst.value);
-        target.add(new Move(src, new Reg(A0, src.asmType())));
+        AsmType asmType = getType(inst.value).toAsmType();
+        target.add(new Move(asmType, src, A0));
         target.add(new Ret());
         return null;
     }
@@ -108,9 +113,30 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
         if (inst.src instanceof TacConstant tacConstant) {
             // 若源操作数为常量，直接计算结果并生成 Move 指令
             Constant result = tacConstant.value.apply(inst.op);
-            target.add(new Move(immediate(result), lowerValue(inst.dst)));
+            AsmType asmType = getType(inst.dst).toAsmType();
+            target.add(new Move(asmType, immediate(result), lowerValue(inst.dst)));
         } else {
-            target.add(new Unary(inst.op, lowerValue(inst.src), lowerValue(inst.dst)));
+            AsmType asmType = getType(inst.src).toAsmType();
+            switch (inst.op) {
+                case NEGATE -> {
+                    // sub.w(d) dst r0 src
+                    target.add(new Binary(
+                        Binary.Operator.SUB, asmType,
+                        ZERO, lowerValue(inst.src), lowerValue(inst.dst)));
+                }
+                case COMPLEMENT -> {
+                    // nor dst src r0
+                    target.add(new Bitwise(
+                        Bitwise.Operator.NOR, asmType,
+                        lowerValue(inst.src), ZERO, lowerValue(inst.dst)));
+                }
+                case NOT -> {
+                    // sltui dst src 1
+                    target.add(new Compare(
+                        Comparison.LESS, true, asmType,
+                        lowerValue(inst.src), new Immediate(1), lowerValue(inst.dst)));
+                }
+            }
         }
         return null;
     }
@@ -121,16 +147,54 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
             inst.rhs instanceof TacConstant tacRhsConstant) {
             // 若左、右操作数均为常量，直接计算结果并生成 Move 指令
             Constant result = tacLhsConstant.value.apply(inst.op, tacRhsConstant.value);
-            target.add(new Move(immediate(result), lowerValue(inst.dst)));
+            AsmType asmType = getType(inst.dst).toAsmType();
+            target.add(new Move(asmType, immediate(result), lowerValue(inst.dst)));
         } else {
-            target.add(new Binary(inst.op, lowerValue(inst.lhs), lowerValue(inst.rhs), lowerValue(inst.dst)));
+            AsmType asmType = getType(inst.lhs).toAsmType();
+            switch (inst.op) {
+                case ADD, SUBTRACT, MULTIPLY -> {
+                    target.add(new Binary(
+                        inst.op, asmType,
+                        lowerValue(inst.lhs), lowerValue(inst.rhs), lowerValue(inst.dst)));
+                }
+                case BITWISE_AND, BITWISE_OR, BITWISE_XOR -> {
+                    target.add(new Bitwise(
+                        inst.op, asmType,
+                        lowerValue(inst.lhs), lowerValue(inst.rhs), lowerValue(inst.dst)));
+                }
+                case DIVIDE, MODULO -> {
+                    boolean isUnsigned = ((BasicType) getType(inst.lhs)).isUnsigned();
+                    target.add(new DivOrMod(
+                        inst.op == BinaryOperator.DIVIDE, asmType, isUnsigned,
+                        lowerValue(inst.lhs), lowerValue(inst.rhs), lowerValue(inst.dst)));
+                }
+                case LEFT_SHIFT, RIGHT_SHIFT -> {
+                    boolean isLeftShift = inst.op == BinaryOperator.LEFT_SHIFT;
+                    boolean isUnsigned = ((BasicType) getType(inst.lhs)).isUnsigned();
+                    target.add(new BitwiseShift(
+                        isLeftShift, asmType, isUnsigned,
+                        lowerValue(inst.lhs), lowerValue(inst.rhs), lowerValue(inst.dst)));
+                }
+                case LOGICAL_AND, LOGICAL_OR ->
+                    throw new UnsupportedOperationException("Logical operators should be lowered to branches");
+                case LESS_THAN, GREATER_THAN, LESS_OR_EQUAL, GREATER_OR_EQUAL, EQUAL, NOT_EQUAL -> {
+                    Comparison cond = inst.op.toComparison();
+                    boolean isUnsigned = ((BasicType) getType(inst.lhs)).isUnsigned();
+                    target.add(new Compare(
+                        cond, isUnsigned, asmType,
+                        lowerValue(inst.lhs), lowerValue(inst.rhs), lowerValue(inst.dst)));
+                }
+                default -> throw new UnsupportedOperationException("Unsupported binary operator: " + inst.op);
+            }
+
         }
         return null;
     }
 
     @Override
     public Void visit(TacCopy inst) {
-        target.add(new Move(lowerValue(inst.src), lowerValue(inst.dst)));
+        AsmType asmType = getType(inst.src).toAsmType();
+        target.add(new Move(asmType, lowerValue(inst.src), lowerValue(inst.dst)));
         return null;
     }
 
@@ -154,7 +218,8 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
                 target.add(new Branch(inst.target));
             }
         } else {
-            target.add(new BranchIfZero(lowerValue(inst.cond), inst.target));
+            AsmType asmType = getType(inst.cond).toAsmType();
+            target.add(new BranchIfZero(asmType, lowerValue(inst.cond), inst.target));
         }
         return null;
     }
@@ -167,7 +232,8 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
                 target.add(new Branch(inst.target));
             }
         } else {
-            target.add(new BranchIfNotZero(lowerValue(inst.cond), inst.target));
+            AsmType asmType = getType(inst.cond).toAsmType();
+            target.add(new BranchIfNotZero(asmType, lowerValue(inst.cond), inst.target));
         }
         return null;
     }
@@ -181,7 +247,11 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
                 target.add(new Branch(inst.target));
             }
         } else {
-            target.add(new BranchIfComparison(inst.cond, lowerValue(inst.lhs), lowerValue(inst.rhs), inst.target));
+            boolean isUnsigned = ((BasicType) getType(inst.lhs)).isUnsigned();
+            AsmType asmType = getType(inst.lhs).toAsmType();
+            target.add(new BranchIfComparison(
+                inst.cond, isUnsigned, asmType,
+                lowerValue(inst.lhs), lowerValue(inst.rhs), inst.target));
         }
         return null;
     }
@@ -197,7 +267,8 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
         int argIndex = 0;
         while (argIndex < Math.min(ARG_REGS.length, inst.args.size())) {
             HighLevelOperand arg = lowerValue(inst.args.get(argIndex));
-            target.add(new Move(arg, new Reg(ARG_REGS[argIndex], arg.asmType())));
+            AsmType asmType = getType(inst.args.get(argIndex)).toAsmType();
+            target.add(new Move(asmType, arg, ARG_REGS[argIndex]));
             argIndex++;
         }
 
@@ -205,7 +276,8 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
         int stackOffset = 0;
         while (argIndex < inst.args.size()) {
             HighLevelOperand arg = lowerValue(inst.args.get(argIndex));
-            target.add(new Move(arg, new Stack(stackOffset, arg.asmType(), false)));
+            AsmType asmType = getType(inst.args.get(argIndex)).toAsmType();
+            target.add(new Move(asmType, arg, new Stack(stackOffset, false)));
             stackOffset += 8;
             argIndex++;
         }
@@ -217,30 +289,32 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
 
         // 获取返回值
         HighLevelOperand dst = lowerValue(inst.dst);
-        target.add(new Move(new Reg(A0, dst.asmType()), dst));
+        AsmType asmType = getType(inst.dst).toAsmType();
+        target.add(new Move(asmType, A0, dst));
         return null;
     }
 
     @Override
     public Void visit(TacSignExtend inst) {
-        // 符号拓展，使用 move
         HighLevelOperand src = lowerValue(inst.src);
         HighLevelOperand dst = lowerValue(inst.dst);
-        target.add(new Move(src.changeAsmType(AsmType.WORD), dst.changeAsmType(AsmType.DWORD)));
+        target.add(new AddSignExtend(src, dst));
         return null;
     }
 
     @Override
     public Void visit(TacTruncate inst) {
-        // 截断至 32 位，使用 move
         HighLevelOperand src = lowerValue(inst.src);
         HighLevelOperand dst = lowerValue(inst.dst);
-        target.add(new Move(src.changeAsmType(AsmType.DWORD), dst.changeAsmType(AsmType.WORD)));
+        target.add(new Move(AsmType.WORD, src, dst));
         return null;
     }
 
     @Override
     public Void visit(TacZeroExtend inst) {
+        HighLevelOperand src = lowerValue(inst.src);
+        HighLevelOperand dst = lowerValue(inst.dst);
+        target.add(new BstrpickZeroExtend(src, dst));
         return null;
     }
 
@@ -248,7 +322,16 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
         if (tacValue instanceof TacConstant tacConstant) {
             return immediate(tacConstant.value);
         } else if (tacValue instanceof TacVariable tacVariable) {
-            return pseudo(tacVariable.name);
+            return new Pseudo(tacVariable.name);
+        }
+        throw new UnsupportedOperationException("Unsupported value type: " + tacValue.getClass().getSimpleName());
+    }
+
+    private Type getType(TacValue tacValue) {
+        if (tacValue instanceof TacConstant tacConstant) {
+            return tacConstant.value.getType();
+        } else if (tacValue instanceof TacVariable tacVariable) {
+            return symbolTable.get(tacVariable.name).type;
         }
         throw new UnsupportedOperationException("Unsupported value type: " + tacValue.getClass().getSimpleName());
     }

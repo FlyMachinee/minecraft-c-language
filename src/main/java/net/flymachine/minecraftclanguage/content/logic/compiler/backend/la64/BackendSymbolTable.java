@@ -1,5 +1,7 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64;
 
+import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.AsmType;
+
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
@@ -36,7 +38,7 @@ public final class BackendSymbolTable {
 
     public sealed interface Entry permits ObjectEntry, FuncEntry { }
 
-    public record ObjectEntry(boolean isStatic) implements Entry { }
+    public record ObjectEntry(AsmType asmType, boolean isStatic) implements Entry { }
 
     public record FuncEntry(boolean defined) implements Entry { }
 }

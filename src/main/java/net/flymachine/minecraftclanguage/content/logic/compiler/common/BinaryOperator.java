@@ -38,4 +38,16 @@ public enum BinaryOperator {
         }
         return null;
     }
+
+    public Comparison toComparison() {
+        return switch (this) {
+            case LESS_THAN -> Comparison.LESS;
+            case GREATER_THAN -> Comparison.GREATER;
+            case EQUAL -> Comparison.EQUAL;
+            case NOT_EQUAL -> Comparison.NOT_EQUAL;
+            case LESS_OR_EQUAL -> Comparison.LESS_EQUAL;
+            case GREATER_OR_EQUAL -> Comparison.GREATER_EQUAL;
+            default -> throw new IllegalArgumentException("Cannot convert " + this + " to a comparison");
+        };
+    }
 }

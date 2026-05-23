@@ -1,7 +1,7 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.instruction;
 
 public class Label implements HighLevelInstruction {
-    public String name;
+    public final String name;
 
     public Label(String name) {
         this.name = name;

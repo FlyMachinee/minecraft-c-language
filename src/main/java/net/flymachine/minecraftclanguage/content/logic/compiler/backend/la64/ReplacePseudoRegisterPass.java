@@ -57,13 +57,6 @@ public final class ReplacePseudoRegisterPass implements HighLevelVisitor<Void> {
     }
 
     @Override
-    public Void visitUnary(Unary inst) {
-        inst.src = replacePseudo(inst.src);
-        inst.dst = replacePseudo(inst.dst);
-        return null;
-    }
-
-    @Override
     public Void visitBinary(Binary inst) {
         inst.lhs = replacePseudo(inst.lhs);
         inst.rhs = replacePseudo(inst.rhs);
@@ -112,11 +105,57 @@ public final class ReplacePseudoRegisterPass implements HighLevelVisitor<Void> {
         return null;
     }
 
+    @Override
+    public Void visitCompare(Compare inst) {
+        inst.lhs = replacePseudo(inst.lhs);
+        inst.rhs = replacePseudo(inst.rhs);
+        inst.dst = replacePseudo(inst.dst);
+        return null;
+    }
+
+    @Override
+    public Void visitDivOrMod(DivOrMod inst) {
+        inst.lhs = replacePseudo(inst.lhs);
+        inst.rhs = replacePseudo(inst.rhs);
+        inst.dst = replacePseudo(inst.dst);
+        return null;
+    }
+
+    @Override
+    public Void visitBitwiseShift(BitwiseShift inst) {
+        inst.lhs = replacePseudo(inst.lhs);
+        inst.rhs = replacePseudo(inst.rhs);
+        inst.dst = replacePseudo(inst.dst);
+        return null;
+    }
+
+    @Override
+    public Void visitBitwise(Bitwise inst) {
+        inst.lhs = replacePseudo(inst.lhs);
+        inst.rhs = replacePseudo(inst.rhs);
+        inst.dst = replacePseudo(inst.dst);
+        return null;
+    }
+
+    @Override
+    public Void visitBstrpickZeroExtend(BstrpickZeroExtend inst) {
+        inst.src = replacePseudo(inst.src);
+        inst.dst = replacePseudo(inst.dst);
+        return null;
+    }
+
+    @Override
+    public Void visitAddSignExtend(AddSignExtend inst) {
+        inst.src = replacePseudo(inst.src);
+        inst.dst = replacePseudo(inst.dst);
+        return null;
+    }
+
     private HighLevelOperand replacePseudo(HighLevelOperand operand) {
         if (operand instanceof Pseudo pseudo) {
             String id = pseudo.name();
             if (registers.containsKey(id)) {
-                return new Stack(registers.get(id), operand.asmType());
+                return new Stack(registers.get(id));
             } else {
                 BackendSymbolTable.Entry entry = backendSymbolTable.get(id);
                 if (entry == null || entry instanceof BackendSymbolTable.FuncEntry) {
@@ -124,14 +163,14 @@ public final class ReplacePseudoRegisterPass implements HighLevelVisitor<Void> {
                 }
                 BackendSymbolTable.ObjectEntry objectEntry = (BackendSymbolTable.ObjectEntry) entry;
                 if (objectEntry.isStatic()) {
-                    return new Data(id, operand.asmType());
+                    return new Data(id);
                 } else {
-                    int alignment = operand.asmType().alignment();
+                    int alignment = ((BackendSymbolTable.ObjectEntry) entry).asmType().alignment();
                     stackOffset -= alignment;
                     // 向负无穷对齐至 alignment
                     stackOffset = Math.floorDiv(stackOffset, alignment) * alignment;
                     registers.put(id, stackOffset);
-                    return new Stack(stackOffset, operand.asmType());
+                    return new Stack(stackOffset);
                 }
             }
         }

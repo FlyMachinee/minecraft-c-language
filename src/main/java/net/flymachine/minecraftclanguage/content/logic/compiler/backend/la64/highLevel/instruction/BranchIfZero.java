@@ -1,12 +1,15 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.instruction;
 
+import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.AsmType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.HighLevelOperand;
 
 public class BranchIfZero implements HighLevelInstruction {
+    public final AsmType asmType;
     public HighLevelOperand cond;
-    public String target;
+    public final String target;
 
-    public BranchIfZero(HighLevelOperand cond, String target) {
+    public BranchIfZero(AsmType asmType, HighLevelOperand cond, String target) {
+        this.asmType = asmType;
         this.cond = cond;
         this.target = target;
     }

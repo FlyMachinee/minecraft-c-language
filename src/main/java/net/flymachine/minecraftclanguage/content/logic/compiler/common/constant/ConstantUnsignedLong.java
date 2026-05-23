@@ -5,6 +5,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.BinaryOpe
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.Comparison;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.UnaryOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.UnsignedLongInit;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.BasicType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
 import org.jetbrains.annotations.NotNull;
 
@@ -79,12 +80,12 @@ public record ConstantUnsignedLong(long value) implements Constant {
 
     @Override
     public Type getType() {
-        return null;
+        return BasicType.UNSIGNED_LONG;
     }
 
     @Override
     public AsmType getAsmType() {
-        return null;
+        return AsmType.DWORD;
     }
 
     public Constant apply(BinaryOperator op, ConstantUnsignedLong rhs) {

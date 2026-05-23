@@ -1,21 +1,18 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.instruction;
 
-import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.AsmType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.HighLevelOperand;
 
-public class Move implements HighLevelInstruction {
-    public final AsmType asmType;
+public class BstrpickZeroExtend implements HighLevelInstruction {
     public HighLevelOperand src;
     public HighLevelOperand dst;
 
-    public Move(AsmType asmType, HighLevelOperand src, HighLevelOperand dst) {
-        this.asmType = asmType;
+    public BstrpickZeroExtend(HighLevelOperand src, HighLevelOperand dst) {
         this.src = src;
         this.dst = dst;
     }
 
     @Override
     public <T> T accept(HighLevelVisitor<T> visitor) {
-        return visitor.visitMove(this);
+        return visitor.visitBstrpickZeroExtend(this);
     }
 }

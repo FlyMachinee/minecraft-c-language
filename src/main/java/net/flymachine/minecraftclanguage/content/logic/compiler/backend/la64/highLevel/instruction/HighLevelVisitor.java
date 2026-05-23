@@ -5,8 +5,6 @@ public interface HighLevelVisitor<T> {
 
     T visitRet(Ret inst);
 
-    T visitUnary(Unary inst);
-
     T visitBinary(Binary inst);
 
     T visitAddSi12(AddSi12 inst);
@@ -22,4 +20,16 @@ public interface HighLevelVisitor<T> {
     T visitBranchIfComparison(BranchIfComparison inst);
 
     T visitCall(Call inst);
+
+    T visitCompare(Compare inst);
+
+    T visitDivOrMod(DivOrMod inst);
+
+    T visitBitwiseShift(BitwiseShift inst);
+
+    T visitBitwise(Bitwise inst);
+
+    T visitBstrpickZeroExtend(BstrpickZeroExtend inst);
+
+    T visitAddSignExtend(AddSignExtend inst);
 }

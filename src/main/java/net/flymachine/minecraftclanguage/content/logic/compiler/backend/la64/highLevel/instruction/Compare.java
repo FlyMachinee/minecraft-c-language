@@ -4,28 +4,28 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.hig
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.HighLevelOperand;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.Comparison;
 
-public class BranchIfComparison implements HighLevelInstruction {
+public class Compare implements HighLevelInstruction {
     public final Comparison cond;
     public final boolean isUnsigned;
     public final AsmType asmType;
     public HighLevelOperand lhs;
     public HighLevelOperand rhs;
-    public final String target;
+    public HighLevelOperand dst;
 
-    public BranchIfComparison(
+    public Compare(
         Comparison cond, boolean isUnsigned, AsmType asmType,
-        HighLevelOperand lhs, HighLevelOperand rhs, String target) {
+        HighLevelOperand lhs, HighLevelOperand rhs, HighLevelOperand dst) {
 
         this.cond = cond;
         this.isUnsigned = isUnsigned;
         this.asmType = asmType;
         this.lhs = lhs;
         this.rhs = rhs;
-        this.target = target;
+        this.dst = dst;
     }
 
     @Override
     public <T> T accept(HighLevelVisitor<T> visitor) {
-        return visitor.visitBranchIfComparison(this);
+        return visitor.visitCompare(this);
     }
 }
