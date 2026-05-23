@@ -1,5 +1,7 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.ir;
 
+import java.io.PrintStream;
+
 public class TacCopy implements TacInstruction {
     public TacValue src;
     public TacValue dst;
@@ -10,15 +12,15 @@ public class TacCopy implements TacInstruction {
     }
 
     @Override
-    public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
+    public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stringBuilder.append("  ".repeat(indentLevel));
+            stream.print("  ".repeat(indentLevel));
         }
-        stringBuilder.append("Copy(src=");
-        src.genFormattedString(stringBuilder);
-        stringBuilder.append(", dst=");
-        dst.genFormattedString(stringBuilder);
-        stringBuilder.append(")");
+        stream.print("Copy(src=");
+        src.dump(stream);
+        stream.print(", dst=");
+        dst.dump(stream);
+        stream.print(")");
     }
 
     @Override

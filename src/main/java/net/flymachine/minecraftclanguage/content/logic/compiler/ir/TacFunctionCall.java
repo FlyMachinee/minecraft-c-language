@@ -1,5 +1,6 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.ir;
 
+import java.io.PrintStream;
 import java.util.List;
 
 public class TacFunctionCall implements TacInstruction {
@@ -19,20 +20,20 @@ public class TacFunctionCall implements TacInstruction {
     }
 
     @Override
-    public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
+    public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stringBuilder.append("  ".repeat(indentLevel));
+            stream.print("  ".repeat(indentLevel));
         }
-        stringBuilder.append("FunctionCall(name=").append(this.funcName).append(", args=[");
+        stream.append("FunctionCall(name=").append(this.funcName).append(", args=[");
         for (int i = 0; i < this.args.size(); i++) {
             if (i > 0) {
-                stringBuilder.append(", ");
+                stream.print(", ");
             }
             TacValue arg = this.args.get(i);
-            arg.genFormattedString(stringBuilder);
+            arg.dump(stream);
         }
-        stringBuilder.append("], dst=");
-        dst.genFormattedString(stringBuilder);
-        stringBuilder.append(")");
+        stream.print("], dst=");
+        dst.dump(stream);
+        stream.print(")");
     }
 }

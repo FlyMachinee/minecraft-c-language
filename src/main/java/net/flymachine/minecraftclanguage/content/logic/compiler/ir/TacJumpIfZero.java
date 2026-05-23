@@ -1,5 +1,7 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.ir;
 
+import java.io.PrintStream;
+
 public class TacJumpIfZero implements TacInstruction {
     public TacValue cond;
     public String target;
@@ -10,13 +12,13 @@ public class TacJumpIfZero implements TacInstruction {
     }
 
     @Override
-    public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
+    public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stringBuilder.append("  ".repeat(indentLevel));
+            stream.print("  ".repeat(indentLevel));
         }
-        stringBuilder.append("JumpIfZero(cond=");
-        cond.genFormattedString(stringBuilder);
-        stringBuilder.append(", target=").append(target).append(")");
+        stream.print("JumpIfZero(cond=");
+        cond.dump(stream);
+        stream.append(", target=").append(target).append(")");
     }
 
     @Override

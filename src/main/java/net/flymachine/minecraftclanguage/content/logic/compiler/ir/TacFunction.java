@@ -1,5 +1,6 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.ir;
 
+import java.io.PrintStream;
 import java.util.List;
 
 public class TacFunction implements TacTopLevel {
@@ -16,20 +17,20 @@ public class TacFunction implements TacTopLevel {
     }
 
     @Override
-    public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
+    public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stringBuilder.append("  ".repeat(indentLevel));
+            stream.print("  ".repeat(indentLevel));
         }
-        stringBuilder.append("TacFunction(\n");
-        stringBuilder.append("  ".repeat(indentLevel + 1)).append("name=\"").append(name).append("\",\n");
-        stringBuilder.append("  ".repeat(indentLevel + 1)).append("global=").append(global).append(",\n");
-        stringBuilder.append("  ".repeat(indentLevel + 1)).append("params=").append(params).append(",\n");
-        stringBuilder.append("  ".repeat(indentLevel + 1)).append("instructions=[\n");
+        stream.println("TacFunction(");
+        stream.append("  ".repeat(indentLevel + 1)).append("name=").append(name).append(",\n");
+        stream.append("  ".repeat(indentLevel + 1)).append("global=").append(String.valueOf(global)).append(",\n");
+        stream.append("  ".repeat(indentLevel + 1)).append("params=").append(String.valueOf(params)).append(",\n");
+        stream.append("  ".repeat(indentLevel + 1)).append("instructions=[\n");
         for (TacInstruction instruction : insts) {
-            instruction.genFormattedString(stringBuilder, indentLevel + 2, true);
-            stringBuilder.append(",\n");
+            instruction.dump(stream, indentLevel + 2, true);
+            stream.println(",");
         }
-        stringBuilder.append("  ".repeat(indentLevel + 1)).append("]\n");
-        stringBuilder.append("  ".repeat(indentLevel)).append(")");
+        stream.append("  ".repeat(indentLevel + 1)).append("]\n");
+        stream.append("  ".repeat(indentLevel)).append(")");
     }
 }

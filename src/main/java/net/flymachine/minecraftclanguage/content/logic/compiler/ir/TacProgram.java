@@ -1,5 +1,6 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.ir;
 
+import java.io.PrintStream;
 import java.util.List;
 
 public class TacProgram implements TacDataStructure {
@@ -10,15 +11,16 @@ public class TacProgram implements TacDataStructure {
     }
 
     @Override
-    public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
+    public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stringBuilder.append("  ".repeat(indentLevel));
+            stream.print("  ".repeat(indentLevel));
         }
-        stringBuilder.append("TacProgram([\n");
+        stream.println("TacProgram([");
         for (TacTopLevel topLevel : topLevels) {
-            topLevel.genFormattedString(stringBuilder, indentLevel + 1, true);
-            stringBuilder.append(",\n");
+            topLevel.dump(stream, indentLevel + 1, true);
+            stream.println(",");
         }
-        stringBuilder.append("  ".repeat(indentLevel)).append("])");
+        stream.print("  ".repeat(indentLevel));
+        stream.print("])");
     }
 }

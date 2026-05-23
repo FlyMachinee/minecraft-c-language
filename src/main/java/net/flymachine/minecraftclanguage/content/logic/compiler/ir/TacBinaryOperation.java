@@ -2,6 +2,8 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.ir;
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.BinaryOperator;
 
+import java.io.PrintStream;
+
 public class TacBinaryOperation implements TacInstruction {
     public BinaryOperator op;
     public TacValue lhs;
@@ -16,17 +18,17 @@ public class TacBinaryOperation implements TacInstruction {
     }
 
     @Override
-    public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
+    public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stringBuilder.append("  ".repeat(indentLevel));
+            stream.print("  ".repeat(indentLevel));
         }
-        stringBuilder.append("Binary(").append(op).append(", lhs=");
-        lhs.genFormattedString(stringBuilder);
-        stringBuilder.append(", rhs=");
-        rhs.genFormattedString(stringBuilder);
-        stringBuilder.append(", dst=");
-        dst.genFormattedString(stringBuilder);
-        stringBuilder.append(")");
+        stream.append("Binary(").append(String.valueOf(op)).append(", lhs=");
+        lhs.dump(stream);
+        stream.print(", rhs=");
+        rhs.dump(stream);
+        stream.print(", dst=");
+        dst.dump(stream);
+        stream.print(")");
     }
 
     @Override

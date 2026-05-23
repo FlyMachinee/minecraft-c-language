@@ -2,6 +2,8 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.ir;
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.Comparison;
 
+import java.io.PrintStream;
+
 public class TacJumpIfComparison implements TacInstruction {
     public Comparison cond;
     public TacValue lhs;
@@ -16,15 +18,15 @@ public class TacJumpIfComparison implements TacInstruction {
     }
 
     @Override
-    public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
+    public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stringBuilder.append("  ".repeat(indentLevel));
+            stream.print("  ".repeat(indentLevel));
         }
-        stringBuilder.append("JumpIf(").append(cond).append(", lhs=");
-        lhs.genFormattedString(stringBuilder);
-        stringBuilder.append(", rhs=");
-        rhs.genFormattedString(stringBuilder);
-        stringBuilder.append(", target=").append(target).append(")");
+        stream.append("JumpIf(").append(String.valueOf(cond)).append(", lhs=");
+        lhs.dump(stream);
+        stream.print(", rhs=");
+        rhs.dump(stream);
+        stream.append(", target=").append(target).append(")");
     }
 
     @Override

@@ -3,6 +3,8 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.ir;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.StaticInit;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
 
+import java.io.PrintStream;
+
 public class TacStaticVariable implements TacTopLevel {
     public String name;
     public boolean global;
@@ -17,18 +19,18 @@ public class TacStaticVariable implements TacTopLevel {
     }
 
     @Override
-    public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
+    public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stringBuilder.append("  ".repeat(indentLevel));
+            stream.print("  ".repeat(indentLevel));
         }
-        stringBuilder.append("StaticVar(")
-                     .append(name)
-                     .append(", global=")
-                     .append(global)
-                     .append(", type=")
-                     .append(type)
-                     .append(", initValue=")
-                     .append(init)
-                     .append(")");
+        stream.append("StaticVar(")
+              .append(name)
+              .append(", global=")
+              .append(String.valueOf(global))
+              .append(", type=")
+              .append(String.valueOf(type))
+              .append(", initValue=")
+              .append(String.valueOf(init))
+              .append(")");
     }
 }

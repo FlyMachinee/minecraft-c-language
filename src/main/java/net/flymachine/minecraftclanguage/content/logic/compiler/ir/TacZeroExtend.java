@@ -1,5 +1,7 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.ir;
 
+import java.io.PrintStream;
+
 /**
  * 将左操作数视为 unsigned int 值，右操作数视为 unsigned long 值，将左操作数的值零扩展为 unsigned long，并将结果存储在右操作数中
  */
@@ -19,15 +21,15 @@ public class TacZeroExtend implements TacInstruction {
     }
 
     @Override
-    public void genFormattedString(StringBuilder stringBuilder, int indentLevel, boolean indentFirstLine) {
+    public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stringBuilder.append("  ".repeat(indentLevel));
+            stream.print("  ".repeat(indentLevel));
         }
-        stringBuilder.append("ZeroExtend(src=");
-        src.genFormattedString(stringBuilder);
-        stringBuilder.append(", dst=");
-        dst.genFormattedString(stringBuilder);
-        stringBuilder.append(")");
+        stream.print("ZeroExtend(src=");
+        src.dump(stream);
+        stream.print(", dst=");
+        dst.dump(stream);
+        stream.print(")");
     }
 
 }
