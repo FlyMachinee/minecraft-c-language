@@ -370,37 +370,23 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         // -> parameterDeclaration (Comma parameterDeclaration)*
         var paramDeclList = ctx.parameterList().parameterDeclaration();
         for (C99Parser.ParameterDeclarationContext paramCtx : paramDeclList) {
-            // parameterDeclaration -> declarationSpecifiers declarator?
-            // TypeNode paramBaseType = parseDeclarationSpecifiers(paramCtx.declarationSpecifiers());
+            // parameterDeclaration
+            //    : declarationSpecifiers declarator
+            //    | declarationSpecifiers abstractDeclarator?
+            //    ;
+
             TypeAndSpecifiers paramTypeAndSpecifiers = parseDeclarationSpecifiers(paramCtx.declarationSpecifiers());
             TypeNode paramBaseType = paramTypeAndSpecifiers.t;
             StorageClassSpecifierNode paramStorageClass = paramTypeAndSpecifiers.storageClass;
 
-            if (paramCtx.declarator() == null) {
-                // 没有参数名
-                if (paramBaseType == null) {
-                    // 没有类型
-                    error();
-                    String msg = "type defaults to '" + logger.white("int") + "' in type name";
-                    assert paramStorageClass != null; // 没有类型，那么一定有存储类型
-                    logErrorWithSourceLine(paramStorageClass.wholeLoc, msg);
-                    paramBaseType = new BasicTypeNode(null, BasicType.INT);
-                }
-                if (paramStorageClass != null && paramStorageClass.storageClass != StorageClassSpecifier.REGISTER) {
-                    // 有非 register 的存储类型
-                    error();
-                    String msg = "storage class specified for unnamed parameter";
-                    logErrorWithSourceLine(paramStorageClass.wholeLoc, msg);
-                }
-                parameterTypes.add(paramBaseType);
-                parameters.add(null);
-            } else {
+            if (paramCtx.declarator() != null) {
                 // 具名参数
                 boolean baseTypeError = paramBaseType == null;
-                if (paramBaseType == null) {
+                if (baseTypeError) {
                     // 没有类型
                     paramBaseType = new BasicTypeNode(null, BasicType.INT);
                 }
+                // 错误信息需要参数标识符位置，所以先 Parse 再报错
                 DeclarationLikeResult paramRes = parseFromDeclarator(paramBaseType, paramCtx.declarator());
                 if (baseTypeError) {
                     error();
@@ -417,6 +403,30 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
 
                 parameterTypes.add(paramRes.t);
                 parameters.add(paramRes.id);
+            } else {
+                // 没有参数名
+                if (paramBaseType == null) {
+                    // 没有类型
+                    error();
+                    String msg = "type defaults to '" + logger.white("int") + "' in type name";
+                    assert paramStorageClass != null; // 没有类型，那么一定有存储类型
+                    logErrorWithSourceLine(paramStorageClass.wholeLoc, msg);
+                    paramBaseType = new BasicTypeNode(null, BasicType.INT);
+                }
+                if (paramStorageClass != null && paramStorageClass.storageClass != StorageClassSpecifier.REGISTER) {
+                    // 有非 register 的存储类型
+                    error();
+                    String msg = "storage class specified for unnamed parameter";
+                    logErrorWithSourceLine(paramStorageClass.wholeLoc, msg);
+                }
+
+                if (paramCtx.abstractDeclarator() != null) {
+                    // 含抽象声明符，递归处理
+                    paramBaseType = parseFromAbstractDeclarator(paramBaseType, paramCtx.abstractDeclarator());
+                }
+
+                parameterTypes.add(paramBaseType);
+                parameters.add(null);
             }
         }
         return new FunctionTypeNode(
