@@ -295,6 +295,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
     private DeclarationLikeResult parseFromDirectDeclarator(TypeNode baseType, C99Parser.DirectDeclaratorContext ctx) {
         // directDeclarator -> Identifier
         if (ctx.Identifier() != null) {
+            // 递归出口
             String name = ctx.Identifier().getText();
             SourceLocation nameLocation = getSourceLocation(ctx.Identifier());
             return new DeclarationLikeResult(baseType, new IdentifierNode(nameLocation, name));
@@ -306,20 +307,13 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         }
 
         // directDeclarator -> directDeclarator LeftParen parameterTypeList RightParen
-        if (ctx.directDeclarator() != null) {
+        if (ctx.parameterTypeList() != null) {
+            // directDeclarator -> directDeclarator LeftParen parameterTypeList RightParen
+            // 构造函数类型
+            baseType = parseFromParameterTypeList(baseType, ctx.parameterTypeList(), ctx.RightParen());
             // 递归处理左侧
-            DeclarationLikeResult inner = parseFromDirectDeclarator(baseType, ctx.directDeclarator());
-            TypeNode t = inner.t;
-            IdentifierNode id = inner.id;
-
-            if (ctx.parameterTypeList() != null) {
-                // directDeclarator -> directDeclarator LeftParen parameterTypeList RightParen
-                // 构造函数类型
-                FunctionTypeNode funcType = parseFromParameterTypeList(t, ctx.parameterTypeList(), ctx.RightParen());
-                return new DeclarationLikeResult(funcType, id);
-            }
+            return parseFromDirectDeclarator(baseType, ctx.directDeclarator());
         }
-
         throw new RuntimeException("Unknown direct declarator: " + ctx.getText());
     }
 
@@ -336,27 +330,27 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
             return parseFromAbstractDeclarator(baseType, ctx.abstractDeclarator());
         }
 
-        // directAbstractDeclarator -> directAbstractDeclarator LeftParen parameterTypeList? RightParen
-        if (ctx.directAbstractDeclarator() != null) {
-            baseType = parseFromDirectAbstractDeclarator(baseType, ctx.directAbstractDeclarator());
-        }
-
         if (ctx.LeftParen() != null) {
             // directAbstractDeclarator -> directAbstractDeclarator LeftParen parameterTypeList? RightParen
             // directAbstractDeclarator -> LeftParen parameterTypeList? RightParen
 
             // 构造函数类型
             if (ctx.parameterTypeList() != null) {
-                return parseFromParameterTypeList(baseType, ctx.parameterTypeList(), ctx.RightParen());
+                baseType = parseFromParameterTypeList(baseType, ctx.parameterTypeList(), ctx.RightParen());
             } else {
                 // 无参数函数类型
-                return new FunctionTypeNode(
+                baseType = new FunctionTypeNode(
                     SourceLocation.concat(baseType.getWholeLocation(), getSourceLocation(ctx.RightParen())),
-                    baseType, new ArrayList<>(), new ArrayList<>());
+                    baseType, List.of(), List.of());
             }
         }
 
-        throw new RuntimeException("Unknown direct declarator: " + ctx.getText());
+        if (ctx.directAbstractDeclarator() != null) {
+            // 递归处理
+            baseType = parseFromDirectAbstractDeclarator(baseType, ctx.directAbstractDeclarator());
+        }
+
+        return baseType;
     }
 
     private FunctionTypeNode parseFromParameterTypeList(
