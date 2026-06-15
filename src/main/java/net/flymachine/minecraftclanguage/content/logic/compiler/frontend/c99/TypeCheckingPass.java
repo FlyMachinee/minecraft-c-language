@@ -50,27 +50,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             logErrorWithSourceLine(node.id.wholeLoc, msg);
         } else {
             visitFunctionDeclaration(node.id, funcType, node.storageClass, true);
-
-            // 检查参数类型
-            // 到了这里，要么所有参数都具名且不重复，要么只有单独的void参数
-            for (int i = 0; i < funcType.params.size(); i++) {
-                IdentifierNode id = funcType.params.get(i);
-                TypeNode type = funcType.paramTypes.get(i);
-                if (id != null) {
-                    if (!type.getType().isComplete()) {
-                        // 不完整类型
-                        error();
-                        String msg =
-                            "parameter '" + getLogger().white(getSourceFile().getByLocation(id.wholeLoc)) +
-                            "' has incomplete type '" +
-                            getLogger().white(type.getType().toString()) + "'";
-                        logErrorWithSourceLine(id.wholeLoc, msg);
-                    }
-                    symbolTable.put(
-                        id.id,
-                        new SymbolTable.Entry(id, type, type.getType(), SymbolTable.Entry.LocalAttr.INSTANCE));
-                }
-            }
+            checkFunctionParameter(funcType, true);
         }
         // 检查函数体
         functionContext = node;
@@ -269,6 +249,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         } else if (node.type instanceof FunctionTypeNode funcType) {
             // 函数声明
             visitFunctionDeclaration(node.id, funcType, node.storageClass, false);
+            checkFunctionParameter(funcType, false);
 
             if (node.init != null) {
                 // 函数类型不能使用赋值初始化
@@ -350,6 +331,39 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             boolean global = storageClass == null || !storageClass.storageClass.equals(StorageClassSpecifier.STATIC);
             SymbolTable.Entry.IdentifierAttr attr = new SymbolTable.Entry.FuncAttr(isDefinition, global);
             symbolTable.put(id.id, new SymbolTable.Entry(id, funcType, funcType.getType(), attr));
+        }
+    }
+
+    private void checkFunctionParameter(FunctionTypeNode funcType, boolean isDefinition) {
+        // 检查参数类型
+        if (funcType.hasNoParameters()) {
+            return;
+        }
+        for (int i = 0; i < funcType.paramTypes.size(); i++) {
+            TypeNode paramType = funcType.paramTypes.get(i);
+            IdentifierNode param = funcType.params.get(i);
+            if (!paramType.getType().isComplete()) {
+                // 不完整类型
+                error();
+                if (param != null) {
+                    String msg =
+                        "parameter '" + getLogger().white(getSourceFile().getByLocation(param.wholeLoc)) +
+                        "' has incomplete type '" +
+                        getLogger().white(paramType.getType().toString()) + "'";
+                    logErrorWithSourceLine(param.wholeLoc, msg);
+                } else {
+                    String msg =
+                        "unnamed parameter " + (i + 1) + " has incomplete type '" +
+                        getLogger().white(paramType.getType().toString()) + "'";
+                    logErrorWithSourceLine(paramType.getWholeLocation(), msg);
+                }
+            }
+            if (isDefinition) {
+                assert param != null;
+                symbolTable.put(
+                    param.id,
+                    new SymbolTable.Entry(param, paramType, paramType.getType(), SymbolTable.Entry.LocalAttr.INSTANCE));
+            }
         }
     }
 
