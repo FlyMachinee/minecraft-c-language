@@ -902,11 +902,12 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                                 logErrorWithSourceLine(node.args.get(i).wholeLoc, msg);
                                 msg = "expected '" + getLogger().white(paramType.toString()) +
                                       "' but argument is of type '" + getLogger().white(arg.expType.toString()) + "'";
-                                logNoteWithSourceLine(
-                                    SourceLocation.concat(
-                                        ((FunctionTypeNode) entry.typeNode).paramTypes.get(i).getWholeLocation(),
-                                        ((FunctionTypeNode) entry.typeNode).params.get(i).getWholeLocation()),
-                                    msg);
+                                TypeNode paramTypeNode = ((FunctionTypeNode) entry.typeNode).paramTypes.get(i);
+                                IdentifierNode idNode = ((FunctionTypeNode) entry.typeNode).params.get(i);
+                                // 匿名参数中参数名可能为 null，特殊处理
+                                SourceLocation loc = idNode == null ? paramTypeNode.getWholeLocation() :
+                                    SourceLocation.concat(paramTypeNode.getWholeLocation(), idNode.getWholeLocation());
+                                logNoteWithSourceLine(loc, msg);
                             } else {
                                 node.args.set(i, convertTo(arg, convertedType));
                             }
