@@ -42,6 +42,14 @@ public interface Type {
 
     <R> R accept(TypeVisitor<R> visitor);
 
+    static Type commonRealType(Type t1, Type t2) {
+        if (!(t1 instanceof BasicType basicType1) || !(t2 instanceof BasicType basicType2)) {
+            return ErrorType.INSTANCE;
+        } else {
+            return commonRealType(basicType1, basicType2);
+        }
+    }
+
     static BasicType commonRealType(BasicType t1, BasicType t2) {
         if (!t1.isInteger() || !t2.isInteger()) {
             throw new IllegalArgumentException("Both types must be arithmetic");

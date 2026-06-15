@@ -154,8 +154,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                     logErrorWithSourceLine(node.op.wholeLoc, msg);
                     yield ErrorType.INSTANCE;
                 } else {
-                    Type commonType = Type.commonRealType(
-                        (BasicType) node.lhs.expType, (BasicType) node.rhs.expType);
+                    Type commonType = Type.commonRealType(node.lhs.expType, node.rhs.expType);
                     node.lhs = convertTo(node.lhs, commonType);
                     node.rhs = convertTo(node.rhs, commonType);
                     yield commonType;
@@ -171,7 +170,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                     logErrorWithSourceLine(node.op.wholeLoc, msg);
                     yield ErrorType.INSTANCE;
                 } else {
-                    Type commonType = Type.commonRealType((BasicType) node.lhs.expType, (BasicType) node.rhs.expType);
+                    Type commonType = Type.commonRealType(node.lhs.expType, node.rhs.expType);
                     node.lhs = convertTo(node.lhs, commonType);
                     node.rhs = convertTo(node.rhs, commonType);
                     yield commonType;
@@ -212,7 +211,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                     logErrorWithSourceLine(node.op.wholeLoc, msg);
                     yield ErrorType.INSTANCE;
                 } else {
-                    Type commonType = Type.commonRealType((BasicType) node.lhs.expType, (BasicType) node.rhs.expType);
+                    Type commonType = Type.commonRealType(node.lhs.expType, node.rhs.expType);
                     node.lhs = convertTo(node.lhs, commonType);
                     node.rhs = convertTo(node.rhs, commonType);
                     yield BasicType.INT;
@@ -228,7 +227,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                     logErrorWithSourceLine(node.op.wholeLoc, msg);
                     yield ErrorType.INSTANCE;
                 } else {
-                    Type commonType = Type.commonRealType((BasicType) node.lhs.expType, (BasicType) node.rhs.expType);
+                    Type commonType = Type.commonRealType(node.lhs.expType, node.rhs.expType);
                     node.lhs = convertTo(node.lhs, commonType);
                     node.rhs = convertTo(node.rhs, commonType);
                     yield BasicType.INT;
@@ -726,7 +725,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         // 两个任何算术类型的表达式
         if (node.thenExp.expType.isArithmetic() && node.elseExp.expType.isArithmetic()) {
             // 若表达式拥有算术类型，则公共类型为一般算术转换后的类型
-            Type commonType = Type.commonRealType((BasicType) node.thenExp.expType, (BasicType) node.elseExp.expType);
+            Type commonType = Type.commonRealType(node.thenExp.expType, node.elseExp.expType);
             node.thenExp = convertTo(node.thenExp, commonType);
             node.elseExp = convertTo(node.elseExp, commonType);
             node.expType = commonType;
