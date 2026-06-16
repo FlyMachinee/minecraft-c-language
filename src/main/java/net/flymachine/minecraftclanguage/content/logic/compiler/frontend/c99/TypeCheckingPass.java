@@ -321,8 +321,9 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             }
             // 链接不冲突，不需要修改 global
             if (!alreadyDefined) {
-                // 先前未定义，更新声明/定义行
+                // 先前未定义，更新声明/定义行，仅用于错误信息打印
                 previous.id = id;
+                previous.typeNode = funcType;
             }
             funcAttr.defined = alreadyDefined || isDefinition;
         } else {
