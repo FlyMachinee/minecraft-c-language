@@ -381,8 +381,8 @@ public final class LA64Linker {
                 }
                 int intDiff = (int) diff;
                 boolean inRange = switch (relocationEntry.relocationType()) {
-                    case R_LARCH_B16 -> !BitMath.isOffs16(intDiff);
-                    case R_LARCH_B21 -> !BitMath.isOffs21(intDiff);
+                    case R_LARCH_B16 -> BitMath.isOffs16(intDiff);
+                    case R_LARCH_B21 -> BitMath.isOffs21(intDiff);
                     case R_LARCH_B26 -> BitMath.isOffs26(intDiff);
                     default -> false; // 不可能
                 };
