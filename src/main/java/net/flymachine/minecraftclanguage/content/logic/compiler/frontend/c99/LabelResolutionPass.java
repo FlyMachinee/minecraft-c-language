@@ -224,7 +224,7 @@ public final class LabelResolutionPass extends SemanticAnalysePass implements As
     }
 
     @Override
-    public Void visit(IdentifierNode node) {
+    public Void visit(VariableNode node) {
         return null;
     }
 

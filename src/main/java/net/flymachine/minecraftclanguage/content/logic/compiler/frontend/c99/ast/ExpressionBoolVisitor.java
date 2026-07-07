@@ -27,7 +27,7 @@ public interface ExpressionBoolVisitor {
 
     BoolGenResult visit(AssignmentNode assignment, String jumpTarget, boolean inverse);
 
-    BoolGenResult visit(IdentifierNode identifier, String jumpTarget, boolean inverse);
+    BoolGenResult visit(VariableNode variable, String jumpTarget, boolean inverse);
 
     BoolGenResult visit(IncrementDecrementNode incrementDecrement, String jumpTarget, boolean inverse);
 

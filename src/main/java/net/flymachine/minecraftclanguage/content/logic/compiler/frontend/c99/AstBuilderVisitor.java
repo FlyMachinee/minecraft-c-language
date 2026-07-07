@@ -677,7 +677,8 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
     public ExpressionNode visitPrimaryExpression(C99Parser.PrimaryExpressionContext ctx) {
         if (ctx.Identifier() != null) {
             String identifier = ctx.Identifier().getText();
-            return new IdentifierNode(getSourceLocation(ctx.Identifier()), identifier);
+            IdentifierNode identifierNode = new IdentifierNode(getSourceLocation(ctx.Identifier()), identifier);
+            return new VariableNode(identifierNode);
         } else if (ctx.IntegerConstant() != null) {
             return parseIntegerConstant(ctx.IntegerConstant());
         } else if (ctx.LeftParen() != null) {

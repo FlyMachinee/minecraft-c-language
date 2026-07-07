@@ -598,10 +598,9 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
     }
 
     @Override
-    public Void visit(IdentifierNode node) {
+    public Void visit(VariableNode node) {
         // 始终有定义
-        SymbolTable.Entry entry = symbolTable.get(node.id);
-        // TypeNode type = entry.typeNode;
+        SymbolTable.Entry entry = symbolTable.get(node.id.id);
         Type t = entry.type;
         if (!t.isComplete()) {
             // 不完整类型不能使用
@@ -843,22 +842,22 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
 
     @Override
     public Void visit(FunctionCallNode node) {
-        if (!(node.func instanceof IdentifierNode id)) {
+        if (!(node.func instanceof VariableNode variable)) {
             // 目前不允许调用函数指针
             error();
             String msg = "function call expression shall have name as function designator";
             logErrorWithSourceLine(node.func.wholeLoc, msg);
             node.expType = ErrorType.INSTANCE;
         } else {
-            SymbolTable.Entry entry = symbolTable.get(id.id);
+            SymbolTable.Entry entry = symbolTable.get(variable.id.id);
             Type type = entry.type;
             if (!(type instanceof FunctionType funcType)) {
                 // 不是函数类型
                 error();
-                String msg = "called object '" + getLogger().white(getSourceFile().getByLocation(id.wholeLoc)) +
+                String msg = "called object '" + getLogger().white(getSourceFile().getByLocation(variable.wholeLoc)) +
                              "' is not a function or function pointer; have type '" +
                              getLogger().white(type.toString()) + "'";
-                logErrorWithSourceLine(id.wholeLoc, msg);
+                logErrorWithSourceLine(variable.wholeLoc, msg);
                 msg = "declared here";
                 logNoteWithSourceLine(entry.id.wholeLoc, msg);
                 node.expType = ErrorType.INSTANCE;
@@ -869,7 +868,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                     if (!node.args.isEmpty()) {
                         // 传递了参数
                         error();
-                        String msg = "too many arguments to function '" + getLogger().white(id.id) + "'";
+                        String msg = "too many arguments to function '" + getLogger().white(variable.id.id) + "'";
                         logErrorWithSourceLine(node.func.wholeLoc, msg);
                         msg = "declared here";
                         logNoteWithSourceLine(entry.id.wholeLoc, msg);
@@ -882,7 +881,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                     if (node.args.size() < funcType.parameterTypes().size()) {
                         // 参数不足
                         error();
-                        String msg = "too few arguments to function '" + getLogger().white(id.id) + "'";
+                        String msg = "too few arguments to function '" + getLogger().white(variable.id.id) + "'";
                         logErrorWithSourceLine(node.func.wholeLoc, msg);
                         msg = "declared here";
                         logNoteWithSourceLine(entry.id.wholeLoc, msg);
@@ -890,7 +889,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                     } else if (node.args.size() > funcType.parameterTypes().size()) {
                         // 参数过多
                         error();
-                        String msg = "too many arguments to function '" + getLogger().white(id.id) + "'";
+                        String msg = "too many arguments to function '" + getLogger().white(variable.id.id) + "'";
                         logErrorWithSourceLine(node.func.wholeLoc, msg);
                         msg = "declared here";
                         logNoteWithSourceLine(entry.id.wholeLoc, msg);
@@ -911,8 +910,8 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                                 error();
                                 noError = false;
                                 String msg =
-                                    "incompatible type for argument " + (i + 1) + " of '" + getLogger().white(id.id) +
-                                    "'";
+                                    "incompatible type for argument " + (i + 1) + " of '"
+                                    + getLogger().white(variable.id.id) + "'";
                                 logErrorWithSourceLine(node.args.get(i).wholeLoc, msg);
                                 msg = "expected '" + getLogger().white(paramType.toString()) +
                                       "' but argument is of type '" + getLogger().white(arg.expType.toString()) + "'";

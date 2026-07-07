@@ -16,7 +16,7 @@ public interface ExpressionVisitor {
 
     TacValue visit(AssignmentNode assignment);
 
-    TacValue visit(IdentifierNode identifier);
+    TacValue visit(VariableNode variable);
 
     TacValue visit(IncrementDecrementNode incrementDecrement);
 

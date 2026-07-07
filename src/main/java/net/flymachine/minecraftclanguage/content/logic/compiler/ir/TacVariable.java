@@ -1,5 +1,8 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.ir;
 
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.IdentifierNode;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.VariableNode;
+
 import java.io.PrintStream;
 
 public class TacVariable implements TacValue {
@@ -7,6 +10,14 @@ public class TacVariable implements TacValue {
 
     public TacVariable(String name) {
         this.name = name;
+    }
+
+    public TacVariable(IdentifierNode id) {
+        this.name = id.id;
+    }
+
+    public TacVariable(VariableNode var) {
+        this.name = var.id.id;
     }
 
     @Override

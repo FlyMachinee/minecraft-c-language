@@ -548,7 +548,7 @@ public final class AstToTacLowerer implements StatementVisitor, ExpressionVisito
     public TacValue visit(AssignmentNode assignment) {
         // 赋值表达式
         TacValue rhs = assignment.rhs.accept(this);
-        TacVariable dst = new TacVariable(((IdentifierNode) assignment.lhs).id);
+        TacVariable dst = new TacVariable((VariableNode) assignment.lhs);
         if (assignment.op.op == AssignmentOperator.ASSIGN) {
             // 普通赋值
             emitTac(new TacCopy(rhs, dst));
@@ -563,15 +563,15 @@ public final class AstToTacLowerer implements StatementVisitor, ExpressionVisito
     }
 
     @Override
-    public TacValue visit(IdentifierNode identifier) {
-        return new TacVariable(identifier.id);
+    public TacValue visit(VariableNode variable) {
+        return new TacVariable(variable);
     }
 
     @Override
     public TacValue visit(IncrementDecrementNode incrementDecrement) {
         // 自增自减表达式
         BinaryOperator op = incrementDecrement.isIncrement ? BinaryOperator.ADD : BinaryOperator.SUBTRACT;
-        TacVariable dst = new TacVariable(((IdentifierNode) incrementDecrement.operand).id);
+        TacVariable dst = new TacVariable((VariableNode) incrementDecrement.operand);
 
         BasicType bt = (BasicType) incrementDecrement.expType;
         Constant one = switch (bt) {
@@ -646,13 +646,13 @@ public final class AstToTacLowerer implements StatementVisitor, ExpressionVisito
         // dst = invoke(func, [res0, res1,...])
         // yield dst
 
-        IdentifierNode funcId = (IdentifierNode) funcCall.func;
+        VariableNode funcId = (VariableNode) funcCall.func;
         List<TacValue> args = new ArrayList<>();
         for (ExpressionNode arg : funcCall.args) {
             args.add(arg.accept(this));
         }
         TacVariable dst = makeTempVar(funcCall.expType);
-        emitTac(new TacFunctionCall(funcId.id, args, dst));
+        emitTac(new TacFunctionCall(funcId.id.id, args, dst));
         return dst;
     }
 
@@ -849,8 +849,8 @@ public final class AstToTacLowerer implements StatementVisitor, ExpressionVisito
     }
 
     @Override
-    public BoolGenResult visit(IdentifierNode identifier, String jumpTarget, boolean inverse) {
-        return visitFallback(identifier, jumpTarget, inverse);
+    public BoolGenResult visit(VariableNode variable, String jumpTarget, boolean inverse) {
+        return visitFallback(variable, jumpTarget, inverse);
     }
 
     @Override

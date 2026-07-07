@@ -305,22 +305,22 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
     }
 
     @Override
-    public Void visit(IdentifierNode node) {
-        String name = node.id;
+    public Void visit(VariableNode node) {
+        String name = node.id.id;
         IdentifierEntry renamed = definitionOf(name);
         if (renamed == null) {
             error();
             String msg = "'" + getLogger().white(name) + "' undeclared";
             logErrorWithSourceLine(node.wholeLoc, msg);
         } else {
-            node.id = renamed.id.id;
+            node.id.id = renamed.id.id;
         }
         return null;
     }
 
     @Override
     public Void visit(AssignmentNode node) {
-        if (!(node.lhs instanceof IdentifierNode)) {
+        if (!(node.lhs instanceof VariableNode)) {
             error();
             String msg = "lvalue required as left operand of assignment";
             logErrorWithSourceLine(node.op.wholeLoc, msg);
@@ -332,7 +332,7 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
 
     @Override
     public Void visit(IncrementDecrementNode node) {
-        if (!(node.operand instanceof IdentifierNode)) {
+        if (!(node.operand instanceof VariableNode)) {
             error();
             String msg;
             if (node.isIncrement) {

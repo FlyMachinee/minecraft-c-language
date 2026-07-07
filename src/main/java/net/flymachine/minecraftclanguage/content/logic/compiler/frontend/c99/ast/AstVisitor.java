@@ -19,7 +19,7 @@ public interface AstVisitor<T> {
 
     T visit(NullStatementNode node);
 
-    T visit(IdentifierNode node);
+    T visit(VariableNode node);
 
     T visit(AssignmentNode node);
 
