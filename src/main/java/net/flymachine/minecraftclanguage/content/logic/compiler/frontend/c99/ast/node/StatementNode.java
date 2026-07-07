@@ -27,7 +27,7 @@ public abstract class StatementNode extends AstNode {
     protected void dumpLabels(PrintStream stream) {
         StringJoiner stringJoiner = new StringJoiner(", ", "labels=[", "]");
         for (GotoLabelInfo info : gotoLabels) {
-            stringJoiner.add(info.label.id);
+            stringJoiner.add(info.label.name);
         }
         for (DefaultLabelInfo info : defaultLabels) {
             stringJoiner.add("default@" + info.switchLabel);

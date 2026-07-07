@@ -6,11 +6,11 @@ import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocatio
 import java.io.PrintStream;
 
 public final class IdentifierNode extends AstNode {
-    public String id;
+    public String name;
 
-    public IdentifierNode(SourceLocation wholeLocation, String id) {
+    public IdentifierNode(SourceLocation wholeLocation, String name) {
         super(wholeLocation);
-        this.id = id;
+        this.name = name;
     }
 
     @Override
@@ -20,6 +20,6 @@ public final class IdentifierNode extends AstNode {
 
     @Override
     public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
-        stream.print(id);
+        stream.print(name);
     }
 }

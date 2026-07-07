@@ -92,7 +92,7 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
     private void panicWithPreviousRef(String msg, IdentifierNode id, IdentifierEntry previous) {
         logErrorWithSourceLine(id.wholeLoc, msg);
         msg = "previous " + (previous.defined ? "definition" : "declaration") + " of '" +
-              getLogger().white(id.id) + "' with type '" +
+              getLogger().white(id.name) + "' with type '" +
               getLogger().white(previous.t.getType().toString()) + "'";
         logNoteWithSourceLine(previous.id.wholeLoc, msg);
     }
@@ -126,13 +126,13 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
                 IdentifierNode identifier = funcType.params.get(i);
                 TypeNode type = funcType.paramTypes.get(i);
 
-                IdentifierEntry entry = scope.get(identifier.id);
+                IdentifierEntry entry = scope.get(identifier.name);
                 if (entry == null) {
                     // 这里认为参数声明是定义，为 No Linkage
-                    scope.put(identifier.id, new IdentifierEntry(identifier, type, false, true));
+                    scope.put(identifier.name, new IdentifierEntry(identifier, type, false, true));
                 } else {
                     error();
-                    String msg = "redefinition of parameter '" + getLogger().white(identifier.id) + "'";
+                    String msg = "redefinition of parameter '" + getLogger().white(identifier.name) + "'";
                     panicWithPreviousRef(msg, identifier, entry);
                 }
             }
@@ -198,7 +198,7 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
     private void visitDeclarationLike(
         IdentifierNode id, TypeNode type, @Nullable StorageClassSpecifierNode storageClass, boolean defined) {
 
-        String name = id.id;
+        String name = id.name;
         IdentifierEntry previous = definitionOf(name);
         if (type instanceof FunctionTypeNode) {
             // 函数声明，始终有链接
@@ -286,7 +286,7 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
                     }
                 } else {
                     // 无链接，需要重命名
-                    id.id = makeUniqueName(name);
+                    id.name = makeUniqueName(name);
                     define(name, new IdentifierEntry(id, type, false, defined));
                 }
             }
@@ -306,14 +306,14 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
 
     @Override
     public Void visit(VariableNode node) {
-        String name = node.id.id;
+        String name = node.id.name;
         IdentifierEntry renamed = definitionOf(name);
         if (renamed == null) {
             error();
             String msg = "'" + getLogger().white(name) + "' undeclared";
             logErrorWithSourceLine(node.wholeLoc, msg);
         } else {
-            node.id.id = renamed.id.id;
+            node.id.name = renamed.id.name;
         }
         return null;
     }

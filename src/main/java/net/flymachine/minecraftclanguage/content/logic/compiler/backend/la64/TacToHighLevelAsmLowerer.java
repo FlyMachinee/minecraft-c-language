@@ -47,11 +47,11 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
         // 建立后端符号表
         for (SymbolTable.Entry entry : symbolTable.getEntries()) {
             if (entry.type instanceof FunctionType) {
-                backendSymbolTable.put(entry.id.id, new BackendSymbolTable.FuncEntry(entry.attr.isDefinition()));
+                backendSymbolTable.put(entry.id.name, new BackendSymbolTable.FuncEntry(entry.attr.isDefinition()));
             } else {
                 AsmType asmType = entry.type.toAsmType();
                 backendSymbolTable.put(
-                    entry.id.id,
+                    entry.id.name,
                     new BackendSymbolTable.ObjectEntry(asmType, entry.attr instanceof SymbolTable.Entry.StaticAttr));
             }
         }

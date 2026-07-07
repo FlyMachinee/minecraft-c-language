@@ -253,7 +253,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             if (node.init != null) {
                 // 函数类型不能使用赋值初始化
                 error();
-                String msg = "function '" + getLogger().white(node.id.id) + "' is initialized like a variable";
+                String msg = "function '" + getLogger().white(node.id.name) + "' is initialized like a variable";
                 logErrorWithSourceLine(node.init.wholeLoc, msg);
             }
         } else {
@@ -272,7 +272,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         String msg, IdentifierNode id, SymbolTable.Entry previous, boolean defined) {
         logErrorWithSourceLine(id.wholeLoc, msg);
         msg = "previous " + (defined ? "definition" : "declaration") + " of '" +
-              getLogger().white(id.id) + "' with type '" + getLogger().white(previous.type.toString()) +
+              getLogger().white(id.name) + "' with type '" + getLogger().white(previous.type.toString()) +
               "'";
         logNoteWithSourceLine(previous.id.wholeLoc, msg);
     }
@@ -287,13 +287,13 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             returnType.getType() == BasicType.VOID) {
             // 返回值类型不合法
             error();
-            String msg = "function '" + getLogger().white(id.id) + "' has invalid return type '" +
+            String msg = "function '" + getLogger().white(id.name) + "' has invalid return type '" +
                          getLogger().white(funcType.retType.getType().toString()) + "'";
             logErrorWithSourceLine(id.wholeLoc, msg);
         }
 
         // 如果已经声明/定义，检查类型是否匹配
-        SymbolTable.Entry previous = symbolTable.get(id.id);
+        SymbolTable.Entry previous = symbolTable.get(id.name);
         if (previous != null) {
             boolean alreadyDefined = previous.attr.isDefinition();
             if (!previous.type.isCompatible(funcType.getType())) {
@@ -307,7 +307,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             if (alreadyDefined && isDefinition) {
                 // 重定义函数
                 error();
-                String msg = "redefinition of '" + getLogger().white(id.id) + "'";
+                String msg = "redefinition of '" + getLogger().white(id.name) + "'";
                 panicWithPreviousRef(msg, id, previous, true);
                 return;
             }
@@ -315,7 +315,8 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                 storageClass.storageClass.equals(StorageClassSpecifier.STATIC)) {
                 // 之前是全局的（External linkage），现在是静态的（Internal linkage），链接冲突
                 error();
-                String msg = "static declaration of '" + getLogger().white(id.id) + "' follows non-static declaration";
+                String msg = "static declaration of '" + getLogger().white(id.name) +
+                             "' follows non-static declaration";
                 panicWithPreviousRef(msg, id, previous, alreadyDefined);
                 return;
             }
@@ -330,7 +331,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             // 第一次
             boolean global = storageClass == null || !storageClass.storageClass.equals(StorageClassSpecifier.STATIC);
             SymbolTable.Entry.IdentifierAttr attr = new SymbolTable.Entry.FuncAttr(isDefinition, global);
-            symbolTable.put(id.id, new SymbolTable.Entry(id, funcType, funcType.getType(), attr));
+            symbolTable.put(id.name, new SymbolTable.Entry(id, funcType, funcType.getType(), attr));
         }
     }
 
@@ -361,7 +362,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             if (isDefinition) {
                 assert param != null;
                 symbolTable.put(
-                    param.id,
+                    param.name,
                     new SymbolTable.Entry(param, paramType, paramType.getType(), SymbolTable.Entry.LocalAttr.INSTANCE));
             }
         }
@@ -419,7 +420,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
 
         boolean global = storageClass == null || !storageClass.storageClass.equals(StorageClassSpecifier.STATIC);
 
-        SymbolTable.Entry previous = symbolTable.get(id.id);
+        SymbolTable.Entry previous = symbolTable.get(id.name);
         if (previous != null) {
             // 先前有声明/定义
             boolean alreadyDefined = previous.attr.isDefinition();
@@ -440,10 +441,10 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                 String msg;
                 if (global) {
                     // 当前 global（External Linkage），先前非 global（Internal Linkage）
-                    msg = "non-static declaration of '" + getLogger().white(id.id) + "' follows static declaration";
+                    msg = "non-static declaration of '" + getLogger().white(id.name) + "' follows static declaration";
                 } else {
                     // 当前非 global（Internal Linkage），先前 global（External Linkage）
-                    msg = "static declaration of '" + getLogger().white(id.id) + "' follows non-static declaration";
+                    msg = "static declaration of '" + getLogger().white(id.name) + "' follows non-static declaration";
                 }
                 panicWithPreviousRef(msg, id, previous, alreadyDefined);
                 return;
@@ -453,7 +454,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                 if (initialValue instanceof SymbolTable.Entry.StaticAttr.Initial) {
                     // 定义了两次，且都有初始化，冲突
                     error();
-                    String msg = "redefinition of '" + getLogger().white(id.id) + "'";
+                    String msg = "redefinition of '" + getLogger().white(id.name) + "'";
                     panicWithPreviousRef(msg, id, previous, true);
                 } else {
                     // 当前无定义，先前有初始化，使用先前的初始化信息
@@ -476,7 +477,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         } else {
             // 第一次
             SymbolTable.Entry.IdentifierAttr attr = new SymbolTable.Entry.StaticAttr(initialValue, global);
-            symbolTable.put(id.id, new SymbolTable.Entry(id, type, type.getType(), attr));
+            symbolTable.put(id.name, new SymbolTable.Entry(id, type, type.getType(), attr));
         }
     }
 
@@ -489,7 +490,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         if (storageClass == null) {
             // 无存储类说明符，不可能重复定义
             SymbolTable.Entry.LocalAttr attr = SymbolTable.Entry.LocalAttr.INSTANCE;
-            symbolTable.put(id.id, new SymbolTable.Entry(id, type, type.getType(), attr));
+            symbolTable.put(id.name, new SymbolTable.Entry(id, type, type.getType(), attr));
             if (init != null) {
                 init.accept(this);
                 // 若提供了初始化式，对于
@@ -513,11 +514,12 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             if (init != null) {
                 error();
                 String msg =
-                    "'" + getLogger().white(id.id) + "' has both '" + getLogger().white("extern") + "' and initializer";
+                    "'" + getLogger().white(id.name) + "' has both '" + getLogger().white("extern") +
+                    "' and initializer";
                 logErrorWithSourceLine(init.wholeLoc, msg);
                 // 这里不 return，继续处理下面的检查与定义
             }
-            SymbolTable.Entry previous = symbolTable.get(id.id);
+            SymbolTable.Entry previous = symbolTable.get(id.name);
             if (previous != null) {
                 // 先前有声明/定义
                 boolean alreadyDefined = previous.attr.isDefinition();
@@ -533,7 +535,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                 // 第一次
                 SymbolTable.Entry.IdentifierAttr attr = new SymbolTable.Entry.StaticAttr(
                     SymbolTable.Entry.StaticAttr.NoInitializer.INSTANCE, true);
-                symbolTable.put(id.id, new SymbolTable.Entry(id, type, type.getType(), attr));
+                symbolTable.put(id.name, new SymbolTable.Entry(id, type, type.getType(), attr));
             }
         } else {
             // static
@@ -569,7 +571,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             }
             // static 块作用域变量为 No Linkage，不可能重复定义（在 Identifier Resolution 中已检查）
             SymbolTable.Entry.IdentifierAttr attr = new SymbolTable.Entry.StaticAttr(initialValue, false);
-            symbolTable.put(id.id, new SymbolTable.Entry(id, type, type.getType(), attr));
+            symbolTable.put(id.name, new SymbolTable.Entry(id, type, type.getType(), attr));
         }
     }
 
@@ -578,9 +580,9 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         error();
         String msg;
         if ((previous.type instanceof FunctionType) != (type instanceof FunctionTypeNode)) {
-            msg = "'" + getLogger().white(id.id) + "' redeclared as different kind of symbol";
+            msg = "'" + getLogger().white(id.name) + "' redeclared as different kind of symbol";
         } else {
-            msg = "conflicting types for '" + getLogger().white(id.id) + "'; have '" +
+            msg = "conflicting types for '" + getLogger().white(id.name) + "'; have '" +
                   getLogger().white(type.getType().toString()) + "'";
         }
         panicWithPreviousRef(msg, id, previous, alreadyDefined);
@@ -600,7 +602,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
     @Override
     public Void visit(VariableNode node) {
         // 始终有定义
-        SymbolTable.Entry entry = symbolTable.get(node.id.id);
+        SymbolTable.Entry entry = symbolTable.get(node.id.name);
         Type t = entry.type;
         if (!t.isComplete()) {
             // 不完整类型不能使用
@@ -796,7 +798,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                 if (decl.type instanceof FunctionTypeNode) {
                     // for 初始化语句中不允许声明函数类型
                     error();
-                    String msg = "declaration of non-variable '" + getLogger().white(decl.id.id) +
+                    String msg = "declaration of non-variable '" + getLogger().white(decl.id.name) +
                                  "' in for loop initial declaration";
                     logErrorWithSourceLine(decl.wholeLoc, msg);
                 }
@@ -849,7 +851,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             logErrorWithSourceLine(node.func.wholeLoc, msg);
             node.expType = ErrorType.INSTANCE;
         } else {
-            SymbolTable.Entry entry = symbolTable.get(variable.id.id);
+            SymbolTable.Entry entry = symbolTable.get(variable.id.name);
             Type type = entry.type;
             if (!(type instanceof FunctionType funcType)) {
                 // 不是函数类型
@@ -868,7 +870,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                     if (!node.args.isEmpty()) {
                         // 传递了参数
                         error();
-                        String msg = "too many arguments to function '" + getLogger().white(variable.id.id) + "'";
+                        String msg = "too many arguments to function '" + getLogger().white(variable.id.name) + "'";
                         logErrorWithSourceLine(node.func.wholeLoc, msg);
                         msg = "declared here";
                         logNoteWithSourceLine(entry.id.wholeLoc, msg);
@@ -881,7 +883,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                     if (node.args.size() < funcType.parameterTypes().size()) {
                         // 参数不足
                         error();
-                        String msg = "too few arguments to function '" + getLogger().white(variable.id.id) + "'";
+                        String msg = "too few arguments to function '" + getLogger().white(variable.id.name) + "'";
                         logErrorWithSourceLine(node.func.wholeLoc, msg);
                         msg = "declared here";
                         logNoteWithSourceLine(entry.id.wholeLoc, msg);
@@ -889,7 +891,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                     } else if (node.args.size() > funcType.parameterTypes().size()) {
                         // 参数过多
                         error();
-                        String msg = "too many arguments to function '" + getLogger().white(variable.id.id) + "'";
+                        String msg = "too many arguments to function '" + getLogger().white(variable.id.name) + "'";
                         logErrorWithSourceLine(node.func.wholeLoc, msg);
                         msg = "declared here";
                         logNoteWithSourceLine(entry.id.wholeLoc, msg);
@@ -911,7 +913,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                                 noError = false;
                                 String msg =
                                     "incompatible type for argument " + (i + 1) + " of '"
-                                    + getLogger().white(variable.id.id) + "'";
+                                    + getLogger().white(variable.id.name) + "'";
                                 logErrorWithSourceLine(node.args.get(i).wholeLoc, msg);
                                 msg = "expected '" + getLogger().white(paramType.toString()) +
                                       "' but argument is of type '" + getLogger().white(arg.expType.toString()) + "'";

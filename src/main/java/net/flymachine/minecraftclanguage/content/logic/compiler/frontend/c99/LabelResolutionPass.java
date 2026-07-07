@@ -93,7 +93,7 @@ public final class LabelResolutionPass extends SemanticAnalysePass implements As
     }
 
     private void defineLabel(StatementNode.GotoLabelInfo gotoLabelInfo) {
-        String id = gotoLabelInfo.label.id;
+        String id = gotoLabelInfo.label.name;
         StatementNode.GotoLabelInfo definition = labelDefinitionMap.get(id);
         if (definition != null) {
             // 标签重定义
@@ -112,7 +112,7 @@ public final class LabelResolutionPass extends SemanticAnalysePass implements As
             if (pendingList != null) {
                 gotoLabelInfo.active = true;
                 for (GotoNode gotoNode : pendingList) {
-                    gotoNode.target.id = gotoLabelInfo.label.id;
+                    gotoNode.target.name = gotoLabelInfo.label.name;
                 }
             }
         }
@@ -187,7 +187,7 @@ public final class LabelResolutionPass extends SemanticAnalysePass implements As
     private int labelRenameCounter = 0;
 
     private void rename(IdentifierNode identifierNode) {
-        identifierNode.id = currentFunction.id.id + "__" + identifierNode.id + "__" + labelRenameCounter++;
+        identifierNode.name = currentFunction.id.name + "__" + identifierNode.name + "__" + labelRenameCounter++;
     }
 
     @Override
@@ -257,11 +257,11 @@ public final class LabelResolutionPass extends SemanticAnalysePass implements As
     public Void visit(GotoNode node) {
         visit((StatementNode) node);
 
-        String target = node.target.id;
+        String target = node.target.name;
         StatementNode.GotoLabelInfo definition = labelDefinitionMap.get(target);
         if (definition != null) {
             // 有定义，直接重命名
-            node.target.id = definition.label.id;
+            node.target.name = definition.label.name;
             // 设置标签为活跃
             definition.active = true;
             return null;

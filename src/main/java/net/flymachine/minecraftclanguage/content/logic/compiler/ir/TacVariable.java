@@ -13,11 +13,11 @@ public class TacVariable implements TacValue {
     }
 
     public TacVariable(IdentifierNode id) {
-        this.name = id.id;
+        this.name = id.name;
     }
 
     public TacVariable(VariableNode var) {
-        this.name = var.id.id;
+        this.name = var.id.name;
     }
 
     @Override

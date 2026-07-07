@@ -42,18 +42,18 @@ public final class AstToTacLowerer implements StatementVisitor, ExpressionVisito
                 SymbolTable.Entry.StaticAttr.InitialValue initialValue = staticAttr.initialValue;
                 if (initialValue instanceof SymbolTable.Entry.StaticAttr.Initial initial) {
                     topLevels.add(new TacStaticVariable(
-                        entry.id.id, staticAttr.global, entry.type, initial.init()));
+                        entry.id.name, staticAttr.global, entry.type, initial.init()));
                 } else if (initialValue instanceof SymbolTable.Entry.StaticAttr.Tentative) {
                     BasicType bt = (BasicType) entry.type;
                     switch (bt) {
                         case INT -> topLevels.add(new TacStaticVariable(
-                            entry.id.id, staticAttr.global, BasicType.INT, IntInit.ZERO));
+                            entry.id.name, staticAttr.global, BasicType.INT, IntInit.ZERO));
                         case LONG -> topLevels.add(new TacStaticVariable(
-                            entry.id.id, staticAttr.global, BasicType.LONG, LongInit.ZERO));
+                            entry.id.name, staticAttr.global, BasicType.LONG, LongInit.ZERO));
                         case UNSIGNED_INT -> topLevels.add(new TacStaticVariable(
-                            entry.id.id, staticAttr.global, BasicType.UNSIGNED_INT, UnsignedIntInit.ZERO));
+                            entry.id.name, staticAttr.global, BasicType.UNSIGNED_INT, UnsignedIntInit.ZERO));
                         case UNSIGNED_LONG -> topLevels.add(new TacStaticVariable(
-                            entry.id.id, staticAttr.global, BasicType.UNSIGNED_LONG, UnsignedLongInit.ZERO));
+                            entry.id.name, staticAttr.global, BasicType.UNSIGNED_LONG, UnsignedLongInit.ZERO));
                         default -> throw new IllegalStateException("Unexpected value: " + bt);
                     }
                 }
@@ -95,13 +95,13 @@ public final class AstToTacLowerer implements StatementVisitor, ExpressionVisito
         instructions = new ArrayList<>();
         funcDef.body.accept(this);
         emitTac(new TacReturn(new TacConstant(ConstantInt.ZERO)));
-        boolean global = symbolTable.get(funcDef.id.id).attr.isGlobal();
+        boolean global = symbolTable.get(funcDef.id.name).attr.isGlobal();
         FunctionTypeNode functionType = (FunctionTypeNode) funcDef.funcType;
         if (functionType.hasNoParameters()) {
-            return new TacFunction(funcDef.id.id, global, List.of(), instructions);
+            return new TacFunction(funcDef.id.name, global, List.of(), instructions);
         } else {
-            List<String> parameters = functionType.params.stream().map(param -> param.id).toList();
-            return new TacFunction(funcDef.id.id, global, parameters, instructions);
+            List<String> parameters = functionType.params.stream().map(param -> param.name).toList();
+            return new TacFunction(funcDef.id.name, global, parameters, instructions);
         }
     }
 
@@ -120,7 +120,7 @@ public final class AstToTacLowerer implements StatementVisitor, ExpressionVisito
         // 无存储类且有初始化时，生成初始化三地址码
         if (decl.init != null && decl.storageClass == null) {
             TacValue initValue = decl.init.accept(this);
-            emitTac(new TacCopy(initValue, new TacVariable(decl.id.id)));
+            emitTac(new TacCopy(initValue, new TacVariable(decl.id.name)));
         }
     }
 
@@ -129,7 +129,7 @@ public final class AstToTacLowerer implements StatementVisitor, ExpressionVisito
         for (int i = stmt.gotoLabels.size() - 1; i >= 0; i--) {
             StatementNode.GotoLabelInfo info = stmt.gotoLabels.get(i);
             if (info.active) {
-                emitTac(new TacLabel(info.label.id));
+                emitTac(new TacLabel(info.label.name));
             }
         }
 
@@ -221,7 +221,7 @@ public final class AstToTacLowerer implements StatementVisitor, ExpressionVisito
     public void visit(GotoNode gotoStmt) {
         visitBefore(gotoStmt);
         // 为 goto 语句生成无条件跳转
-        emitTac(new TacJump(gotoStmt.target.id));
+        emitTac(new TacJump(gotoStmt.target.name));
     }
 
     @Override
@@ -652,7 +652,7 @@ public final class AstToTacLowerer implements StatementVisitor, ExpressionVisito
             args.add(arg.accept(this));
         }
         TacVariable dst = makeTempVar(funcCall.expType);
-        emitTac(new TacFunctionCall(funcId.id.id, args, dst));
+        emitTac(new TacFunctionCall(funcId.id.name, args, dst));
         return dst;
     }
 

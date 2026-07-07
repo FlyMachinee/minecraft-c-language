@@ -26,7 +26,7 @@ public final class VariableNode extends ExpressionNode {
             indent(stream, indentLevel);
         }
         stream.print("VariableNode(id=");
-        stream.print(id.id);
+        stream.print(id.name);
         if (expType != null) {
             stream.print(", expType=");
             stream.print(expType);

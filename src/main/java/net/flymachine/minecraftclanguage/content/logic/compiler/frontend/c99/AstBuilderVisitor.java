@@ -128,7 +128,8 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         if (isBaseTypeError) {
             error();
             String msg =
-                "type defaults to '" + logger.white("int") + "' in declaration of '" + logger.white(res.id.id) + "'";
+                "type defaults to '" + logger.white("int") + "' in declaration of '" + logger.white(res.id.name) +
+                "'";
             logErrorWithSourceLine(res.id.wholeLoc, msg);
         }
         CompoundStatementNode body = (CompoundStatementNode) visit(ctx.compoundStatement());
@@ -385,13 +386,13 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
                 if (baseTypeError) {
                     error();
                     String msg = "type defaults to '" + logger.white("int") + "' in declaration of '" +
-                                 logger.white(paramRes.id.id) + "'";
+                                 logger.white(paramRes.id.name) + "'";
                     logErrorWithSourceLine(paramRes.id.wholeLoc, msg);
                 }
                 if (paramStorageClass != null && paramStorageClass.storageClass != StorageClassSpecifier.REGISTER) {
                     // 有非 register 的存储类型
                     error();
-                    String msg = "storage class specified for parameter '" + logger.white(paramRes.id.id) + "'";
+                    String msg = "storage class specified for parameter '" + logger.white(paramRes.id.name) + "'";
                     logErrorWithSourceLine(paramStorageClass.wholeLoc, msg);
                 }
 
@@ -450,8 +451,8 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
             if (isBaseTypeError) {
                 error();
                 String msg =
-                    "type defaults to '" + logger.white("int") + "' in declaration of '" + logger.white(res.id.id) +
-                    "'";
+                    "type defaults to '" + logger.white("int") + "' in declaration of '"
+                    + logger.white(res.id.name) + "'";
                 logErrorWithSourceLine(res.id.wholeLoc, msg);
             }
 
