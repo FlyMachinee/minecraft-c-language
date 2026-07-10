@@ -346,13 +346,26 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
         return null;
     }
 
+    private void visitSubstatement(StatementNode node) {
+        if (node instanceof CompoundStatementNode || node instanceof IfStatementNode ||
+            node instanceof SwitchStatementNode || node instanceof WhileLoopNode || node instanceof ForLoopNode) {
+            node.accept(this);
+        } else {
+            enterScope();
+            node.accept(this);
+            exitScope();
+        }
+    }
+
     @Override
     public Void visit(IfStatementNode node) {
+        enterScope();
         node.cond.accept(this);
-        node.thenStmt.accept(this);
+        visitSubstatement(node.thenStmt);
         if (node.elseStmt != null) {
-            node.elseStmt.accept(this);
+            visitSubstatement(node.elseStmt);
         }
+        exitScope();
         return null;
     }
 
@@ -391,13 +404,15 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
 
     @Override
     public Void visit(WhileLoopNode node) {
+        enterScope();
         if (node.isDoWhile) {
-            node.body.accept(this);
+            visitSubstatement(node.body);
             node.cond.accept(this);
         } else {
             node.cond.accept(this);
-            node.body.accept(this);
+            visitSubstatement(node.body);
         }
+        exitScope();
         return null;
     }
 
@@ -413,15 +428,17 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
         if (node.step != null) {
             node.step.accept(this);
         }
-        node.body.accept(this);
+        visitSubstatement(node.body);
         exitScope();
         return null;
     }
 
     @Override
     public Void visit(SwitchStatementNode node) {
+        enterScope();
         node.exp.accept(this);
-        node.body.accept(this);
+        visitSubstatement(node.body);
+        exitScope();
         return null;
     }
 
