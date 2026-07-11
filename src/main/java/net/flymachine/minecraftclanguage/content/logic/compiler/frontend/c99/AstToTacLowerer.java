@@ -249,7 +249,7 @@ public final class AstToTacLowerer implements StatementVisitor, ExpressionVisito
         visitBefore(whileLoop);
         // while (cond) body
         // =>
-        //   goto continue_label <=====
+        //   if (!cond) goto break_label <=====
         // begin:
         //   body
         // continue_label:
@@ -269,8 +269,18 @@ public final class AstToTacLowerer implements StatementVisitor, ExpressionVisito
         String labelBreak = "break_" + whileLoop.loopLabel;
 
         if (!whileLoop.isDoWhile) {
-            // while 循环需要在循环前生成跳转到条件判断的指令
-            emitTac(new TacJump(labelContinue));
+            // while 循环需要在循环前生成跳转到结尾处的条件测试指令
+            if (whileLoop.cond.accept(this, labelBreak, true) == BoolGenResult.ALWAYS_JUMP) {
+                // 始终跳转，则条件始终为 0
+                if (whileLoop.body.containsActiveLabel()) {
+                    // 若含有活跃标签，则循环体不能优化，只能生成无条件跳转
+                    emitTac(new TacJump(labelBreak));
+                    // 继续处理循环体
+                } else {
+                    // 直接优化掉循环体，返回即可
+                    return;
+                }
+            }
         }
         emitTac(new TacLabel(labelBegin));
         whileLoop.body.accept(this);
@@ -288,18 +298,16 @@ public final class AstToTacLowerer implements StatementVisitor, ExpressionVisito
         // for (init; cond; step) body
         // =>
         //   init
-        //   goto cond
+        //   if (!cond) goto break_label
         // begin:
         //   body
         // continue_label:
         //   step
-        // cond:
         //   if (cond) goto begin
         // break_label:
         String labelBegin = makeLabel("for_begin");
         String labelContinue = "continue_" + forLoop.loopLabel;
         String labelBreak = "break_" + forLoop.loopLabel;
-        String labelCond = makeLabel("for_cond");
 
         if (forLoop.init != null) {
             if (forLoop.init instanceof ForInitDeclarationNode decl) {
@@ -310,14 +318,25 @@ public final class AstToTacLowerer implements StatementVisitor, ExpressionVisito
                 throw new RuntimeException("unexpected init node in for loop: " + forLoop.init.getClass());
             }
         }
-        emitTac(new TacJump(labelCond));
+        if (forLoop.cond != null) {
+            if (forLoop.cond.accept(this, labelBreak, true) == BoolGenResult.ALWAYS_JUMP) {
+                // 始终跳转，则条件始终为 0
+                if (forLoop.body.containsActiveLabel()) {
+                    // 若含有活跃标签，则循环体不能优化，只能生成无条件跳转
+                    emitTac(new TacJump(labelBreak));
+                    // 继续处理循环体
+                } else {
+                    // 直接优化掉循环体，返回即可
+                    return;
+                }
+            }
+        } // 否则条件缺省，始终视为真，则不跳转
         emitTac(new TacLabel(labelBegin));
         forLoop.body.accept(this);
         emitTac(new TacLabel(labelContinue));
         if (forLoop.step != null) {
             forLoop.step.accept(this);
         }
-        emitTac(new TacLabel(labelCond));
         if (forLoop.cond != null) {
             if (forLoop.cond.accept(this, labelBegin, false) == BoolGenResult.ALWAYS_JUMP) {
                 // 始终跳转，生成无条件跳转
