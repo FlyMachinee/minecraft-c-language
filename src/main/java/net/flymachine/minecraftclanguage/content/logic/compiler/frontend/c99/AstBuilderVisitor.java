@@ -332,18 +332,11 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         }
 
         if (ctx.LeftParen() != null) {
-            // directAbstractDeclarator -> directAbstractDeclarator LeftParen parameterTypeList? RightParen
-            // directAbstractDeclarator -> LeftParen parameterTypeList? RightParen
+            // directAbstractDeclarator -> directAbstractDeclarator LeftParen parameterTypeList RightParen
+            // directAbstractDeclarator -> LeftParen parameterTypeList RightParen
 
             // 构造函数类型
-            if (ctx.parameterTypeList() != null) {
-                baseType = parseFromParameterTypeList(baseType, ctx.parameterTypeList(), ctx.RightParen());
-            } else {
-                // 无参数函数类型
-                baseType = new FunctionTypeNode(
-                    SourceLocation.concat(baseType.getWholeLocation(), getSourceLocation(ctx.RightParen())),
-                    baseType, List.of(), List.of());
-            }
+            baseType = parseFromParameterTypeList(baseType, ctx.parameterTypeList(), ctx.RightParen());
         }
 
         if (ctx.directAbstractDeclarator() != null) {

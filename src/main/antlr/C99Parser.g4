@@ -237,8 +237,8 @@ abstractDeclarator
     ;
 directAbstractDeclarator
     : LeftParen abstractDeclarator RightParen
-    | LeftParen parameterTypeList? RightParen
-    | directAbstractDeclarator LeftParen parameterTypeList? RightParen
+    | LeftParen parameterTypeList RightParen
+    | directAbstractDeclarator LeftParen parameterTypeList RightParen
     ;
 
 // ISO 6.7.8, Initialization
