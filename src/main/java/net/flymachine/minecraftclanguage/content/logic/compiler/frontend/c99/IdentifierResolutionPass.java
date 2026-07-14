@@ -98,53 +98,43 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
     }
 
     private void visitFunctionTypeNode(FunctionTypeNode funcType, boolean isDefinition) {
-        if (isDefinition) {
-            // 如果 isDefinition，要求参数要么是单独的 void，要么就必须具名
-            // 若检查无误，则将形参换名并定义在当前作用域
+        // 处理返回类型
+        if (funcType.retType instanceof FunctionTypeNode retFuncType) {
+            visitFunctionTypeNode(retFuncType, false);
+        }
 
-            if (funcType.hasNoParameters()) {
-                // 参数列表为单独的 void
-                return;
+        if (funcType.hasNoParameters()) {
+            // 参数列表为单独的 void
+            return;
+        }
+
+        if (!isDefinition) {
+            enterScope(); // 函数原型作用域
+        }
+
+        for (int i = 0; i < funcType.params.size(); i++) {
+            TypeNode type = funcType.paramTypes.get(i);
+            if (type instanceof FunctionTypeNode paramFuncType) {
+                visitFunctionTypeNode(paramFuncType, false);
             }
 
-            for (int i = 0; i < funcType.params.size(); i++) {
-                // 检查是否具名
-                if (funcType.params.get(i) == null) {
+            IdentifierNode identifier = funcType.params.get(i);
+            if (identifier == null) {
+                if (isDefinition) {
                     error();
                     String msg = "ISO C99 does not support omitting parameter names in function definitions";
-                    logErrorWithSourceLine(funcType.paramTypes.get(i).getWholeLocation(), msg);
-                } else {
-                    visitDeclarationLike(funcType.params.get(i), funcType.paramTypes.get(i), null, true);
+                    logErrorWithSourceLine(type.getWholeLocation(), msg);
                 }
+                // 函数声明中允许参数不具名
+                continue;
             }
-        } else {
-            // 否则，只要求参数列表中的参数名不重复即可，参数可不具名，也不会被定义
-            HashMap<String, IdentifierEntry> scope = new HashMap<>();
-            for (int i = 0; i < funcType.params.size(); i++) {
-                if (funcType.params.get(i) == null) { continue; }
 
-                IdentifierNode identifier = funcType.params.get(i);
-                TypeNode type = funcType.paramTypes.get(i);
+            // 这里认为参数声明是定义，为 No Linkage
+            visitDeclarationLike(identifier, type, null, true);
+        }
 
-                IdentifierEntry entry = scope.get(identifier.name);
-                if (entry == null) {
-                    // 这里认为参数声明是定义，为 No Linkage
-                    scope.put(identifier.name, new IdentifierEntry(identifier, type, false, true));
-                } else {
-                    error();
-                    String msg = "redefinition of parameter '" + getLogger().white(identifier.name) + "'";
-                    panicWithPreviousRef(msg, identifier, entry);
-                }
-            }
-        }
-        // 递归检查返回类型和参数类型
-        if (funcType.retType instanceof FunctionTypeNode) {
-            visitFunctionTypeNode((FunctionTypeNode) funcType.retType, false);
-        }
-        for (TypeNode paramType : funcType.paramTypes) {
-            if (paramType instanceof FunctionTypeNode) {
-                visitFunctionTypeNode((FunctionTypeNode) paramType, false);
-            }
+        if (!isDefinition) {
+            exitScope(); // 函数原型作用域
         }
     }
 
