@@ -49,6 +49,14 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
         scopeStack.pop();
     }
 
+    private void pushScope(Map<String, IdentifierEntry> scope) {
+        scopeStack.push(scope);
+    }
+
+    private Map<String, IdentifierEntry> popScope() {
+        return scopeStack.pop();
+    }
+
     private boolean definedInCurrentScope(String identifier) {
         return scopeStack.peek().containsKey(identifier);
     }
@@ -140,11 +148,13 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
 
     @Override
     public Void visit(FunctionDefinitionNode node) {
-        visitDeclarationLike(node.id, node.funcType, node.storageClass, true);
         enterScope();
         if (node.funcType instanceof FunctionTypeNode) {
             visitFunctionTypeNode((FunctionTypeNode) node.funcType, true);
         }
+        var bodyScope = popScope();
+        visitDeclarationLike(node.id, node.funcType, node.storageClass, true);
+        pushScope(bodyScope);
         for (BlockItemNode item : node.body.blockItems) {
             item.accept(this);
         }
@@ -173,12 +183,12 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
 
     @Override
     public Void visit(DeclarationNode node) {
-        visitDeclarationLike(
-            node.id, node.type, node.storageClass,
-            !(node.type instanceof FunctionTypeNode) && node.init != null);
         if (node.type instanceof FunctionTypeNode funcType) {
             visitFunctionTypeNode(funcType, false);
         }
+        visitDeclarationLike(
+            node.id, node.type, node.storageClass,
+            !(node.type instanceof FunctionTypeNode) && node.init != null);
         if (node.init != null) {
             node.init.accept(this);
         }
