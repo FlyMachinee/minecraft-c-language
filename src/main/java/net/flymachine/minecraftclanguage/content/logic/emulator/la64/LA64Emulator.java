@@ -29,7 +29,7 @@ public final class LA64Emulator {
     public LA64Emulator() {
         reset();
         Teletypewriter tty = new Teletypewriter();
-        memoryCrossbar.amountDevice(
+        memoryCrossbar.mountDevice(
             Teletypewriter.BASE_ADDRESS, Teletypewriter.BASE_ADDRESS + SimpleRam.PAGE_SIZE - 1, tty);
     }
 

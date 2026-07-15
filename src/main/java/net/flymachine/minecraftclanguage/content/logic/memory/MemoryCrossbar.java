@@ -35,7 +35,7 @@ public class MemoryCrossbar implements MemoryLikeDevice {
 
     private final List<MappingEntry> entries = new ArrayList<>();
 
-    public void amountDevice(long startAddress, long endAddress, MemoryLikeDevice device) {
+    public void mountDevice(long startAddress, long endAddress, MemoryLikeDevice device) {
         entries.add(new MappingEntry(startAddress, endAddress, device));
     }
 
