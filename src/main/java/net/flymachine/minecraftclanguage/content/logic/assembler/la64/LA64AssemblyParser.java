@@ -12,7 +12,7 @@ import java.util.regex.Pattern;
 
 public final class LA64AssemblyParser {
 
-    private static final Pattern LABEL_PATTERN = Pattern.compile("^([a-zA-Z_.][a-zA-Z0-9_.]*):\\s*(.*)$");
+    private static final Pattern LABEL_PATTERN = Pattern.compile("^([a-zA-Z_.][a-zA-Z0-9_.$]*):\\s*(.*)$");
     private static final Pattern DIRECTIVE_PATTERN = Pattern.compile("^\\.([a-zA-Z][a-zA-Z0-9_]*)(?:\\s+(.*))?$");
     private static final Pattern INSTRUCTION_PATTERN = Pattern.compile("^([a-zA-Z][a-zA-Z0-9.]*)(?:\\s+(.*))?$");
 

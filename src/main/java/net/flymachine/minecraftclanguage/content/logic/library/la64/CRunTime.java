@@ -20,7 +20,7 @@ public final class CRunTime {
                                 .balign 4
                             _start:
                                 # Initialize the stack pointer
-                                la.abs sp, __stack_top
+                                la.abs sp, __$stack_top
                           
                                 # Call the main function
                                 bl main

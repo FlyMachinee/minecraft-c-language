@@ -272,7 +272,7 @@ public final class LA64Linker {
             }
             localSymbols.put(i, localSymbolMap);
         }
-        globalSymbols.put("__stack_top", new GlobalSymbol(options.stackTopVA(), -1, -1, true));
+        globalSymbols.put("__$stack_top", new GlobalSymbol(options.stackTopVA(), -1, -1, true));
 
         // 重定位
         for (int i = 0; i < objects.length; i++) {
