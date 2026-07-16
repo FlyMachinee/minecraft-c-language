@@ -54,7 +54,7 @@ public final class SymbolTable {
             this.attr = attr;
         }
 
-        public sealed interface IdentifierAttr permits FuncAttr, LocalAttr, StaticAttr {
+        public sealed interface IdentifierAttr permits FuncAttr, AutoAttr, StaticAttr {
             boolean isDefinition();
 
             boolean isGlobal();
@@ -84,20 +84,20 @@ public final class SymbolTable {
         }
 
         public static final class StaticAttr implements IdentifierAttr {
-            public InitialValue initialValue;
+            public DefinitionType defType;
             /**
              * 是否对其他编译单元可见
              */
             public boolean global;
 
-            StaticAttr(InitialValue initialValue, boolean global) {
-                this.initialValue = initialValue;
+            StaticAttr(DefinitionType defType, boolean global) {
+                this.defType = defType;
                 this.global = global;
             }
 
             @Override
             public boolean isDefinition() {
-                return initialValue instanceof Initial;
+                return defType instanceof Defined;
             }
 
             @Override
@@ -105,30 +105,30 @@ public final class SymbolTable {
                 return global;
             }
 
-            public sealed interface InitialValue permits Initial, NoInitializer, Tentative { }
+            public sealed interface DefinitionType permits Defined, NoDefinition, Tentative { }
 
-            public static final class Tentative implements InitialValue {
+            public static final class Tentative implements DefinitionType {
                 private Tentative() { }
 
                 public static final Tentative INSTANCE = new Tentative();
             }
 
-            public static final class NoInitializer implements InitialValue {
-                private NoInitializer() { }
+            public static final class NoDefinition implements DefinitionType {
+                private NoDefinition() { }
 
-                public static final NoInitializer INSTANCE = new NoInitializer();
+                public static final NoDefinition INSTANCE = new NoDefinition();
             }
 
-            public record Initial(StaticInit init) implements InitialValue {
-                public static final Initial INT_ZERO = new Initial(IntInit.ZERO);
-                public static final Initial LONG_ZERO = new Initial(LongInit.ZERO);
+            public record Defined(StaticInit init) implements DefinitionType {
+                public static final Defined INT_ZERO = new Defined(IntInit.ZERO);
+                public static final Defined LONG_ZERO = new Defined(LongInit.ZERO);
             }
         }
 
-        public static final class LocalAttr implements IdentifierAttr {
-            private LocalAttr() { }
+        public static final class AutoAttr implements IdentifierAttr {
+            private AutoAttr() { }
 
-            public static final LocalAttr INSTANCE = new LocalAttr();
+            public static final AutoAttr INSTANCE = new AutoAttr();
 
             @Override
             public boolean isDefinition() {

@@ -39,11 +39,11 @@ public final class AstToTacLowerer implements StatementVisitor, ExpressionVisito
         for (SymbolTable.Entry entry : symbolTable.getEntries()) {
             SymbolTable.Entry.IdentifierAttr attr = entry.attr;
             if (attr instanceof SymbolTable.Entry.StaticAttr staticAttr) {
-                SymbolTable.Entry.StaticAttr.InitialValue initialValue = staticAttr.initialValue;
-                if (initialValue instanceof SymbolTable.Entry.StaticAttr.Initial initial) {
+                SymbolTable.Entry.StaticAttr.DefinitionType defType = staticAttr.defType;
+                if (defType instanceof SymbolTable.Entry.StaticAttr.Defined defined) {
                     topLevels.add(new TacStaticVariable(
-                        entry.id.name, staticAttr.global, entry.type, initial.init()));
-                } else if (initialValue instanceof SymbolTable.Entry.StaticAttr.Tentative) {
+                        entry.id.name, staticAttr.global, entry.type, defined.init()));
+                } else if (defType instanceof SymbolTable.Entry.StaticAttr.Tentative) {
                     BasicType bt = (BasicType) entry.type;
                     switch (bt) {
                         case INT -> topLevels.add(new TacStaticVariable(
@@ -70,7 +70,7 @@ public final class AstToTacLowerer implements StatementVisitor, ExpressionVisito
         symbolTable.put(
             name, new SymbolTable.Entry(
                 new IdentifierNode(null, name), null, type,
-                SymbolTable.Entry.LocalAttr.INSTANCE));
+                SymbolTable.Entry.AutoAttr.INSTANCE));
         return var;
     }
 

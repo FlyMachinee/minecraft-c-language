@@ -363,7 +363,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                 assert param != null;
                 symbolTable.put(
                     param.name,
-                    new SymbolTable.Entry(param, paramType, paramType.getType(), SymbolTable.Entry.LocalAttr.INSTANCE));
+                    new SymbolTable.Entry(param, paramType, paramType.getType(), SymbolTable.Entry.AutoAttr.INSTANCE));
             }
         }
     }
@@ -372,14 +372,14 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
      * @param init 常量初始化器
      * @param t    被初始化的类型
      */
-    private SymbolTable.Entry.StaticAttr.InitialValue getInitialValueFromInitializer(ConstantNode init, Type t) {
+    private SymbolTable.Entry.StaticAttr.DefinitionType getInitialValueFromInitializer(ConstantNode init, Type t) {
         // 若提供了初始化式，对于
         // 标量类型初始化，见标量初始化
         if (t.isScalar()) {
             // 求值该表达式，而其值在如同赋值般转换到对象类型后，成为被初始化对象的初值
             if (t.isArithmetic()) {
                 BasicType bt = (BasicType) t;
-                return new SymbolTable.Entry.StaticAttr.Initial(init.value.castTo(bt).toStaticInit());
+                return new SymbolTable.Entry.StaticAttr.Defined(init.value.castTo(bt).toStaticInit());
             } else {
                 throw new IllegalStateException("unexpected static initializer: " + t);
             }
@@ -394,28 +394,28 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         StorageClassSpecifierNode storageClass = decl.storageClass;
         ExpressionNode init = decl.init;
 
-        // 获取初始化类型
-        SymbolTable.Entry.StaticAttr.InitialValue initialValue;
+        // 获取定义类型
+        SymbolTable.Entry.StaticAttr.DefinitionType defType;
         if (init == null) {
             // 无初始化
             if (storageClass != null && storageClass.storageClass.equals(StorageClassSpecifier.EXTERN)) {
                 // 来自其他编译单元，外部定义，未定义
-                initialValue = SymbolTable.Entry.StaticAttr.NoInitializer.INSTANCE;
+                defType = SymbolTable.Entry.StaticAttr.NoDefinition.INSTANCE;
             } else {
                 // 本编译单元内定义，试探性定义
-                initialValue = SymbolTable.Entry.StaticAttr.Tentative.INSTANCE;
+                defType = SymbolTable.Entry.StaticAttr.Tentative.INSTANCE;
             }
         } else if (init instanceof ConstantNode constInit) {
             // 整数常量初始化
             Type t = type.getType();
-            initialValue = getInitialValueFromInitializer(constInit, t);
+            defType = getInitialValueFromInitializer(constInit, t);
         } else {
             // 其他类型的初始化表达式不合法
             error();
             String msg = "initializer element is not constant";
             logErrorWithSourceLine(init.wholeLoc, msg);
             // 给一个 dummy 类型以继续后续检查
-            initialValue = SymbolTable.Entry.StaticAttr.NoInitializer.INSTANCE;
+            defType = SymbolTable.Entry.StaticAttr.NoDefinition.INSTANCE;
         }
 
         boolean global = storageClass == null || !storageClass.storageClass.equals(StorageClassSpecifier.STATIC);
@@ -450,20 +450,20 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                 return;
             }
 
-            if (prevAttr.initialValue instanceof SymbolTable.Entry.StaticAttr.Initial prevInit) {
-                if (initialValue instanceof SymbolTable.Entry.StaticAttr.Initial) {
+            if (prevAttr.defType instanceof SymbolTable.Entry.StaticAttr.Defined prevDef) {
+                if (defType instanceof SymbolTable.Entry.StaticAttr.Defined) {
                     // 定义了两次，且都有初始化，冲突
                     error();
                     String msg = "redefinition of '" + getLogger().white(id.name) + "'";
                     panicWithPreviousRef(msg, id, previous, true);
                 } else {
                     // 当前无定义，先前有初始化，使用先前的初始化信息
-                    initialValue = prevInit;
+                    defType = prevDef;
                 }
-            } else if (!(initialValue instanceof SymbolTable.Entry.StaticAttr.Initial) &&
-                       prevAttr.initialValue instanceof SymbolTable.Entry.StaticAttr.Tentative) {
+            } else if (!(defType instanceof SymbolTable.Entry.StaticAttr.Defined) &&
+                       prevAttr.defType instanceof SymbolTable.Entry.StaticAttr.Tentative) {
                 // 当前无初始化（NoInitializer 或 Tentative），先前为 Tentative，则为 Tentative
-                initialValue = SymbolTable.Entry.StaticAttr.Tentative.INSTANCE;
+                defType = SymbolTable.Entry.StaticAttr.Tentative.INSTANCE;
             }
             // 其他情况使用当前的初始化信息
 
@@ -472,11 +472,11 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                 previous.id = id;
             }
             // 更新定义属性
-            prevAttr.initialValue = initialValue;
+            prevAttr.defType = defType;
             prevAttr.global = global;
         } else {
             // 第一次
-            SymbolTable.Entry.IdentifierAttr attr = new SymbolTable.Entry.StaticAttr(initialValue, global);
+            SymbolTable.Entry.IdentifierAttr attr = new SymbolTable.Entry.StaticAttr(defType, global);
             symbolTable.put(id.name, new SymbolTable.Entry(id, type, type.getType(), attr));
         }
     }
@@ -489,7 +489,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
 
         if (storageClass == null) {
             // 无存储类说明符，不可能重复定义
-            SymbolTable.Entry.LocalAttr attr = SymbolTable.Entry.LocalAttr.INSTANCE;
+            SymbolTable.Entry.AutoAttr attr = SymbolTable.Entry.AutoAttr.INSTANCE;
             symbolTable.put(id.name, new SymbolTable.Entry(id, type, type.getType(), attr));
             if (init != null) {
                 init.accept(this);
@@ -534,12 +534,12 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             } else {
                 // 第一次
                 SymbolTable.Entry.IdentifierAttr attr = new SymbolTable.Entry.StaticAttr(
-                    SymbolTable.Entry.StaticAttr.NoInitializer.INSTANCE, true);
+                    SymbolTable.Entry.StaticAttr.NoDefinition.INSTANCE, true);
                 symbolTable.put(id.name, new SymbolTable.Entry(id, type, type.getType(), attr));
             }
         } else {
             // static
-            SymbolTable.Entry.StaticAttr.InitialValue initialValue = null;
+            SymbolTable.Entry.StaticAttr.DefinitionType initialValue = null;
             Type t = type.getType();
             if (init == null) {
                 // 块作用域 static 无初始化器
@@ -549,9 +549,9 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                     // 整数类型对象被初始化成无符号的零
                     if (t instanceof BasicType bt) {
                         if (bt == BasicType.INT) {
-                            initialValue = SymbolTable.Entry.StaticAttr.Initial.INT_ZERO;
+                            initialValue = SymbolTable.Entry.StaticAttr.Defined.INT_ZERO;
                         } else if (bt == BasicType.LONG) {
-                            initialValue = SymbolTable.Entry.StaticAttr.Initial.LONG_ZERO;
+                            initialValue = SymbolTable.Entry.StaticAttr.Defined.LONG_ZERO;
                         } else {
                             throw new IllegalStateException("unexpected integer type: " + t);
                         }
