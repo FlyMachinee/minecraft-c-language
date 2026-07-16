@@ -63,7 +63,7 @@ public final class SymbolTable {
         public static final class FuncAttr implements IdentifierAttr {
             public boolean defined;
             /**
-             * 是否对其他编译单元可见，对应 External Linkage 与 Internal Linkage
+             * 是否对其他编译单元可见
              */
             public boolean global;
 
@@ -86,7 +86,7 @@ public final class SymbolTable {
         public static final class StaticAttr implements IdentifierAttr {
             public InitialValue initialValue;
             /**
-             * 是否对其他编译单元可见，对应 External Linkage 与 Internal Linkage
+             * 是否对其他编译单元可见
              */
             public boolean global;
 
