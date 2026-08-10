@@ -23,11 +23,23 @@ public final class ContinueNode extends StatementNode {
         if (indentFirstLine) {
             indent(stream, indentLevel);
         }
-        if (loopLabel != null) {
-            stream.append("ContinueNode(loop=").append(loopLabel).append(')');
-        } else {
-            stream.print("ContinueNode()");
+        stream.println("ContinueNode(");
+
+        if (isLabeled()) {
+            indent(stream, indentLevel + 1);
+            dumpLabels(stream);
+            stream.println(',');
         }
+
+        if (loopLabel != null) {
+            indent(stream, indentLevel + 1);
+            stream.append("loop=").append(loopLabel);
+            stream.println(',');
+        }
+
+        indent(stream, indentLevel);
+        stream.print(')');
+
     }
 
     @Override

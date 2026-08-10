@@ -47,6 +47,12 @@ public final class WhileLoopNode extends StatementNode {
 
         stream.println(isDoWhile ? "DoWhileLoopNode(" : "WhileLoopNode(");
 
+        if (isLabeled()) {
+            indent(stream, indentLevel + 1);
+            dumpLabels(stream);
+            stream.println(',');
+        }
+
         if (loopLabel != null) {
             indent(stream, indentLevel + 1);
             stream.print("loop=");

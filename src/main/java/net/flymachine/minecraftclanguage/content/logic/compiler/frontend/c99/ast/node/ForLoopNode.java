@@ -45,6 +45,11 @@ public final class ForLoopNode extends StatementNode {
 
         stream.println("ForLoopNode(");
 
+        if (isLabeled()) {
+            indent(stream, indentLevel + 1);
+            dumpLabels(stream);
+            stream.println(',');
+        }
         if (loopLabel != null) {
             indent(stream, indentLevel + 1);
             stream.append("loop=").append(loopLabel).append(',');

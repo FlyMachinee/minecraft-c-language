@@ -23,11 +23,22 @@ public final class BreakNode extends StatementNode {
         if (indentFirstLine) {
             indent(stream, indentLevel);
         }
-        if (loopOrSwitchLabel != null) {
-            stream.append("BreakNode(loop/switch=").append(loopOrSwitchLabel).append(')');
-        } else {
-            stream.print("BreakNode()");
+        stream.println("BreakNode(");
+
+        if (isLabeled()) {
+            indent(stream, indentLevel + 1);
+            dumpLabels(stream);
+            stream.println(',');
         }
+
+        if (loopOrSwitchLabel != null) {
+            indent(stream, indentLevel + 1);
+            stream.append("loop/switch=").append(loopOrSwitchLabel);
+            stream.println(',');
+        }
+
+        indent(stream, indentLevel);
+        stream.print(')');
     }
 
     @Override

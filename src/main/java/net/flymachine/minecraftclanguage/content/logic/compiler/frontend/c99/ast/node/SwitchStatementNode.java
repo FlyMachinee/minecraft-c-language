@@ -34,6 +34,12 @@ public final class SwitchStatementNode extends StatementNode {
 
         stream.println("SwitchStatementNode(");
 
+        if (isLabeled()) {
+            indent(stream, indentLevel + 1);
+            dumpLabels(stream);
+            stream.println(',');
+        }
+
         if (switchLabel != null) {
             indent(stream, indentLevel + 1);
             stream.print("switch=");
