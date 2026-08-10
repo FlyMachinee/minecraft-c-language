@@ -71,9 +71,10 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                     "incompatible types when returning type '" + getLogger().white(node.exp.expType.toString()) +
                     "' but '" + getLogger().white(funcType.retType.getType().toString()) + "' was expected";
                 logErrorWithSourceLine(node.exp.wholeLoc, msg);
-            } else {
-                node.exp = convertTo(node.exp, convertedType);
+                return null;
             }
+
+            node.exp = convertTo(node.exp, convertedType);
         }
         return null;
     }
@@ -104,9 +105,8 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                                  getLogger().white(node.exp.expType.toString()) + "'";
                     logErrorWithSourceLine(node.op.wholeLoc, msg);
                     yield ErrorType.INSTANCE;
-                } else {
-                    yield node.exp.expType;
                 }
+                yield node.exp.expType;
             }
             case COMPLEMENT -> {
                 if (!node.exp.expType.isInteger()) {
@@ -115,9 +115,8 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                                  getLogger().white(node.exp.expType.toString()) + "'";
                     logErrorWithSourceLine(node.op.wholeLoc, msg);
                     yield ErrorType.INSTANCE;
-                } else {
-                    yield node.exp.expType;
                 }
+                yield node.exp.expType;
             }
             case NOT -> {
                 if (!node.exp.expType.isScalar()) {
@@ -126,9 +125,8 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                                  getLogger().white(node.exp.expType.toString()) + "'";
                     logErrorWithSourceLine(node.op.wholeLoc, msg);
                     yield ErrorType.INSTANCE;
-                } else {
-                    yield BasicType.INT;
                 }
+                yield BasicType.INT;
             }
         };
         return null;
@@ -153,12 +151,11 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                                  getLogger().white(node.rhs.expType.toString()) + "'";
                     logErrorWithSourceLine(node.op.wholeLoc, msg);
                     yield ErrorType.INSTANCE;
-                } else {
-                    Type commonType = Type.commonRealType(node.lhs.expType, node.rhs.expType);
-                    node.lhs = convertTo(node.lhs, commonType);
-                    node.rhs = convertTo(node.rhs, commonType);
-                    yield commonType;
                 }
+                Type commonType = Type.commonRealType(node.lhs.expType, node.rhs.expType);
+                node.lhs = convertTo(node.lhs, commonType);
+                node.rhs = convertTo(node.rhs, commonType);
+                yield commonType;
             }
             case MODULO, BITWISE_AND, BITWISE_OR, BITWISE_XOR -> {
                 if (!node.lhs.expType.isInteger() || !node.rhs.expType.isInteger()) {
@@ -169,12 +166,11 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                                  getLogger().white(node.rhs.expType.toString()) + "'";
                     logErrorWithSourceLine(node.op.wholeLoc, msg);
                     yield ErrorType.INSTANCE;
-                } else {
-                    Type commonType = Type.commonRealType(node.lhs.expType, node.rhs.expType);
-                    node.lhs = convertTo(node.lhs, commonType);
-                    node.rhs = convertTo(node.rhs, commonType);
-                    yield commonType;
                 }
+                Type commonType = Type.commonRealType(node.lhs.expType, node.rhs.expType);
+                node.lhs = convertTo(node.lhs, commonType);
+                node.rhs = convertTo(node.rhs, commonType);
+                yield commonType;
             }
             case LEFT_SHIFT, RIGHT_SHIFT -> {
                 if (!node.lhs.expType.isInteger() || !node.rhs.expType.isInteger()) {
@@ -185,9 +181,8 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                                  getLogger().white(node.rhs.expType.toString()) + "'";
                     logErrorWithSourceLine(node.op.wholeLoc, msg);
                     yield ErrorType.INSTANCE;
-                } else {
-                    yield node.lhs.expType;
                 }
+                yield node.lhs.expType;
             }
             case LOGICAL_AND, LOGICAL_OR -> {
                 if (!node.lhs.expType.isScalar() || !node.rhs.expType.isScalar()) {
@@ -198,9 +193,8 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                                  getLogger().white(node.rhs.expType.toString()) + "'";
                     logErrorWithSourceLine(node.op.wholeLoc, msg);
                     yield ErrorType.INSTANCE;
-                } else {
-                    yield BasicType.INT;
                 }
+                yield BasicType.INT;
             }
             case LESS_THAN, LESS_OR_EQUAL, GREATER_THAN, GREATER_OR_EQUAL -> {
                 if (!node.lhs.expType.isReal() || !node.rhs.expType.isReal()) {
@@ -210,12 +204,11 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                                  "' and '" + getLogger().white(node.rhs.expType.toString()) + "'";
                     logErrorWithSourceLine(node.op.wholeLoc, msg);
                     yield ErrorType.INSTANCE;
-                } else {
-                    Type commonType = Type.commonRealType(node.lhs.expType, node.rhs.expType);
-                    node.lhs = convertTo(node.lhs, commonType);
-                    node.rhs = convertTo(node.rhs, commonType);
-                    yield BasicType.INT;
                 }
+                Type commonType = Type.commonRealType(node.lhs.expType, node.rhs.expType);
+                node.lhs = convertTo(node.lhs, commonType);
+                node.rhs = convertTo(node.rhs, commonType);
+                yield BasicType.INT;
             }
             case EQUAL, NOT_EQUAL -> {
                 if (!node.lhs.expType.isArithmetic() || !node.rhs.expType.isArithmetic()) {
@@ -226,12 +219,11 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                                  "' and '" + getLogger().white(node.rhs.expType.toString()) + "'";
                     logErrorWithSourceLine(node.op.wholeLoc, msg);
                     yield ErrorType.INSTANCE;
-                } else {
-                    Type commonType = Type.commonRealType(node.lhs.expType, node.rhs.expType);
-                    node.lhs = convertTo(node.lhs, commonType);
-                    node.rhs = convertTo(node.rhs, commonType);
-                    yield BasicType.INT;
                 }
+                Type commonType = Type.commonRealType(node.lhs.expType, node.rhs.expType);
+                node.lhs = convertTo(node.lhs, commonType);
+                node.rhs = convertTo(node.rhs, commonType);
+                yield BasicType.INT;
             }
         };
     }
@@ -245,7 +237,10 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                 "storage size of '" + getLogger().white(getSourceFile().getByLocation(node.id.wholeLoc)) +
                 "' isn't known; have type '" + getLogger().white(node.type.getType().toString()) + "'";
             logErrorWithSourceLine(node.id.wholeLoc, msg);
-        } else if (node.type instanceof FunctionTypeNode funcType) {
+            return null;
+        }
+
+        if (node.type instanceof FunctionTypeNode funcType) {
             // 函数声明
             visitFunctionDeclaration(node.id, funcType, node.storageClass, false);
             checkFunctionParameter(funcType, false);
@@ -292,47 +287,48 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             logErrorWithSourceLine(id.wholeLoc, msg);
         }
 
-        // 如果已经声明/定义，检查类型是否匹配
         SymbolTable.Entry previous = symbolTable.get(id.name);
-        if (previous != null) {
-            boolean alreadyDefined = previous.attr.isDefinition();
-            if (!previous.type.isCompatible(funcType.getType())) {
-                // 类型不匹配
-                panicConflictType(id, funcType, previous, alreadyDefined);
-                return;
-            }
-            // 类型匹配，一定是函数的属性
-            SymbolTable.Entry.FuncAttr funcAttr = (SymbolTable.Entry.FuncAttr) previous.attr;
-
-            if (alreadyDefined && isDefinition) {
-                // 重定义函数
-                error();
-                String msg = "redefinition of '" + getLogger().white(id.name) + "'";
-                panicWithPreviousRef(msg, id, previous, true);
-                return;
-            }
-            if (funcAttr.isGlobal() && storageClass != null &&
-                storageClass.storageClass.equals(StorageClassSpecifier.STATIC)) {
-                // 之前是全局的（External linkage），现在是静态的（Internal linkage），链接冲突
-                error();
-                String msg = "static declaration of '" + getLogger().white(id.name) +
-                             "' follows non-static declaration";
-                panicWithPreviousRef(msg, id, previous, alreadyDefined);
-                return;
-            }
-            // 链接不冲突，不需要修改 global
-            if (!alreadyDefined) {
-                // 先前未定义，更新声明/定义行，仅用于错误信息打印
-                previous.id = id;
-                previous.typeNode = funcType;
-            }
-            funcAttr.defined = alreadyDefined || isDefinition;
-        } else {
+        if (previous == null) {
             // 第一次
             boolean global = storageClass == null || !storageClass.storageClass.equals(StorageClassSpecifier.STATIC);
             SymbolTable.Entry.IdentifierAttr attr = new SymbolTable.Entry.FuncAttr(isDefinition, global);
             symbolTable.put(id.name, new SymbolTable.Entry(id, funcType, funcType.getType(), attr));
+            return;
         }
+
+        // 如果已经声明/定义，检查类型是否匹配
+        boolean alreadyDefined = previous.attr.isDefinition();
+        if (!previous.type.isCompatible(funcType.getType())) {
+            // 类型不匹配
+            panicConflictType(id, funcType, previous, alreadyDefined);
+            return;
+        }
+        // 类型匹配，一定是函数的属性
+        SymbolTable.Entry.FuncAttr funcAttr = (SymbolTable.Entry.FuncAttr) previous.attr;
+
+        if (alreadyDefined && isDefinition) {
+            // 重定义函数
+            error();
+            String msg = "redefinition of '" + getLogger().white(id.name) + "'";
+            panicWithPreviousRef(msg, id, previous, true);
+            return;
+        }
+        if (funcAttr.isGlobal() && storageClass != null &&
+            storageClass.storageClass.equals(StorageClassSpecifier.STATIC)) {
+            // 之前是全局的（External linkage），现在是静态的（Internal linkage），链接冲突
+            error();
+            String msg = "static declaration of '" + getLogger().white(id.name) +
+                         "' follows non-static declaration";
+            panicWithPreviousRef(msg, id, previous, alreadyDefined);
+            return;
+        }
+        // 链接不冲突，不需要修改 global
+        if (!alreadyDefined) {
+            // 先前未定义，更新声明/定义行，仅用于错误信息打印
+            previous.id = id;
+            previous.typeNode = funcType;
+        }
+        funcAttr.defined = alreadyDefined || isDefinition;
     }
 
     private void checkFunctionParameter(FunctionTypeNode funcType, boolean isDefinition) {
@@ -421,64 +417,65 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         boolean global = storageClass == null || !storageClass.storageClass.equals(StorageClassSpecifier.STATIC);
 
         SymbolTable.Entry previous = symbolTable.get(id.name);
-        if (previous != null) {
-            // 先前有声明/定义
-            boolean alreadyDefined = previous.attr.isDefinition();
-            if (!previous.type.isCompatible(type.getType())) {
-                // 类型不匹配
-                panicConflictType(id, type, previous, alreadyDefined);
-                return;
-            }
-            // 类型匹配，且在全局作用域，一定是全局变量
-            SymbolTable.Entry.StaticAttr prevAttr = (SymbolTable.Entry.StaticAttr) previous.attr;
-
-            if (storageClass != null && storageClass.storageClass.equals(StorageClassSpecifier.EXTERN)) {
-                // 当前为 extern，链接属性跟随先前定义/声明的属性
-                global = prevAttr.isGlobal();
-            } else if (prevAttr.isGlobal() != global) {
-                // 链接属性不同，冲突
-                error();
-                String msg;
-                if (global) {
-                    // 当前 global（External Linkage），先前非 global（Internal Linkage）
-                    msg = "non-static declaration of '" + getLogger().white(id.name) + "' follows static declaration";
-                } else {
-                    // 当前非 global（Internal Linkage），先前 global（External Linkage）
-                    msg = "static declaration of '" + getLogger().white(id.name) + "' follows non-static declaration";
-                }
-                panicWithPreviousRef(msg, id, previous, alreadyDefined);
-                return;
-            }
-
-            if (prevAttr.defType instanceof SymbolTable.Entry.StaticAttr.Defined prevDef) {
-                if (defType instanceof SymbolTable.Entry.StaticAttr.Defined) {
-                    // 定义了两次，且都有初始化，冲突
-                    error();
-                    String msg = "redefinition of '" + getLogger().white(id.name) + "'";
-                    panicWithPreviousRef(msg, id, previous, true);
-                } else {
-                    // 当前无定义，先前有初始化，使用先前的初始化信息
-                    defType = prevDef;
-                }
-            } else if (!(defType instanceof SymbolTable.Entry.StaticAttr.Defined) &&
-                       prevAttr.defType instanceof SymbolTable.Entry.StaticAttr.Tentative) {
-                // 当前无初始化（NoInitializer 或 Tentative），先前为 Tentative，则为 Tentative
-                defType = SymbolTable.Entry.StaticAttr.Tentative.INSTANCE;
-            }
-            // 其他情况使用当前的初始化信息
-
-            if (!alreadyDefined) {
-                // 先前未定义，更新声明/定义行
-                previous.id = id;
-            }
-            // 更新定义属性
-            prevAttr.defType = defType;
-            prevAttr.global = global;
-        } else {
+        if (previous == null) {
             // 第一次
             SymbolTable.Entry.IdentifierAttr attr = new SymbolTable.Entry.StaticAttr(defType, global);
             symbolTable.put(id.name, new SymbolTable.Entry(id, type, type.getType(), attr));
+            return;
         }
+
+        // 先前有声明/定义
+        boolean alreadyDefined = previous.attr.isDefinition();
+        if (!previous.type.isCompatible(type.getType())) {
+            // 类型不匹配
+            panicConflictType(id, type, previous, alreadyDefined);
+            return;
+        }
+        // 类型匹配，且在全局作用域，一定是全局变量
+        SymbolTable.Entry.StaticAttr prevAttr = (SymbolTable.Entry.StaticAttr) previous.attr;
+
+        if (storageClass != null && storageClass.storageClass.equals(StorageClassSpecifier.EXTERN)) {
+            // 当前为 extern，链接属性跟随先前定义/声明的属性
+            global = prevAttr.isGlobal();
+        } else if (prevAttr.isGlobal() != global) {
+            // 链接属性不同，冲突
+            error();
+            String msg;
+            if (global) {
+                // 当前 global（External Linkage），先前非 global（Internal Linkage）
+                msg = "non-static declaration of '" + getLogger().white(id.name) + "' follows static declaration";
+            } else {
+                // 当前非 global（Internal Linkage），先前 global（External Linkage）
+                msg = "static declaration of '" + getLogger().white(id.name) + "' follows non-static declaration";
+            }
+            panicWithPreviousRef(msg, id, previous, alreadyDefined);
+            return;
+        }
+
+        if (prevAttr.defType instanceof SymbolTable.Entry.StaticAttr.Defined prevDef) {
+            if (defType instanceof SymbolTable.Entry.StaticAttr.Defined) {
+                // 定义了两次，且都有初始化，冲突
+                error();
+                String msg = "redefinition of '" + getLogger().white(id.name) + "'";
+                panicWithPreviousRef(msg, id, previous, true);
+            } else {
+                // 当前无定义，先前有初始化，使用先前的初始化信息
+                defType = prevDef;
+            }
+        } else if (!(defType instanceof SymbolTable.Entry.StaticAttr.Defined) &&
+                   prevAttr.defType instanceof SymbolTable.Entry.StaticAttr.Tentative) {
+            // 当前无初始化（NoInitializer 或 Tentative），先前为 Tentative，则为 Tentative
+            defType = SymbolTable.Entry.StaticAttr.Tentative.INSTANCE;
+        }
+        // 其他情况使用当前的初始化信息
+
+        if (!alreadyDefined) {
+            // 先前未定义，更新声明/定义行
+            previous.id = id;
+        }
+        // 更新定义属性
+        prevAttr.defType = defType;
+        prevAttr.global = global;
     }
 
     public void visitBlockScopeVariableDeclaration(DeclarationNode decl) {
@@ -491,25 +488,28 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             // 无存储类说明符，不可能重复定义
             SymbolTable.Entry.AutoAttr attr = SymbolTable.Entry.AutoAttr.INSTANCE;
             symbolTable.put(id.name, new SymbolTable.Entry(id, type, type.getType(), attr));
-            if (init != null) {
-                init.accept(this);
-                // 若提供了初始化式，对于
-                // 标量类型初始化，见标量初始化
-                if (type.getType().isScalar()) {
-                    // 求值该表达式，而其值在如同赋值般转换到对象类型后，成为被初始化对象的初值
-                    Type convertedType = getConvertTypeAsIfByAssignment(init, type.getType());
-                    if (convertedType instanceof ErrorType) {
-                        error();
-                        String msg = "incompatible types when initializing type '" +
-                                     getLogger().white(type.getType().toString()) +
-                                     "' using type '" + getLogger().white(init.expType.toString()) + "'";
-                        logErrorWithSourceLine(init.wholeLoc, msg);
-                    } else {
-                        decl.init = convertTo(init, convertedType);
-                    }
+
+            if (init == null) { return; }
+            init.accept(this);
+            // 若提供了初始化式，对于
+            // 标量类型初始化，见标量初始化
+            if (type.getType().isScalar()) {
+                // 求值该表达式，而其值在如同赋值般转换到对象类型后，成为被初始化对象的初值
+                Type convertedType = getConvertTypeAsIfByAssignment(init, type.getType());
+                if (convertedType instanceof ErrorType) {
+                    error();
+                    String msg = "incompatible types when initializing type '" +
+                                 getLogger().white(type.getType().toString()) +
+                                 "' using type '" + getLogger().white(init.expType.toString()) + "'";
+                    logErrorWithSourceLine(init.wholeLoc, msg);
+                } else {
+                    decl.init = convertTo(init, convertedType);
                 }
             }
-        } else if (storageClass.storageClass.equals(StorageClassSpecifier.EXTERN)) {
+            return;
+        }
+
+        if (storageClass.storageClass.equals(StorageClassSpecifier.EXTERN)) {
             // 块作用域的 extern 声明不允许有初始化
             if (init != null) {
                 error();
@@ -520,59 +520,61 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                 // 这里不 return，继续处理下面的检查与定义
             }
             SymbolTable.Entry previous = symbolTable.get(id.name);
-            if (previous != null) {
-                // 先前有声明/定义
-                boolean alreadyDefined = previous.attr.isDefinition();
-                if (!previous.type.isCompatible(type.getType())) {
-                    // 类型不匹配
-                    panicConflictType(id, type, previous, alreadyDefined);
-                }
-                if (!alreadyDefined) {
-                    // 更新声明/定义行
-                    previous.id = id;
-                }
-            } else {
+            if (previous == null) {
                 // 第一次
                 SymbolTable.Entry.IdentifierAttr attr = new SymbolTable.Entry.StaticAttr(
                     SymbolTable.Entry.StaticAttr.NoDefinition.INSTANCE, true);
                 symbolTable.put(id.name, new SymbolTable.Entry(id, type, type.getType(), attr));
+                return;
             }
-        } else {
-            // static
-            SymbolTable.Entry.StaticAttr.DefinitionType initialValue = null;
-            Type t = type.getType();
-            if (init == null) {
-                // 块作用域 static 无初始化器
-                // 若未提供初始化式
-                // 拥有静态及线程局域存储期的对象被空初始化
-                if (t.isInteger()) {
-                    // 整数类型对象被初始化成无符号的零
-                    if (t instanceof BasicType bt) {
-                        if (bt == BasicType.INT) {
-                            initialValue = SymbolTable.Entry.StaticAttr.Defined.INT_ZERO;
-                        } else if (bt == BasicType.LONG) {
-                            initialValue = SymbolTable.Entry.StaticAttr.Defined.LONG_ZERO;
-                        } else {
-                            throw new IllegalStateException("unexpected integer type: " + t);
-                        }
-                    } else {
-                        throw new IllegalStateException("unexpected static initializer: " + t);
-                    }
-                }
-            } else if (init instanceof ConstantNode constInit) {
-                // 常量初始化
-                initialValue = getInitialValueFromInitializer(constInit, t);
-            } else {
-                // 其他类型的初始化表达式不合法
-                error();
-                String msg = "initializer element is not constant";
-                logErrorWithSourceLine(init.wholeLoc, msg);
-                // 这里不 return，继续处理下面的定义，防止后续引用无定义
+
+            // 先前有声明/定义
+            boolean alreadyDefined = previous.attr.isDefinition();
+            if (!previous.type.isCompatible(type.getType())) {
+                // 类型不匹配
+                panicConflictType(id, type, previous, alreadyDefined);
             }
-            // static 块作用域变量为 No Linkage，不可能重复定义（在 Identifier Resolution 中已检查）
-            SymbolTable.Entry.IdentifierAttr attr = new SymbolTable.Entry.StaticAttr(initialValue, false);
-            symbolTable.put(id.name, new SymbolTable.Entry(id, type, type.getType(), attr));
+            if (!alreadyDefined) {
+                // 更新声明/定义行
+                previous.id = id;
+            }
+            return;
         }
+
+        // static
+        SymbolTable.Entry.StaticAttr.DefinitionType initialValue = null;
+        Type t = type.getType();
+        if (init == null) {
+            // 块作用域 static 无初始化器
+            // 若未提供初始化式
+            // 拥有静态及线程局域存储期的对象被空初始化
+            if (t.isInteger()) {
+                // 整数类型对象被初始化成无符号的零
+                if (t instanceof BasicType bt) {
+                    if (bt == BasicType.INT) {
+                        initialValue = SymbolTable.Entry.StaticAttr.Defined.INT_ZERO;
+                    } else if (bt == BasicType.LONG) {
+                        initialValue = SymbolTable.Entry.StaticAttr.Defined.LONG_ZERO;
+                    } else {
+                        throw new IllegalStateException("unexpected integer type: " + t);
+                    }
+                } else {
+                    throw new IllegalStateException("unexpected static initializer: " + t);
+                }
+            }
+        } else if (init instanceof ConstantNode constInit) {
+            // 常量初始化
+            initialValue = getInitialValueFromInitializer(constInit, t);
+        } else {
+            // 其他类型的初始化表达式不合法
+            error();
+            String msg = "initializer element is not constant";
+            logErrorWithSourceLine(init.wholeLoc, msg);
+            // 这里不 return，继续处理下面的定义，防止后续引用无定义
+        }
+        // static 块作用域变量为 No Linkage，不可能重复定义（在 Identifier Resolution 中已检查）
+        SymbolTable.Entry.IdentifierAttr attr = new SymbolTable.Entry.StaticAttr(initialValue, false);
+        symbolTable.put(id.name, new SymbolTable.Entry(id, type, type.getType(), attr));
     }
 
     private void panicConflictType(
@@ -611,9 +613,10 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                          "' isn't known; have type '" + getLogger().white(t.toString()) + "'";
             logErrorWithSourceLine(node.wholeLoc, msg);
             node.expType = ErrorType.INSTANCE;
-        } else {
-            node.expType = t;
+            return null;
         }
+
+        node.expType = t;
         return null;
     }
 
@@ -648,30 +651,33 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                              "' and '" + getLogger().white(node.rhs.expType.toString()) + "'";
                 logErrorWithSourceLine(node.op.wholeLoc, msg);
                 node.expType = ErrorType.INSTANCE;
-            } else {
-                // 表达式 lhs @= rhs 与 lhs = lhs @ (rhs) 完全相同
-                // 替换右表达式为新表达式
-                BinaryExpressionNode binaryExp =
-                    new BinaryExpressionNode(
-                        new BinaryOperatorNode(node.op.wholeLoc, node.op.op.toBinaryOperator()), node.lhs, node.rhs);
-                typeCheckBinaryExp(binaryExp);
-                node.op = new AssignmentOperatorNode(node.op.wholeLoc, AssignmentOperator.ASSIGN);
-                node.rhs = binaryExp;
-                // 回到简单赋值的情形
+                return null;
             }
+
+            // 表达式 lhs @= rhs 与 lhs = lhs @ (rhs) 完全相同
+            // 替换右表达式为新表达式
+            BinaryExpressionNode binaryExp =
+                new BinaryExpressionNode(
+                    new BinaryOperatorNode(node.op.wholeLoc, node.op.op.toBinaryOperator()), node.lhs, node.rhs);
+            typeCheckBinaryExp(binaryExp);
+            node.op = new AssignmentOperatorNode(node.op.wholeLoc, AssignmentOperator.ASSIGN);
+            node.rhs = binaryExp;
+            // 回到简单赋值的情形
         }
+
         Type convertedType = getConvertTypeAsIfByAssignment(node.rhs, node.lhs.expType);
         if (convertedType instanceof ErrorType) {
             error();
             String msg =
-                "incompatible types when initializing type '" + getLogger().white(node.lhs.expType.toString()) +
+                "incompatible types when assigning type '" + getLogger().white(node.lhs.expType.toString()) +
                 "' using type '" + getLogger().white(node.rhs.expType.toString()) + "'";
             logErrorWithSourceLine(node.rhs.wholeLoc, msg);
             node.expType = ErrorType.INSTANCE;
-        } else {
-            node.rhs = convertTo(node.rhs, convertedType);
-            node.expType = node.lhs.expType;
+            return null;
         }
+
+        node.rhs = convertTo(node.rhs, convertedType);
+        node.expType = node.lhs.expType;
         return null;
     }
 
@@ -686,9 +692,10 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                          getLogger().white(node.operand.expType.toString()) + "'";
             logErrorWithSourceLine(node.operatorLoc, msg);
             node.expType = ErrorType.INSTANCE;
-        } else {
-            node.expType = node.operand.expType;
+            return null;
         }
+
+        node.expType = node.operand.expType;
         return null;
     }
 
@@ -850,88 +857,84 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             String msg = "function call expression shall have name as function designator";
             logErrorWithSourceLine(node.func.wholeLoc, msg);
             node.expType = ErrorType.INSTANCE;
-        } else {
-            SymbolTable.Entry entry = symbolTable.get(variable.id.name);
-            Type type = entry.type;
-            if (!(type instanceof FunctionType funcType)) {
-                // 不是函数类型
+            // 检查参数
+            node.args.forEach(arg -> arg.accept(this));
+            return null;
+        }
+
+        SymbolTable.Entry entry = symbolTable.get(variable.id.name);
+        Type type = entry.type;
+        if (!(type instanceof FunctionType funcType)) {
+            // 不是函数类型
+            error();
+            String msg = "called object '" + getLogger().white(getSourceFile().getByLocation(variable.wholeLoc)) +
+                         "' is not a function or function pointer; have type '" +
+                         getLogger().white(type.toString()) + "'";
+            logErrorWithSourceLine(variable.wholeLoc, msg);
+            msg = "declared here";
+            logNoteWithSourceLine(entry.id.wholeLoc, msg);
+            node.expType = ErrorType.INSTANCE;
+            // 检查参数
+            node.args.forEach(arg -> arg.accept(this));
+            return null;
+        }
+
+        // 检查调用是否合法
+        if (node.args.size() > funcType.parameterCount()) {
+            // 参数过多
+            error();
+            String msg = "too many arguments to function '" + getLogger().white(variable.id.name) + "'";
+            logErrorWithSourceLine(node.func.wholeLoc, msg);
+            msg = "declared here";
+            logNoteWithSourceLine(entry.id.wholeLoc, msg);
+            node.expType = ErrorType.INSTANCE;
+            // 检查参数
+            node.args.forEach(arg -> arg.accept(this));
+            return null;
+        }
+        if (node.args.size() < funcType.parameterCount()) {
+            // 参数不足
+            error();
+            String msg = "too few arguments to function '" + getLogger().white(variable.id.name) + "'";
+            logErrorWithSourceLine(node.func.wholeLoc, msg);
+            msg = "declared here";
+            logNoteWithSourceLine(entry.id.wholeLoc, msg);
+            node.expType = ErrorType.INSTANCE;
+            // 检查参数
+            node.args.forEach(arg -> arg.accept(this));
+            return null;
+        }
+
+        // 形参数量必须等于实参数量（除非使用省略号形参）
+        // 参数数量正确，检查类型
+        boolean noError = true;
+        for (int i = 0; i < node.args.size(); i++) {
+            ExpressionNode arg = node.args.get(i);
+            // 检查参数类型
+            arg.accept(this);
+            // 必须存在如同赋值的隐式转换，将对应实参的无限定类型转换为形参类型
+            Type paramType = funcType.parameterTypes().get(i);
+            Type convertedType = getConvertTypeAsIfByAssignment(arg, paramType);
+            if (convertedType instanceof ErrorType) {
+                // 参数类型不兼容
                 error();
-                String msg = "called object '" + getLogger().white(getSourceFile().getByLocation(variable.wholeLoc)) +
-                             "' is not a function or function pointer; have type '" +
-                             getLogger().white(type.toString()) + "'";
-                logErrorWithSourceLine(variable.wholeLoc, msg);
-                msg = "declared here";
-                logNoteWithSourceLine(entry.id.wholeLoc, msg);
-                node.expType = ErrorType.INSTANCE;
+                noError = false;
+                String msg =
+                    "incompatible type for argument " + (i + 1) + " of '" + getLogger().white(variable.id.name) + "'";
+                logErrorWithSourceLine(node.args.get(i).wholeLoc, msg);
+                msg = "expected '" + getLogger().white(paramType.toString()) +
+                      "' but argument is of type '" + getLogger().white(arg.expType.toString()) + "'";
+                TypeNode paramTypeNode = ((FunctionTypeNode) entry.typeNode).paramTypes.get(i);
+                IdentifierNode idNode = ((FunctionTypeNode) entry.typeNode).params.get(i);
+                // 匿名参数中参数名可能为 null，特殊处理
+                SourceLocation loc = idNode == null ? paramTypeNode.getWholeLocation() :
+                    SourceLocation.concat(paramTypeNode.getWholeLocation(), idNode.getWholeLocation());
+                logNoteWithSourceLine(loc, msg);
             } else {
-                // 检查调用是否合法
-                if (funcType.hasNoParameters()) {
-                    // 无参数
-                    if (!node.args.isEmpty()) {
-                        // 传递了参数
-                        error();
-                        String msg = "too many arguments to function '" + getLogger().white(variable.id.name) + "'";
-                        logErrorWithSourceLine(node.func.wholeLoc, msg);
-                        msg = "declared here";
-                        logNoteWithSourceLine(entry.id.wholeLoc, msg);
-                        node.expType = ErrorType.INSTANCE;
-                    } else {
-                        node.expType = funcType.returnType();
-                    }
-                } else {
-                    // 有参数
-                    if (node.args.size() < funcType.parameterTypes().size()) {
-                        // 参数不足
-                        error();
-                        String msg = "too few arguments to function '" + getLogger().white(variable.id.name) + "'";
-                        logErrorWithSourceLine(node.func.wholeLoc, msg);
-                        msg = "declared here";
-                        logNoteWithSourceLine(entry.id.wholeLoc, msg);
-                        node.expType = ErrorType.INSTANCE;
-                    } else if (node.args.size() > funcType.parameterTypes().size()) {
-                        // 参数过多
-                        error();
-                        String msg = "too many arguments to function '" + getLogger().white(variable.id.name) + "'";
-                        logErrorWithSourceLine(node.func.wholeLoc, msg);
-                        msg = "declared here";
-                        logNoteWithSourceLine(entry.id.wholeLoc, msg);
-                        node.expType = ErrorType.INSTANCE;
-                    } else {
-                        // 形参数量必须等于实参数量（除非使用省略号形参）
-                        // 参数数量正确，检查类型
-                        boolean noError = true;
-                        for (int i = 0; i < node.args.size(); i++) {
-                            ExpressionNode arg = node.args.get(i);
-                            // 检查参数类型
-                            arg.accept(this);
-                            // 必须存在如同赋值的隐式转换，将对应实参的无限定类型转换为形参类型
-                            Type paramType = funcType.parameterTypes().get(i);
-                            Type convertedType = getConvertTypeAsIfByAssignment(arg, paramType);
-                            if (convertedType instanceof ErrorType) {
-                                // 参数类型不兼容
-                                error();
-                                noError = false;
-                                String msg =
-                                    "incompatible type for argument " + (i + 1) + " of '"
-                                    + getLogger().white(variable.id.name) + "'";
-                                logErrorWithSourceLine(node.args.get(i).wholeLoc, msg);
-                                msg = "expected '" + getLogger().white(paramType.toString()) +
-                                      "' but argument is of type '" + getLogger().white(arg.expType.toString()) + "'";
-                                TypeNode paramTypeNode = ((FunctionTypeNode) entry.typeNode).paramTypes.get(i);
-                                IdentifierNode idNode = ((FunctionTypeNode) entry.typeNode).params.get(i);
-                                // 匿名参数中参数名可能为 null，特殊处理
-                                SourceLocation loc = idNode == null ? paramTypeNode.getWholeLocation() :
-                                    SourceLocation.concat(paramTypeNode.getWholeLocation(), idNode.getWholeLocation());
-                                logNoteWithSourceLine(loc, msg);
-                            } else {
-                                node.args.set(i, convertTo(arg, convertedType));
-                            }
-                        }
-                        node.expType = noError ? funcType.returnType() : ErrorType.INSTANCE;
-                    }
-                }
+                node.args.set(i, convertTo(arg, convertedType));
             }
         }
+        node.expType = noError ? funcType.returnType() : ErrorType.INSTANCE;
         return null;
     }
 

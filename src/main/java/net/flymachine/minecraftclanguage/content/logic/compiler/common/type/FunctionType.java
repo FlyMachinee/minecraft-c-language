@@ -99,4 +99,14 @@ public record FunctionType(Type returnType, List<Type> parameterTypes) implement
         }
         return false;
     }
+
+    public int parameterCount() {
+        if (parameterTypes.size() == 1) {
+            Type paramType = parameterTypes.get(0);
+            if (paramType instanceof BasicType basicType && basicType == BasicType.VOID) {
+                return 0;
+            }
+        }
+        return parameterTypes.size();
+    }
 }
