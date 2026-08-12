@@ -119,7 +119,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
     public FunctionDefinitionNode visitFunctionDefinition(C99Parser.FunctionDefinitionContext ctx) {
         TypeAndSpecifiers typeAndSpecifiers = parseDeclarationSpecifiers(ctx.declarationSpecifiers());
         TypeNode baseType = typeAndSpecifiers.t;
-        boolean isBaseTypeError = baseType == null;
+        boolean isBaseTypeError = baseType == null || baseType.getType() == null;
         if (isBaseTypeError) {
             // 返回值无类型
             baseType = new BasicTypeNode(null, BasicType.INT);
@@ -369,7 +369,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
 
             if (paramCtx.declarator() != null) {
                 // 具名参数
-                boolean baseTypeError = paramBaseType == null;
+                boolean baseTypeError = paramBaseType == null || paramBaseType.getType() == null;
                 if (baseTypeError) {
                     // 没有类型
                     paramBaseType = new BasicTypeNode(null, BasicType.INT);
@@ -393,7 +393,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
                 parameters.add(paramRes.id);
             } else {
                 // 没有参数名
-                if (paramBaseType == null) {
+                if (paramBaseType == null || paramBaseType.getType() == null) {
                     // 没有类型
                     error();
                     String msg = "type defaults to '" + logger.white("int") + "' in type name";
@@ -417,9 +417,10 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
                 parameters.add(null);
             }
         }
-        return new FunctionTypeNode(
-            SourceLocation.concat(returnType.getWholeLocation(), getSourceLocation(rightParen)),
-            returnType, parameterTypes, parameters);
+        SourceLocation funcTypeLoc = returnType.getWholeLocation() == null ?
+            getSourceLocation(rightParen) :
+            SourceLocation.concat(returnType.getWholeLocation(), getSourceLocation(rightParen));
+        return new FunctionTypeNode(funcTypeLoc, returnType, parameterTypes, parameters);
 
     }
 
@@ -434,7 +435,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
             var initDeclarator = list.initDeclarator();
             TypeAndSpecifiers typeAndSpecifiers = parseDeclarationSpecifiers(ctx.declarationSpecifiers());
             TypeNode baseType = typeAndSpecifiers.t;
-            boolean isBaseTypeError = baseType == null;
+            boolean isBaseTypeError = baseType == null || baseType.getType() == null;
             if (isBaseTypeError) {
                 // 没有类型
                 baseType = new BasicTypeNode(null, BasicType.INT);
