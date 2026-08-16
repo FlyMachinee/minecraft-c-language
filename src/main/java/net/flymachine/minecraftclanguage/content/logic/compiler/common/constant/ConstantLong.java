@@ -39,6 +39,11 @@ public record ConstantLong(long value) implements Constant {
     }
 
     @Override
+    public ConstantDouble toDouble() {
+        return new ConstantDouble(value);
+    }
+
+    @Override
     public LongInit toStaticInit() {
         return new LongInit(value);
     }
@@ -60,20 +65,15 @@ public record ConstantLong(long value) implements Constant {
             return apply(op, longRhs);
         } else if (rhs instanceof ConstantUnsignedLong unsignedLongRhs) {
             return toUnsignedLong().apply(op, unsignedLongRhs);
+        } else if (rhs instanceof ConstantDouble doubleRhs) {
+            return toDouble().apply(op, doubleRhs);
         }
         throw new IllegalStateException("Unsupported constant type: " + rhs.getClass());
     }
 
     @Override
     public ConstantInt apply(Comparison cmp, Constant rhs) {
-        if (rhs instanceof ConstantInt || rhs instanceof ConstantUnsignedInt) {
-            return apply(cmp, rhs.toLong());
-        } else if (rhs instanceof ConstantLong longRhs) {
-            return apply(cmp, longRhs);
-        } else if (rhs instanceof ConstantUnsignedLong unsignedLongRhs) {
-            return toUnsignedLong().apply(cmp, unsignedLongRhs);
-        }
-        throw new IllegalStateException("Unsupported constant type: " + rhs.getClass());
+        return (ConstantInt) apply(cmp.toBinaryOperator(), rhs);
     }
 
     @Override

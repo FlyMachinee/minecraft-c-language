@@ -19,7 +19,7 @@ public record LongInit(long value) implements StaticInit {
 
     @Override
     public ConstantInt toConstantInt() {
-        return new ConstantInt((int) value);
+        return toConstantLong().toInt();
     }
 
     @Override
@@ -29,11 +29,16 @@ public record LongInit(long value) implements StaticInit {
 
     @Override
     public ConstantUnsignedInt toConstantUnsignedInt() {
-        return new ConstantUnsignedInt((int) value);
+        return toConstantLong().toUnsignedInt();
     }
 
     @Override
     public ConstantUnsignedLong toConstantUnsignedLong() {
-        return new ConstantUnsignedLong(value);
+        return toConstantLong().toUnsignedLong();
+    }
+
+    @Override
+    public ConstantDouble toConstantDouble() {
+        return toConstantLong().toDouble();
     }
 }

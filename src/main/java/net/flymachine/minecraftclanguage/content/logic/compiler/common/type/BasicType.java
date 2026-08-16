@@ -7,7 +7,8 @@ public enum BasicType implements Type {
     INT("int"),
     LONG("long"),
     UNSIGNED_INT("unsigned int"),
-    UNSIGNED_LONG("unsigned long");
+    UNSIGNED_LONG("unsigned long"),
+    DOUBLE("double");
 
     private final String name;
 
@@ -40,7 +41,7 @@ public enum BasicType implements Type {
 
     @Override
     public boolean isInteger() {
-        return this != VOID;
+        return this != VOID && this != DOUBLE;
     }
 
     @Override
@@ -53,7 +54,7 @@ public enum BasicType implements Type {
         return switch (this) {
             case VOID -> -1;
             case INT, UNSIGNED_INT -> 4;
-            case LONG, UNSIGNED_LONG -> 8;
+            case LONG, UNSIGNED_LONG, DOUBLE -> 8;
         };
     }
 
@@ -63,6 +64,7 @@ public enum BasicType implements Type {
             case VOID -> throw new UnsupportedOperationException("toAsmType(void) is not defined");
             case INT, UNSIGNED_INT -> AsmType.WORD;
             case LONG, UNSIGNED_LONG -> AsmType.DWORD;
+            case DOUBLE -> null;
         };
     }
 

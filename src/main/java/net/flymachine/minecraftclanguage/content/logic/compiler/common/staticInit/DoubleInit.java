@@ -1,44 +1,38 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit;
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.*;
-import org.jetbrains.annotations.NotNull;
 
-public record IntInit(int value) implements StaticInit {
+public record DoubleInit(double value) implements StaticInit {
 
-    public static final IntInit ZERO = new IntInit(0);
-
-    @Override
-    public @NotNull String toString() {
-        return Integer.toString(value);
-    }
+    public static final DoubleInit ZERO = new DoubleInit(0.0);
 
     @Override
     public Constant toConstant() {
-        return toConstantInt();
+        return toConstantDouble();
     }
 
     @Override
     public ConstantInt toConstantInt() {
-        return new ConstantInt(value);
+        return toConstantDouble().toInt();
     }
 
     @Override
     public ConstantLong toConstantLong() {
-        return toConstantInt().toLong();
+        return toConstantDouble().toLong();
     }
 
     @Override
     public ConstantUnsignedInt toConstantUnsignedInt() {
-        return toConstantInt().toUnsignedInt();
+        return toConstantDouble().toUnsignedInt();
     }
 
     @Override
     public ConstantUnsignedLong toConstantUnsignedLong() {
-        return toConstantInt().toUnsignedLong();
+        return toConstantDouble().toUnsignedLong();
     }
 
     @Override
     public ConstantDouble toConstantDouble() {
-        return toConstantInt().toDouble();
+        return new ConstantDouble(value);
     }
 }

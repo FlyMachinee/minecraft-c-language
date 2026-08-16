@@ -10,12 +10,17 @@ public enum AsmType {
     /**
      * 合理的 64 位数
      */
-    DWORD;
+    DWORD,
+
+    /**
+     * 合理的 64 位浮点数
+     */
+    DOUBLE;
 
     public int alignment() {
         return switch (this) {
             case WORD -> 4;
-            case DWORD -> 8;
+            case DWORD, DOUBLE -> 8;
         };
     }
 }

@@ -11,10 +11,16 @@ compilationUnit:
     translationUnit? EOF
     ;
 
+// ISO 6.4.4, Constants
+constant
+    : IntegerConstant
+    | FloatingConstant
+    ;
+
 // ISO 6.5.1, Primary Expressions
 primaryExpression
     : Identifier
-    | IntegerConstant
+    | constant
     | LeftParen expression RightParen
     ;
 
@@ -196,6 +202,7 @@ typeSpecifier
     : Void
     | Int
     | Long
+    | Double
     | Signed
     | Unsigned
     ;

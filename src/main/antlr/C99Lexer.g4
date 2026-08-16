@@ -7,6 +7,7 @@ Case: 'case';
 Continue: 'continue';
 Default: 'default';
 Do: 'do';
+Double: 'double';
 Else: 'else';
 Extern: 'extern';
 For: 'for';
@@ -48,6 +49,31 @@ fragment IntegerSuffix
     ;
 fragment UnsignedSuffix: 'u' | 'U';
 fragment LongSuffix: 'l' | 'L';
+
+FloatingConstant
+    : DecimalFloatingConstant
+    | HexadecimalFloatingConstant
+    ;
+fragment DecimalFloatingConstant
+    : FractionalConstant ExponentPart?
+    | DigitSequence ExponentPart
+    ;
+fragment HexadecimalFloatingConstant
+    : HexadecimalPrefix (HexadecimalFractionalConstant | HexadecimalDigitSequence) BinaryExponentPart
+    ;
+fragment FractionalConstant
+    : DigitSequence? '.' DigitSequence
+    | DigitSequence '.'
+    ;
+fragment ExponentPart: [eE] Sign? DigitSequence;
+fragment Sign: [+-];
+fragment DigitSequence: Digit+;
+fragment HexadecimalFractionalConstant
+    : HexadecimalDigitSequence? '.' HexadecimalDigitSequence
+    | HexadecimalDigitSequence '.'
+    ;
+fragment BinaryExponentPart: [pP] Sign? DigitSequence;
+fragment HexadecimalDigitSequence: HexadecimalDigit+;
 
 // Operators
 
