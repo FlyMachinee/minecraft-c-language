@@ -51,8 +51,15 @@ public interface Type {
     }
 
     static BasicType commonRealType(BasicType t1, BasicType t2) {
-        if (!t1.isInteger() || !t2.isInteger()) {
+        if (!t1.isArithmetic() || !t2.isArithmetic()) {
             throw new IllegalArgumentException("Both types must be arithmetic");
+        }
+        // 否则，若一个操作数是 double、double complex 或 double imaginary，则会按下列方式隐式转换另一操作数：
+        // 整数或实浮点数类型转换成 double
+        // 复数类型转换成 double complex
+        // 虚数类型转换成 double imaginary
+        if (t1 == BasicType.DOUBLE || t2 == BasicType.DOUBLE) {
+            return BasicType.DOUBLE;
         }
         // 否则两个操作数均为整数。两个操作数都会经历整数提升；经过整数提升后，适用于以下情况之一：
         // 若两类型相同，则该类型即为公共类型

@@ -3,7 +3,7 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99;
 import net.flymachine.minecraftclanguage.content.logger.ConsoleLogger;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.AssignmentOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.StorageClassSpecifier;
-import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.*;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.Constant;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.BasicType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.ErrorType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.FunctionType;
@@ -374,7 +374,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         if (t.isScalar()) {
             // 求值该表达式，而其值在如同赋值般转换到对象类型后，成为被初始化对象的初值
             if (t.isArithmetic()) {
-                BasicType bt = (BasicType) t;
+                BasicType bt = (BasicType) getConvertTypeAsIfByAssignment(init, t);
                 return new SymbolTable.Entry.StaticAttr.Defined(init.value.castTo(bt).toStaticInit());
             } else {
                 throw new IllegalStateException("unexpected static initializer: " + t);
@@ -404,6 +404,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         } else if (init instanceof ConstantNode constInit) {
             // 整数常量初始化
             Type t = type.getType();
+            constInit.accept(this);
             defType = getInitialValueFromInitializer(constInit, t);
         } else {
             // 其他类型的初始化表达式不合法
@@ -548,22 +549,23 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             // 块作用域 static 无初始化器
             // 若未提供初始化式
             // 拥有静态及线程局域存储期的对象被空初始化
-            if (t.isInteger()) {
-                // 整数类型对象被初始化成无符号的零
-                if (t instanceof BasicType bt) {
-                    if (bt == BasicType.INT) {
-                        initialValue = SymbolTable.Entry.StaticAttr.Defined.INT_ZERO;
-                    } else if (bt == BasicType.LONG) {
-                        initialValue = SymbolTable.Entry.StaticAttr.Defined.LONG_ZERO;
-                    } else {
-                        throw new IllegalStateException("unexpected integer type: " + t);
-                    }
-                } else {
-                    throw new IllegalStateException("unexpected static initializer: " + t);
-                }
+            if (t instanceof BasicType bt) {
+                initialValue = switch (bt) {
+                    // 整数类型对象被初始化成无符号的零
+                    case INT -> SymbolTable.Entry.StaticAttr.Defined.INT_ZERO;
+                    case LONG -> SymbolTable.Entry.StaticAttr.Defined.LONG_ZERO;
+                    case UNSIGNED_INT -> SymbolTable.Entry.StaticAttr.Defined.UNSIGNED_INT_ZERO;
+                    case UNSIGNED_LONG -> SymbolTable.Entry.StaticAttr.Defined.UNSIGNED_LONG_ZERO;
+                    // 浮点类型对象被初始化成正零
+                    case DOUBLE -> SymbolTable.Entry.StaticAttr.Defined.DOUBLE_ZERO;
+                    default -> throw new IllegalStateException("unexpected static initializer: " + t);
+                };
+            } else {
+                throw new IllegalStateException("unexpected static initializer: " + t);
             }
         } else if (init instanceof ConstantNode constInit) {
             // 常量初始化
+            constInit.accept(this);
             initialValue = getInitialValueFromInitializer(constInit, t);
         } else {
             // 其他类型的初始化表达式不合法
@@ -941,17 +943,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
     @Override
     public Void visit(ConstantNode node) {
         Constant value = node.value;
-        if (value instanceof ConstantInt) {
-            node.expType = BasicType.INT;
-        } else if (value instanceof ConstantLong) {
-            node.expType = BasicType.LONG;
-        } else if (value instanceof ConstantUnsignedInt) {
-            node.expType = BasicType.UNSIGNED_INT;
-        } else if (value instanceof ConstantUnsignedLong) {
-            node.expType = BasicType.UNSIGNED_LONG;
-        } else {
-            throw new IllegalStateException("unexpected constant type: " + value);
-        }
+        node.expType = value.getType();
         return null;
     }
 
