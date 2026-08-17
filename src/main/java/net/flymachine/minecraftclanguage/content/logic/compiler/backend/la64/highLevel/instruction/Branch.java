@@ -9,6 +9,6 @@ public class Branch implements HighLevelInstruction {
 
     @Override
     public <T> T accept(HighLevelVisitor<T> visitor) {
-        return visitor.visitBranch(this);
+        return visitor.visit(this);
     }
 }

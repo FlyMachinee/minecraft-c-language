@@ -45,19 +45,19 @@ public final class ReplacePseudoRegisterPass implements HighLevelVisitor<Void> {
     }
 
     @Override
-    public Void visitMove(Move inst) {
+    public Void visit(Move inst) {
         inst.src = replacePseudo(inst.src);
         inst.dst = replacePseudo(inst.dst);
         return null;
     }
 
     @Override
-    public Void visitRet(Ret inst) {
+    public Void visit(Ret inst) {
         return null;
     }
 
     @Override
-    public Void visitBinary(Binary inst) {
+    public Void visit(Binary inst) {
         inst.lhs = replacePseudo(inst.lhs);
         inst.rhs = replacePseudo(inst.rhs);
         inst.dst = replacePseudo(inst.dst);
@@ -65,56 +65,48 @@ public final class ReplacePseudoRegisterPass implements HighLevelVisitor<Void> {
     }
 
     @Override
-    public Void visitAddSi12(AddSi12 inst) {
+    public Void visit(AddSi12 inst) {
         inst.src = replacePseudo(inst.src);
         inst.dst = replacePseudo(inst.dst);
         return null;
     }
 
     @Override
-    public Void visitLabel(Label inst) {
+    public Void visit(Label inst) {
         return null;
     }
 
     @Override
-    public Void visitBranch(Branch inst) {
+    public Void visit(Branch inst) {
         return null;
     }
 
     @Override
-    public Void visitBranchIfZero(BranchIfZero inst) {
+    public Void visit(BranchIfZero inst) {
         inst.cond = replacePseudo(inst.cond);
         return null;
     }
 
     @Override
-    public Void visitBranchIfNotZero(BranchIfNotZero inst) {
+    public Void visit(BranchIfNotZero inst) {
         inst.cond = replacePseudo(inst.cond);
         return null;
     }
 
     @Override
-    public Void visitBranchIfComparison(BranchIfComparison inst) {
+    public Void visit(BranchIfComparison inst) {
         inst.lhs = replacePseudo(inst.lhs);
         inst.rhs = replacePseudo(inst.rhs);
         return null;
     }
 
     @Override
-    public Void visitCall(Call inst) {
+    public Void visit(Call inst) {
         return null;
     }
 
     @Override
-    public Void visitCompare(Compare inst) {
-        inst.lhs = replacePseudo(inst.lhs);
-        inst.rhs = replacePseudo(inst.rhs);
-        inst.dst = replacePseudo(inst.dst);
-        return null;
-    }
-
-    @Override
-    public Void visitDivOrMod(DivOrMod inst) {
+    public Void visit(Compare inst) {
         inst.lhs = replacePseudo(inst.lhs);
         inst.rhs = replacePseudo(inst.rhs);
         inst.dst = replacePseudo(inst.dst);
@@ -122,7 +114,7 @@ public final class ReplacePseudoRegisterPass implements HighLevelVisitor<Void> {
     }
 
     @Override
-    public Void visitBitwiseShift(BitwiseShift inst) {
+    public Void visit(DivOrMod inst) {
         inst.lhs = replacePseudo(inst.lhs);
         inst.rhs = replacePseudo(inst.rhs);
         inst.dst = replacePseudo(inst.dst);
@@ -130,7 +122,7 @@ public final class ReplacePseudoRegisterPass implements HighLevelVisitor<Void> {
     }
 
     @Override
-    public Void visitBitwise(Bitwise inst) {
+    public Void visit(BitwiseShift inst) {
         inst.lhs = replacePseudo(inst.lhs);
         inst.rhs = replacePseudo(inst.rhs);
         inst.dst = replacePseudo(inst.dst);
@@ -138,14 +130,22 @@ public final class ReplacePseudoRegisterPass implements HighLevelVisitor<Void> {
     }
 
     @Override
-    public Void visitBstrpickZeroExtend(BstrpickZeroExtend inst) {
+    public Void visit(Bitwise inst) {
+        inst.lhs = replacePseudo(inst.lhs);
+        inst.rhs = replacePseudo(inst.rhs);
+        inst.dst = replacePseudo(inst.dst);
+        return null;
+    }
+
+    @Override
+    public Void visit(BstrpickZeroExtend inst) {
         inst.src = replacePseudo(inst.src);
         inst.dst = replacePseudo(inst.dst);
         return null;
     }
 
     @Override
-    public Void visitAddSignExtend(AddSignExtend inst) {
+    public Void visit(AddSignExtend inst) {
         inst.src = replacePseudo(inst.src);
         inst.dst = replacePseudo(inst.dst);
         return null;

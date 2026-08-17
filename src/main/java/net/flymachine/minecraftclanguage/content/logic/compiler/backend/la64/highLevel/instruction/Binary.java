@@ -63,6 +63,6 @@ public class Binary implements HighLevelInstruction {
 
     @Override
     public <T> T accept(HighLevelVisitor<T> visitor) {
-        return visitor.visitBinary(this);
+        return visitor.visit(this);
     }
 }

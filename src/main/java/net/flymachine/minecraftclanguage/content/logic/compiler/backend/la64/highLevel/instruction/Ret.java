@@ -3,6 +3,6 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.hi
 public class Ret implements HighLevelInstruction {
     @Override
     public <T> T accept(HighLevelVisitor<T> visitor) {
-        return visitor.visitRet(this);
+        return visitor.visit(this);
     }
 }

@@ -25,6 +25,6 @@ public class BitwiseShift implements HighLevelInstruction {
 
     @Override
     public <T> T accept(HighLevelVisitor<T> visitor) {
-        return visitor.visitBitwiseShift(this);
+        return visitor.visit(this);
     }
 }

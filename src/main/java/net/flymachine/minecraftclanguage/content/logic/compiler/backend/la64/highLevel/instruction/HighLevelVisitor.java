@@ -1,35 +1,35 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.instruction;
 
 public interface HighLevelVisitor<T> {
-    T visitMove(Move inst);
+    T visit(Move inst);
 
-    T visitRet(Ret inst);
+    T visit(Ret inst);
 
-    T visitBinary(Binary inst);
+    T visit(Binary inst);
 
-    T visitAddSi12(AddSi12 inst);
+    T visit(AddSi12 inst);
 
-    T visitLabel(Label inst);
+    T visit(Label inst);
 
-    T visitBranch(Branch inst);
+    T visit(Branch inst);
 
-    T visitBranchIfZero(BranchIfZero inst);
+    T visit(BranchIfZero inst);
 
-    T visitBranchIfNotZero(BranchIfNotZero inst);
+    T visit(BranchIfNotZero inst);
 
-    T visitBranchIfComparison(BranchIfComparison inst);
+    T visit(BranchIfComparison inst);
 
-    T visitCall(Call inst);
+    T visit(Call inst);
 
-    T visitCompare(Compare inst);
+    T visit(Compare inst);
 
-    T visitDivOrMod(DivOrMod inst);
+    T visit(DivOrMod inst);
 
-    T visitBitwiseShift(BitwiseShift inst);
+    T visit(BitwiseShift inst);
 
-    T visitBitwise(Bitwise inst);
+    T visit(Bitwise inst);
 
-    T visitBstrpickZeroExtend(BstrpickZeroExtend inst);
+    T visit(BstrpickZeroExtend inst);
 
-    T visitAddSignExtend(AddSignExtend inst);
+    T visit(AddSignExtend inst);
 }

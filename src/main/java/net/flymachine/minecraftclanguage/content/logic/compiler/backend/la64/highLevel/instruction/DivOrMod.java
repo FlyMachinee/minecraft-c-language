@@ -25,6 +25,6 @@ public class DivOrMod implements HighLevelInstruction {
 
     @Override
     public <T> T accept(HighLevelVisitor<T> visitor) {
-        return visitor.visitDivOrMod(this);
+        return visitor.visit(this);
     }
 }

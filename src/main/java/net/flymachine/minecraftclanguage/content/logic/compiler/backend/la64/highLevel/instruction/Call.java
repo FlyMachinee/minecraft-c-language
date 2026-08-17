@@ -12,6 +12,6 @@ public class Call implements HighLevelInstruction {
 
     @Override
     public <T> T accept(HighLevelVisitor<T> visitor) {
-        return visitor.visitCall(this);
+        return visitor.visit(this);
     }
 }

@@ -13,6 +13,6 @@ public class AddSignExtend implements HighLevelInstruction {
 
     @Override
     public <T> T accept(HighLevelVisitor<T> visitor) {
-        return visitor.visitAddSignExtend(this);
+        return visitor.visit(this);
     }
 }

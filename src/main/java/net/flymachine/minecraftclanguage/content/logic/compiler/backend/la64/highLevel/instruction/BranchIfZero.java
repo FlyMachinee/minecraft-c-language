@@ -16,6 +16,6 @@ public class BranchIfZero implements HighLevelInstruction {
 
     @Override
     public <T> T accept(HighLevelVisitor<T> visitor) {
-        return visitor.visitBranchIfZero(this);
+        return visitor.visit(this);
     }
 }

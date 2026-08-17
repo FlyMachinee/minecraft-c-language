@@ -139,7 +139,7 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
     }
 
     @Override
-    public Void visitMove(Move inst) {
+    public Void visit(Move inst) {
         AsmType asmType = inst.asmType;
         HighLevelOperand dst = inst.dst;
         HighLevelOperand src = inst.src;
@@ -213,13 +213,13 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
     }
 
     @Override
-    public Void visitRet(Ret inst) {
+    public Void visit(Ret inst) {
         generateEpilogue(functionContext);
         return null;
     }
 
     @Override
-    public Void visitBinary(Binary binary) {
+    public Void visit(Binary binary) {
         Binary.Operator op = binary.op;
         AsmType asmType = binary.asmType;
         HighLevelOperand lhs = binary.lhs;
@@ -233,17 +233,17 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
             // 检查立即数是否可用 si12 表示，如果可以，生成 addi.w(d) 指令，否则使用默认处理
             if (lhs instanceof Immediate imm && BitMath.isSi12(imm.value())) {
                 // 立即数在左操作数
-                visitAddSi12(new AddSi12(asmType, rhs, (int) imm.value(), dst));
+                visit(new AddSi12(asmType, rhs, (int) imm.value(), dst));
                 return null;
             } else if (rhs instanceof Immediate imm && BitMath.isSi12(imm.value())) {
                 // 立即数在右操作数
-                visitAddSi12(new AddSi12(asmType, lhs, (int) imm.value(), dst));
+                visit(new AddSi12(asmType, lhs, (int) imm.value(), dst));
                 return null;
             }
         }
         // 立即数减法，处理减立即数的情况
         if (op == Binary.Operator.SUB && rhs instanceof Immediate imm && BitMath.isSi12(-imm.value())) {
-            visitAddSi12(new AddSi12(asmType, lhs, (int) -imm.value(), dst));
+            visit(new AddSi12(asmType, lhs, (int) -imm.value(), dst));
             return null;
         }
 
@@ -267,7 +267,7 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
     }
 
     @Override
-    public Void visitAddSi12(AddSi12 addSi12) {
+    public Void visit(AddSi12 addSi12) {
         AsmType asmType = addSi12.asmType;
         HighLevelOperand src = addSi12.src;
         int si12 = addSi12.si12;
@@ -293,19 +293,19 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
     }
 
     @Override
-    public Void visitLabel(Label inst) {
+    public Void visit(Label inst) {
         emitLabel(".L" + inst.name);
         return null;
     }
 
     @Override
-    public Void visitBranch(Branch inst) {
+    public Void visit(Branch inst) {
         emitInst("b", new LA64AsmSymOperand(".L" + inst.target));
         return null;
     }
 
     @Override
-    public Void visitBranchIfZero(BranchIfZero inst) {
+    public Void visit(BranchIfZero inst) {
         HighLevelOperand cond = inst.cond;
         AsmType asmType = inst.asmType;
         String branchTarget = inst.target;
@@ -321,7 +321,7 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
     }
 
     @Override
-    public Void visitBranchIfNotZero(BranchIfNotZero inst) {
+    public Void visit(BranchIfNotZero inst) {
         HighLevelOperand cond = inst.cond;
         AsmType asmType = inst.asmType;
         String branchTarget = inst.target;
@@ -337,7 +337,7 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
     }
 
     @Override
-    public Void visitBranchIfComparison(BranchIfComparison inst) {
+    public Void visit(BranchIfComparison inst) {
         Comparison cond = inst.cond;
         boolean isUnsigned = inst.isUnsigned;
         AsmType asmType = inst.asmType;
@@ -374,13 +374,13 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
     }
 
     @Override
-    public Void visitCall(Call inst) {
+    public Void visit(Call inst) {
         emitInst("bl", new LA64AsmSymOperand(inst.name));
         return null;
     }
 
     @Override
-    public Void visitCompare(Compare inst) {
+    public Void visit(Compare inst) {
         Comparison op = inst.cond;
         boolean isUnsigned = inst.isUnsigned;
         AsmType asmType = inst.asmType;
@@ -438,7 +438,7 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
     }
 
     @Override
-    public Void visitDivOrMod(DivOrMod inst) {
+    public Void visit(DivOrMod inst) {
         boolean isDiv = inst.isDiv;
         boolean isUnsigned = inst.isUnsigned;
         AsmType asmType = inst.asmType;
@@ -465,7 +465,7 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
     }
 
     @Override
-    public Void visitBitwiseShift(BitwiseShift inst) {
+    public Void visit(BitwiseShift inst) {
         boolean isLeftShift = inst.isLeftShift;
         boolean isUnsigned = inst.isUnsigned;
         AsmType asmType = inst.asmType;
@@ -509,7 +509,7 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
     }
 
     @Override
-    public Void visitBitwise(Bitwise inst) {
+    public Void visit(Bitwise inst) {
         Bitwise.Operator op = inst.op;
         AsmType asmType = inst.asmType;
         HighLevelOperand lhs = inst.lhs;
@@ -559,7 +559,7 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
     }
 
     @Override
-    public Void visitBstrpickZeroExtend(BstrpickZeroExtend inst) {
+    public Void visit(BstrpickZeroExtend inst) {
         HighLevelOperand src = inst.src;
         HighLevelOperand dst = inst.dst;
         testUnaryHighLevelOperand(src, dst);
@@ -578,7 +578,7 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
     }
 
     @Override
-    public Void visitAddSignExtend(AddSignExtend inst) {
+    public Void visit(AddSignExtend inst) {
         HighLevelOperand src = inst.src;
         HighLevelOperand dst = inst.dst;
         testUnaryHighLevelOperand(src, dst);

@@ -13,6 +13,6 @@ public class BstrpickZeroExtend implements HighLevelInstruction {
 
     @Override
     public <T> T accept(HighLevelVisitor<T> visitor) {
-        return visitor.visitBstrpickZeroExtend(this);
+        return visitor.visit(this);
     }
 }

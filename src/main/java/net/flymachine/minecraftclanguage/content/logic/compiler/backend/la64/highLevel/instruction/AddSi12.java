@@ -18,6 +18,6 @@ public class AddSi12 implements HighLevelInstruction {
 
     @Override
     public <T> T accept(HighLevelVisitor<T> visitor) {
-        return visitor.visitAddSi12(this);
+        return visitor.visit(this);
     }
 }

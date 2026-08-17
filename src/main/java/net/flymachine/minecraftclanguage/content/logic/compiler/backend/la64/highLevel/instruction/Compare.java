@@ -26,6 +26,6 @@ public class Compare implements HighLevelInstruction {
 
     @Override
     public <T> T accept(HighLevelVisitor<T> visitor) {
-        return visitor.visitCompare(this);
+        return visitor.visit(this);
     }
 }
