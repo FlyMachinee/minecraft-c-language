@@ -24,6 +24,10 @@ public final class LA64RegisterResolver {
         for (FloatingPointRegister reg : FloatingPointRegister.values()) {
             register(reg);
         }
+        // 加载条件标志寄存器
+        for (ConditionFlagRegister reg : ConditionFlagRegister.values()) {
+            register(reg);
+        }
     }
 
     private void register(LA64Register reg) {
@@ -83,8 +87,8 @@ public final class LA64RegisterResolver {
     /**
      * 根据类型和编号查找寄存器
      *
-     * @param type   GPR 或 FPR
-     * @param number 0-31
+     * @param type   寄存器类型
+     * @param number 寄存器编号
      * @return 对应的寄存器，如果无效则返回空
      */
     public Optional<LA64Register> getRegister(LA64Register.RegType type, int number) {
@@ -98,7 +102,7 @@ public final class LA64RegisterResolver {
     /**
      * 根据编号查找通用寄存器
      *
-     * @param number 0-31
+     * @param number 寄存器编号
      * @return 对应的通用寄存器，如果无效则返回空
      */
     public Optional<LA64Register> getGeneralPurposeRegister(int number) {
@@ -108,10 +112,20 @@ public final class LA64RegisterResolver {
     /**
      * 根据编号查找浮点寄存器
      *
-     * @param number 0-31
+     * @param number 寄存器编号
      * @return 对应的浮点寄存器，如果无效则返回空
      */
     public Optional<LA64Register> getFloatingPointRegister(int number) {
         return getRegister(LA64Register.RegType.FPR, number);
+    }
+
+    /**
+     * 根据编号查找条件标志寄存器
+     *
+     * @param number 寄存器编号
+     * @return 对应的条件标志寄存器，如果无效则返回空
+     */
+    public Optional<LA64Register> getConditionFlagRegister(int number) {
+        return getRegister(LA64Register.RegType.CFR, number);
     }
 }

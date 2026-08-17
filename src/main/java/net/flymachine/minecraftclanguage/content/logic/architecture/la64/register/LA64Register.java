@@ -6,12 +6,12 @@ import java.util.List;
 
 public interface LA64Register extends LA64AsmOperand {
     /**
-     * @return 寄存器类型（通用或浮点）
+     * @return 寄存器类型
      */
     RegType getType();
 
     /**
-     * @return 寄存器编号 0-31
+     * @return 寄存器编号
      */
     int getNumber();
 
@@ -29,7 +29,7 @@ public interface LA64Register extends LA64AsmOperand {
      * 寄存器类型枚举
      */
     enum RegType {
-        GPR, FPR
+        GPR, FPR, CFR
     }
 }
 

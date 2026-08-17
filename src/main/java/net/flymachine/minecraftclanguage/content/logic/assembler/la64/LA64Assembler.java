@@ -203,6 +203,7 @@ public final class LA64Assembler {
                             boolean matched = switch (expected) {
                                 case GPR -> current.isGpr();
                                 case FPR -> current.isFpr();
+                                case CFR -> current.isCfr();
                                 case UI5, UI6, UI12, SI12, SI20 -> {
                                     if (!current.isImm()) {
                                         yield false;

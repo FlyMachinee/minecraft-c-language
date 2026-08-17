@@ -3,7 +3,7 @@ package net.flymachine.minecraftclanguage.content.logic.architecture.la64.isa.op
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.util.BitMath;
 
 public enum LA64OperandType {
-    GPR, FPR, UI5, UI6, SI12, SI20, UI12, OFFS16, OFFS21, OFFS26;
+    GPR, FPR, UI5, UI6, SI12, SI20, UI12, OFFS16, OFFS21, OFFS26, CFR;
 
     public final static LA64OperandType[] FORMAT_3GPR_OPTYPE
         = new LA64OperandType[]{LA64OperandType.GPR, LA64OperandType.GPR, LA64OperandType.GPR};
@@ -30,6 +30,7 @@ public enum LA64OperandType {
             case OFFS16 -> BitMath.isOffs16(imm);
             case OFFS21 -> BitMath.isOffs21(imm);
             case OFFS26 -> BitMath.isOffs26(imm);
+            case CFR -> (imm & ~0b111) == 0;
         };
     }
 

@@ -1,5 +1,6 @@
 package net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.operand;
 
+import net.flymachine.minecraftclanguage.content.logic.architecture.la64.register.ConditionFlagRegister;
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.register.FloatingPointRegister;
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.register.GeneralPurposeRegister;
 
@@ -10,6 +11,10 @@ public interface LA64AsmOperand {
 
     default boolean isFpr() {
         return this instanceof FloatingPointRegister;
+    }
+
+    default boolean isCfr() {
+        return this instanceof ConditionFlagRegister;
     }
 
     default boolean isImm() {
@@ -24,8 +29,12 @@ public interface LA64AsmOperand {
         return (GeneralPurposeRegister) this;
     }
 
-    default GeneralPurposeRegister asFpr() {
-        return (GeneralPurposeRegister) this;
+    default FloatingPointRegister asFpr() {
+        return (FloatingPointRegister) this;
+    }
+
+    default ConditionFlagRegister asCfr() {
+        return (ConditionFlagRegister) this;
     }
 
     default long asImm() {
