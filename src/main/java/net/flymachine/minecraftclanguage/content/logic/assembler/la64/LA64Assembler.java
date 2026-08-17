@@ -339,8 +339,7 @@ public final class LA64Assembler {
 
                 // 先判断是否是宏指令，如果不是再视为普通指令处理
                 int offsetIncrease = switch (instruction.mnemonic()) {
-                    case "li.w" -> getExpandLiWSize(ops);
-                    case "li.d" -> getExpandLiDSize(ops);
+                    case "li.w", "li.d" -> getExpandLiDSize(ops.get(1).asImm());
                     case "sle", "sge", "sleu", "sgeu", "seq", "sne" -> 8;
                     case "la.abs" -> 16;
                     case "la.local", "la.pcrel" -> {
@@ -473,8 +472,7 @@ public final class LA64Assembler {
 
                 // 先判断是否是宏指令，如果不是再视为普通指令处理
                 switch (instruction.mnemonic()) {
-                    case "li.w" -> expandLiW(ops, out);
-                    case "li.d" -> expandLiD(ops, out);
+                    case "li.w", "li.d" -> expandLiD(ops, out);
                     case "ret" -> expandRet(out);
                     case "move" -> expandMove(ops, out);
                     case "sle" -> expandSle(ops, out);
@@ -553,79 +551,97 @@ public final class LA64Assembler {
         };
     }
 
-    private void expandLiW(List<LA64AsmOperand> ops, ByteArrayOutputStream out) {
-        // li.w dst, imm32
-        LA64Register dst = ops.get(0).asGpr();
-        int value = (int) ops.get(1).asImm();
-
-        if (BitMath.isSi12(value)) {
-            // addi.w rd, zero, imm12
-            writeFormat2RSi12(out, "addi.w", dst, GeneralPurposeRegister.ZERO, value);
-        } else {
-            // lu12i.w rd, upper20 si20
-            // ori rd, rd, lower12 ui12
-            int lower12 = BitMath.extractBits(value, 12);
-            int upper20 = BitMath.extractSignedBits(value, 12, 20);
-            writeFormat1RSi20(out, "lu12i.w", dst, upper20);
-            writeFormat2RUi12(out, "ori", dst, dst, lower12);
-        }
-    }
-
     private void expandLiD(List<LA64AsmOperand> ops, ByteArrayOutputStream out) {
         // li.w dst, imm64
-        LA64Register dst = ops.get(0).asGpr();
+        GeneralPurposeRegister dst = ops.get(0).asGpr();
         long value = ops.get(1).asImm();
 
-        if (value >= Integer.MIN_VALUE && value <= Integer.MAX_VALUE) {
-            // imm64 -> imm32
-            expandLiW(ops, out);
+        // ref: https://github.com/llvm/llvm-project/blob/main/llvm/lib/Target/LoongArch/MCTargetDesc/LoongArchMatInt.cpp
+
+        // |            hi32              |              lo32            |
+        // +-----------+------------------+------------------+-----------+
+        // | Highest12 |    Higher20      |       Hi20       |    Lo12   |
+        // +-----------+------------------+------------------+-----------+
+        // 63        52 51              32 31              12 11         0
+
+        int highest12 = (int) BitMath.extractBits(value, 52, 12);
+        int higher20 = (int) BitMath.extractBits(value, 32, 20);
+        int hi20 = (int) BitMath.extractBits(value, 12, 20);
+        int lo12 = (int) BitMath.extractBits(value, 12);
+
+        // 仅highest12有值，其他均为0
+        if (highest12 != 0 && BitMath.extractSignedBits(value, 52) == 0) {
+            writeFormat2RSi12(out, "lu52i.d", dst, dst, BitMath.extractSignedBits(highest12, 12));
+            return;
+        }
+
+        // 处理lo32
+        if (hi20 == 0) {
+            // hi20全0，用ori加载
+            writeFormat2RUi12(out, "ori", dst, dst, lo12);
+        } else if (BitMath.extractSignedBits(lo12 >> 11, 1) ==
+                   BitMath.extractSignedBits(hi20, 20)) {
+            // hi20全为1，且lo12最高位为1，使用addi.w加载
+            writeFormat2RSi12(out, "addi.w", dst, dst, BitMath.extractSignedBits(lo12, 12));
         } else {
-            // lu12i.w   rd, hi20       si20
-            // ori       rd, rd, low12  ui12
-            // lu32i.d   rd, h_low20    si20
-            // lu52i.d   rd, rd, h_hi12 si12
-            int hi20 = (int) BitMath.extractSignedBits(value, 12, 20);
-            int low12 = (int) BitMath.extractBits(value, 12);
-            int hLow20 = (int) BitMath.extractSignedBits(value, 32, 20);
-
-            writeFormat1RSi20(out, "lu12i.w", dst, hi20);
-            writeFormat2RUi12(out, "ori", dst, dst, low12);
-            writeFormat1RSi20(out, "lu32i.d", dst, hLow20);
-
-            int hHi12 = (int) BitMath.extractSignedBits(value, 52, 12);
-            if (hHi12 != 0 && hHi12 != -1) {
-                writeFormat2RSi12(out, "lu52i.d", dst, dst, hHi12);
+            // 一般情况
+            writeFormat1RSi20(out, "lu12i.w", dst, BitMath.extractSignedBits(hi20, 20));
+            if (lo12 != 0) {
+                writeFormat2RUi12(out, "ori", dst, dst, lo12);
             }
+        }
+
+        // 处理hi32
+        // higher20
+        if (BitMath.extractSignedBits(hi20 >> 19, 1) !=
+            BitMath.extractSignedBits(higher20, 20)) {
+            // higher20不与hi20符号位拓展结果相同
+            writeFormat1RSi20(out, "lu32i.d", dst, BitMath.extractSignedBits(higher20, 20));
+        }
+
+        // highest12
+        if (BitMath.extractSignedBits(higher20 >> 19, 1) !=
+            BitMath.extractSignedBits(highest12, 12)) {
+            // highest12不与higher20符号位拓展结果相同
+            writeFormat2RSi12(out, "lu52i.d", dst, dst, BitMath.extractSignedBits(highest12, 12));
         }
     }
 
-    private int getExpandLiWSize(List<LA64AsmOperand> ops) {
-        // li.w dst, imm32
-        int value = (int) ops.get(1).asImm();
-        if (BitMath.isSi12(value)) {
-            // addi.w rd, zero, imm12
+    public static int getExpandLiDSize(long value) {
+        int highest12 = (int) BitMath.extractBits(value, 52, 12);
+        int higher20 = (int) BitMath.extractBits(value, 32, 20);
+        int hi20 = (int) BitMath.extractBits(value, 12, 20);
+        int lo12 = (int) BitMath.extractBits(value, 12);
+
+        if (highest12 != 0 && BitMath.extractSignedBits(value, 52) == 0) {
             return 4;
-        } else {
-            // lu12i.w rd, upper20
-            // ori rd, rd, lower12
-            return 8;
         }
-    }
 
-    private int getExpandLiDSize(List<LA64AsmOperand> ops) {
-        // li.d dst, imm64
-        long value = ops.get(1).asImm();
+        int cnt = 0;
 
-        if (value >= Integer.MIN_VALUE && value <= Integer.MAX_VALUE) {
-            // imm64 -> imm32
-            return getExpandLiWSize(ops);
+        if (hi20 == 0) {
+            cnt++;
+        } else if (BitMath.extractSignedBits(lo12 >> 11, 1) ==
+                   BitMath.extractSignedBits(hi20, 20)) {
+            cnt++;
         } else {
-            int hHi12 = (int) BitMath.extractSignedBits(value, 52, 12);
-            if (hHi12 != 0 && hHi12 != -1) {
-                return 16;
+            cnt++;
+            if (lo12 != 0) {
+                cnt++;
             }
-            return 12;
         }
+
+        if (BitMath.extractSignedBits(hi20 >> 19, 1) !=
+            BitMath.extractSignedBits(higher20, 20)) {
+            cnt++;
+        }
+
+        if (BitMath.extractSignedBits(higher20 >> 19, 1) !=
+            BitMath.extractSignedBits(highest12, 12)) {
+            cnt++;
+        }
+
+        return cnt * 4;
     }
 
     private void expandRet(ByteArrayOutputStream out) {
