@@ -9,12 +9,14 @@ public class TacJumpIfComparison implements TacInstruction {
     public TacValue lhs;
     public TacValue rhs;
     public String target;
+    public boolean inverse;
 
-    public TacJumpIfComparison(Comparison cond, TacValue lhs, TacValue rhs, String target) {
+    public TacJumpIfComparison(Comparison cond, TacValue lhs, TacValue rhs, String target, boolean inverse) {
         this.cond = cond;
         this.lhs = lhs;
         this.rhs = rhs;
         this.target = target;
+        this.inverse = inverse;
     }
 
     @Override
@@ -26,7 +28,7 @@ public class TacJumpIfComparison implements TacInstruction {
         lhs.dump(stream);
         stream.print(", rhs=");
         rhs.dump(stream);
-        stream.append(", target=").append(target).append(")");
+        stream.append(", target=").append(target).append(", inverse=").append(String.valueOf(inverse)).append(")");
     }
 
     @Override

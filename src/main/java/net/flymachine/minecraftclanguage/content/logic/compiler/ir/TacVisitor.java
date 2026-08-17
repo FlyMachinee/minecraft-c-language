@@ -26,4 +26,12 @@ public interface TacVisitor<T> {
     T visit(TacTruncate inst);
 
     T visit(TacZeroExtend inst);
+
+    T visit(TacDoubleToInt inst);
+
+    T visit(TacDoubleToUnsignedInt inst);
+
+    T visit(TacIntToDouble inst);
+
+    T visit(TacUnsignedIntToDouble inst);
 }

@@ -5,10 +5,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.BinaryOpe
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.Comparison;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.UnaryOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.*;
-import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.IntInit;
-import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.LongInit;
-import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.UnsignedIntInit;
-import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.UnsignedLongInit;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.*;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.BasicType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.ExpressionBoolVisitor;
@@ -54,6 +51,8 @@ public final class AstToTacLowerer implements StatementVisitor, ExpressionVisito
                             entry.id.name, staticAttr.global, BasicType.UNSIGNED_INT, UnsignedIntInit.ZERO));
                         case UNSIGNED_LONG -> topLevels.add(new TacStaticVariable(
                             entry.id.name, staticAttr.global, BasicType.UNSIGNED_LONG, UnsignedLongInit.ZERO));
+                        case DOUBLE -> topLevels.add(new TacStaticVariable(
+                            entry.id.name, staticAttr.global, BasicType.DOUBLE, DoubleInit.ZERO));
                         default -> throw new IllegalStateException("Unexpected value: " + bt);
                     }
                 }
@@ -388,7 +387,7 @@ public final class AstToTacLowerer implements StatementVisitor, ExpressionVisito
             for (SwitchStatementNode.CaseLabelInfo caseInfo : switchStmt.caseValues.values()) {
                 String caseLabel = "case_" + caseInfo.caseValue + "_" + switchStmt.switchLabel;
                 TacValue caseValue = new TacConstant(((ConstantNode) caseInfo.caseValue).value);
-                emitTac(new TacJumpIfComparison(Comparison.EQUAL, res, caseValue, caseLabel));
+                emitTac(new TacJumpIfComparison(Comparison.EQUAL, res, caseValue, caseLabel, false));
             }
             if (switchStmt.defaultLabel != null) {
                 emitTac(new TacJump(defaultLabel));
@@ -598,6 +597,7 @@ public final class AstToTacLowerer implements StatementVisitor, ExpressionVisito
             case LONG -> ConstantLong.ONE;
             case UNSIGNED_INT -> ConstantUnsignedInt.ONE;
             case UNSIGNED_LONG -> ConstantUnsignedLong.ONE;
+            case DOUBLE -> ConstantDouble.ONE;
             default -> throw new IllegalStateException("Unexpected value: " + bt);
         };
 
@@ -679,19 +679,41 @@ public final class AstToTacLowerer implements StatementVisitor, ExpressionVisito
     public TacValue visit(CastExpressionNode castExp) {
         TacValue toCast = castExp.exp.accept(this);
         Type targetType = castExp.targetType.getType();
+        Type originType = castExp.exp.expType;
 
-        if (targetType.isCompatible(castExp.exp.expType)) {
+        if (targetType.isCompatible(originType)) {
             return toCast;
         }
         if (toCast instanceof TacConstant constant) {
             return new TacConstant(constant.value.castTo((BasicType) targetType));
         }
-        TacVariable dst = makeTempVar(castExp.expType);
-        if (targetType.sizeof() == castExp.exp.expType.sizeof()) {
+        TacVariable dst = makeTempVar(targetType);
+
+        BasicType targetBasic = (BasicType) targetType;
+        BasicType originBasic = (BasicType) originType;
+
+        if (targetBasic == BasicType.DOUBLE) {
+            switch (originBasic) {
+                case INT, LONG -> emitTac(new TacIntToDouble(toCast, dst));
+                case UNSIGNED_INT, UNSIGNED_LONG -> emitTac(new TacUnsignedIntToDouble(toCast, dst));
+                default -> throw new IllegalStateException("Unexpected value: " + originBasic);
+            }
+            return dst;
+        }
+        if (originBasic == BasicType.DOUBLE) {
+            switch (targetBasic) {
+                case INT, LONG -> emitTac(new TacDoubleToInt(toCast, dst));
+                case UNSIGNED_INT, UNSIGNED_LONG -> emitTac(new TacDoubleToUnsignedInt(toCast, dst));
+                default -> throw new IllegalStateException("Unexpected value: " + targetBasic);
+            }
+            return dst;
+        }
+
+        if (targetBasic.sizeof() == originBasic.sizeof()) {
             emitTac(new TacCopy(toCast, dst));
-        } else if (targetType.sizeof() < castExp.exp.expType.sizeof()) {
+        } else if (targetBasic.sizeof() < originBasic.sizeof()) {
             emitTac(new TacTruncate(toCast, dst));
-        } else if (((BasicType) castExp.exp.expType).isSigned()) {
+        } else if (originBasic.isSigned()) {
             emitTac(new TacSignExtend(toCast, dst));
         } else {
             emitTac(new TacZeroExtend(toCast, dst));
@@ -814,26 +836,18 @@ public final class AstToTacLowerer implements StatementVisitor, ExpressionVisito
             }
             case EQUAL, NOT_EQUAL, LESS_THAN, LESS_OR_EQUAL, GREATER_THAN, GREATER_OR_EQUAL -> {
                 // 直接生成比较跳转指令，而不是比较置位指令
-                Comparison cond = switch (binaryExp.op.op) {
-                    case EQUAL -> inverse ? Comparison.NOT_EQUAL : Comparison.EQUAL;
-                    case NOT_EQUAL -> inverse ? Comparison.EQUAL : Comparison.NOT_EQUAL;
-                    case LESS_THAN -> inverse ? Comparison.GREATER_EQUAL : Comparison.LESS;
-                    case LESS_OR_EQUAL -> inverse ? Comparison.GREATER : Comparison.LESS_EQUAL;
-                    case GREATER_THAN -> inverse ? Comparison.LESS_EQUAL : Comparison.GREATER;
-                    case GREATER_OR_EQUAL -> inverse ? Comparison.LESS : Comparison.GREATER_EQUAL;
-                    default -> throw new IllegalStateException("Control should never reach here");
-                };
+                Comparison cond = binaryExp.op.op.toComparison();
 
                 TacValue lhs = binaryExp.lhs.accept(this);
                 TacValue rhs = binaryExp.rhs.accept(this);
                 if (lhs instanceof TacConstant lhsConst && rhs instanceof TacConstant rhsConst) {
-                    if (lhsConst.value.apply(cond, rhsConst.value).isZero()) {
-                        return BoolGenResult.NEVER_JUMP;
-                    } else {
+                    if (lhsConst.value.apply(cond, rhsConst.value).isZero() == inverse) {
                         return BoolGenResult.ALWAYS_JUMP;
+                    } else {
+                        return BoolGenResult.NEVER_JUMP;
                     }
                 }
-                emitTac(new TacJumpIfComparison(cond, lhs, rhs, jumpTarget));
+                emitTac(new TacJumpIfComparison(cond, lhs, rhs, jumpTarget, inverse));
                 return BoolGenResult.VARIOUS;
             }
         }
@@ -853,7 +867,7 @@ public final class AstToTacLowerer implements StatementVisitor, ExpressionVisito
         // 其他表达式，先求值再与 0 比较跳转
         TacValue value = exp.accept(this);
         if (value instanceof TacConstant constant) {
-            if ((!constant.value.isZero()) ^ inverse) {
+            if (constant.value.isZero() == inverse) {
                 return BoolGenResult.ALWAYS_JUMP;
             } else {
                 return BoolGenResult.NEVER_JUMP;

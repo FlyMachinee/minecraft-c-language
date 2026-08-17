@@ -318,6 +318,26 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
         return null;
     }
 
+    @Override
+    public Void visit(TacDoubleToInt inst) {
+        return null;
+    }
+
+    @Override
+    public Void visit(TacDoubleToUnsignedInt inst) {
+        return null;
+    }
+
+    @Override
+    public Void visit(TacIntToDouble inst) {
+        return null;
+    }
+
+    @Override
+    public Void visit(TacUnsignedIntToDouble inst) {
+        return null;
+    }
+
     private HighLevelOperand lowerValue(TacValue tacValue) {
         if (tacValue instanceof TacConstant tacConstant) {
             return immediate(tacConstant.value);
