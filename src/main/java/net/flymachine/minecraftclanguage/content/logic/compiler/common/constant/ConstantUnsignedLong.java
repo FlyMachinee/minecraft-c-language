@@ -41,11 +41,13 @@ public record ConstantUnsignedLong(long value) implements Constant {
 
     @Override
     public ConstantDouble toDouble() {
-        double doubleValue = (double) value;
-        if (value < 0) {
-            doubleValue += 0x1.0p64; // 2^64
+        if (value >= 0) {
+            return new ConstantDouble((double) value);
+        } else {
+            long lowBits = value & Long.MAX_VALUE;
+            double result = Math.scalb(1.0, 63) + (double) lowBits;
+            return new ConstantDouble(result);
         }
-        return new ConstantDouble(doubleValue);
     }
 
     @Override
