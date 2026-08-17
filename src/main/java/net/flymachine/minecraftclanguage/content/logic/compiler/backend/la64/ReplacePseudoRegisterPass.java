@@ -151,6 +151,41 @@ public final class ReplacePseudoRegisterPass implements HighLevelVisitor<Void> {
         return null;
     }
 
+    @Override
+    public Void visit(DoubleFromInt inst) {
+        return null;
+    }
+
+    @Override
+    public Void visit(DoubleToIntRoundZero inst) {
+        return null;
+    }
+
+    @Override
+    public Void visit(CompareDouble inst) {
+        return null;
+    }
+
+    @Override
+    public Void visit(GetCC inst) {
+        return null;
+    }
+
+    @Override
+    public Void visit(BranchIfCCZero inst) {
+        return null;
+    }
+
+    @Override
+    public Void visit(BranchIfCCNotZero inst) {
+        return null;
+    }
+
+    @Override
+    public Void visit(DoubleNegate inst) {
+        return null;
+    }
+
     private HighLevelOperand replacePseudo(HighLevelOperand operand) {
         if (operand instanceof Pseudo pseudo) {
             String id = pseudo.name();

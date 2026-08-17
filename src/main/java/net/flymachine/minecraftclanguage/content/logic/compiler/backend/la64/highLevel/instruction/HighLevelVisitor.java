@@ -32,4 +32,18 @@ public interface HighLevelVisitor<T> {
     T visit(BstrpickZeroExtend inst);
 
     T visit(AddSignExtend inst);
+
+    T visit(DoubleFromInt inst);
+
+    T visit(DoubleToIntRoundZero inst);
+
+    T visit(CompareDouble inst);
+
+    T visit(GetCC inst);
+
+    T visit(BranchIfCCZero inst);
+
+    T visit(BranchIfCCNotZero inst);
+
+    T visit(DoubleNegate inst);
 }

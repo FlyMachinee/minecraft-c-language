@@ -596,6 +596,41 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
         return null;
     }
 
+    @Override
+    public Void visit(DoubleFromInt inst) {
+        return null;
+    }
+
+    @Override
+    public Void visit(DoubleToIntRoundZero inst) {
+        return null;
+    }
+
+    @Override
+    public Void visit(CompareDouble inst) {
+        return null;
+    }
+
+    @Override
+    public Void visit(GetCC inst) {
+        return null;
+    }
+
+    @Override
+    public Void visit(BranchIfCCZero inst) {
+        return null;
+    }
+
+    @Override
+    public Void visit(BranchIfCCNotZero inst) {
+        return null;
+    }
+
+    @Override
+    public Void visit(DoubleNegate inst) {
+        return null;
+    }
+
     private static void testUnaryHighLevelOperand(HighLevelOperand src, HighLevelOperand dst) {
         if (dst instanceof Immediate) {
             throw new UnsupportedOperationException("Cannot store result in an immediate");
