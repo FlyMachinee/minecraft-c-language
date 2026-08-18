@@ -764,11 +764,16 @@ public final class AstToTacLowerer implements StatementVisitor, ExpressionVisito
                     switch (binaryExp.lhs.accept(this, label, true)) {
                         case VARIOUS -> {
                             // a 未知
-                            if (binaryExp.rhs.accept(this, jumpTarget, false) == BoolGenResult.NEVER_JUMP) {
-                                // b=0 => a && b = 0
-                                ret = BoolGenResult.NEVER_JUMP;
+                            switch (binaryExp.rhs.accept(this, jumpTarget, false)) {
+                                case NEVER_JUMP -> {
+                                    // b=0 => a && b = 0
+                                    ret = BoolGenResult.NEVER_JUMP;
+                                }
+                                case ALWAYS_JUMP -> {
+                                    // b=1
+                                    emitTac(new TacJump(jumpTarget));
+                                }
                             }
-                            // 无法断言
                         }
                         case ALWAYS_JUMP -> {
                             // a=0 => a && b = 0
@@ -792,11 +797,16 @@ public final class AstToTacLowerer implements StatementVisitor, ExpressionVisito
                     switch (binaryExp.lhs.accept(this, label, false)) {
                         case VARIOUS -> {
                             // a 未知
-                            if (binaryExp.rhs.accept(this, jumpTarget, true) == BoolGenResult.NEVER_JUMP) {
-                                // b=1 => !(a || b) = 0
-                                ret = BoolGenResult.NEVER_JUMP;
+                            switch (binaryExp.rhs.accept(this, jumpTarget, true)) {
+                                case NEVER_JUMP -> {
+                                    // b=1 => !(a || b) = 0
+                                    ret = BoolGenResult.NEVER_JUMP;
+                                }
+                                case ALWAYS_JUMP -> {
+                                    // b=0
+                                    emitTac(new TacJump(jumpTarget));
+                                }
                             }
-                            // 无法断言
                         }
                         case ALWAYS_JUMP -> {
                             // a=1 => !(a || b) = 0
