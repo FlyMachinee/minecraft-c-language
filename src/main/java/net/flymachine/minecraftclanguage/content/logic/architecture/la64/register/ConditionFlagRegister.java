@@ -39,4 +39,9 @@ public enum ConditionFlagRegister implements LA64Register {
     public List<String> getNames() {
         return List.of(name);
     }
+
+    @Override
+    public String toString() {
+        return getPrimaryName();
+    }
 }

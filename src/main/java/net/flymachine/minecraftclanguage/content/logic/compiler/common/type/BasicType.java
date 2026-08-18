@@ -64,7 +64,7 @@ public enum BasicType implements Type {
             case VOID -> throw new UnsupportedOperationException("toAsmType(void) is not defined");
             case INT, UNSIGNED_INT -> AsmType.WORD;
             case LONG, UNSIGNED_LONG -> AsmType.DWORD;
-            case DOUBLE -> null;
+            case DOUBLE -> AsmType.DOUBLE;
         };
     }
 

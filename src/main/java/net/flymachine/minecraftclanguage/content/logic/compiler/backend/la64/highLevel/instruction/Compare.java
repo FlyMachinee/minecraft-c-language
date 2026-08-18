@@ -16,6 +16,9 @@ public class Compare implements HighLevelInstruction {
         Comparison cond, boolean isUnsigned, AsmType asmType,
         HighLevelOperand lhs, HighLevelOperand rhs, HighLevelOperand dst) {
 
+        if (asmType == AsmType.DOUBLE) {
+            throw new IllegalArgumentException("Compare does not support DOUBLE type");
+        }
         this.cond = cond;
         this.isUnsigned = isUnsigned;
         this.asmType = asmType;

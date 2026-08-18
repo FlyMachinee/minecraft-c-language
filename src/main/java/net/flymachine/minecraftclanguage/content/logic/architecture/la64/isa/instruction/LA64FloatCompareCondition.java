@@ -118,7 +118,11 @@ public enum LA64FloatCompareCondition {
         this.code = code;
     }
 
-    int getCode() {
+    public int getCode() {
         return code;
+    }
+
+    public String mnemonic() {
+        return name().toLowerCase();
     }
 }

@@ -16,6 +16,9 @@ public class BranchIfComparison implements HighLevelInstruction {
         Comparison cond, boolean isUnsigned, AsmType asmType,
         HighLevelOperand lhs, HighLevelOperand rhs, String target) {
 
+        if (asmType == AsmType.DOUBLE) {
+            throw new IllegalArgumentException("BranchIfComparison does not support DOUBLE type");
+        }
         this.cond = cond;
         this.isUnsigned = isUnsigned;
         this.asmType = asmType;

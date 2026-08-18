@@ -15,6 +15,9 @@ public class BitwiseShift implements HighLevelInstruction {
         boolean isLeftShift, AsmType asmType, boolean isUnsigned,
         HighLevelOperand lhs, HighLevelOperand rhs, HighLevelOperand dst) {
 
+        if (asmType == AsmType.DOUBLE) {
+            throw new IllegalArgumentException("BitwiseShift does not support DOUBLE type");
+        }
         this.isLeftShift = isLeftShift;
         this.asmType = asmType;
         this.isUnsigned = isUnsigned;

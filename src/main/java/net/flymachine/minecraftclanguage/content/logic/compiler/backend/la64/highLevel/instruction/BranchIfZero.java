@@ -9,6 +9,9 @@ public class BranchIfZero implements HighLevelInstruction {
     public final String target;
 
     public BranchIfZero(AsmType asmType, HighLevelOperand cond, String target) {
+        if (asmType == AsmType.DOUBLE) {
+            throw new IllegalArgumentException("BranchIfZero does not support DOUBLE type");
+        }
         this.asmType = asmType;
         this.cond = cond;
         this.target = target;

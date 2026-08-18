@@ -34,6 +34,9 @@ public class Bitwise implements HighLevelInstruction {
     public Bitwise(
         Operator op, AsmType asmType, HighLevelOperand lhs, HighLevelOperand rhs, HighLevelOperand dst) {
 
+        if (asmType == AsmType.DOUBLE) {
+            throw new IllegalArgumentException("Bitwise does not support DOUBLE type");
+        }
         this.op = op;
         this.asmType = asmType;
         this.lhs = lhs;
@@ -44,6 +47,9 @@ public class Bitwise implements HighLevelInstruction {
     public Bitwise(
         BinaryOperator op, AsmType asmType, HighLevelOperand lhs, HighLevelOperand rhs, HighLevelOperand dst) {
 
+        if (asmType == AsmType.DOUBLE) {
+            throw new IllegalArgumentException("Bitwise does not support DOUBLE type");
+        }
         this.op = switch (op) {
             case ADD, SUBTRACT, MULTIPLY -> throw new IllegalArgumentException(
                 "Use Binary instruction for addition, subtraction, and multiplication");

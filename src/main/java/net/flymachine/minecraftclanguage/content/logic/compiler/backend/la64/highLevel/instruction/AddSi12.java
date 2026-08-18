@@ -10,6 +10,9 @@ public class AddSi12 implements HighLevelInstruction {
     public HighLevelOperand dst;
 
     public AddSi12(AsmType asmType, HighLevelOperand src, int si12, HighLevelOperand dst) {
+        if (asmType == AsmType.DOUBLE) {
+            throw new IllegalArgumentException("AddSi12 does not support DOUBLE type");
+        }
         this.asmType = asmType;
         this.src = src;
         this.si12 = si12;

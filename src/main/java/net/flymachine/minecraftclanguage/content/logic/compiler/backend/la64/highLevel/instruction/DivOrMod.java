@@ -15,6 +15,9 @@ public class DivOrMod implements HighLevelInstruction {
         boolean isDiv, AsmType asmType, boolean isUnsigned,
         HighLevelOperand lhs, HighLevelOperand rhs, HighLevelOperand dst) {
 
+        if (!isDiv && asmType == AsmType.DOUBLE) {
+            throw new IllegalArgumentException("Mod does not support DOUBLE type");
+        }
         this.isDiv = isDiv;
         this.asmType = asmType;
         this.isUnsigned = isUnsigned;

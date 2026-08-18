@@ -9,6 +9,9 @@ public class DoubleFromInt implements HighLevelInstruction {
     public AsmType srcAsmType;
 
     public DoubleFromInt(HighLevelOperand src, HighLevelOperand dst, AsmType srcAsmType) {
+        if (srcAsmType == AsmType.DOUBLE) {
+            throw new IllegalArgumentException("Invalid AsmType for DoubleFromInt");
+        }
         this.src = src;
         this.dst = dst;
         this.srcAsmType = srcAsmType;

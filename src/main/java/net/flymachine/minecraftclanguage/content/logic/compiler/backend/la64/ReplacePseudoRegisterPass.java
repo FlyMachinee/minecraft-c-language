@@ -153,21 +153,28 @@ public final class ReplacePseudoRegisterPass implements HighLevelVisitor<Void> {
 
     @Override
     public Void visit(DoubleFromInt inst) {
+        inst.src = replacePseudo(inst.src);
+        inst.dst = replacePseudo(inst.dst);
         return null;
     }
 
     @Override
     public Void visit(DoubleToIntRoundZero inst) {
+        inst.src = replacePseudo(inst.src);
+        inst.dst = replacePseudo(inst.dst);
         return null;
     }
 
     @Override
     public Void visit(CompareDouble inst) {
+        inst.lhs = replacePseudo(inst.lhs);
+        inst.rhs = replacePseudo(inst.rhs);
         return null;
     }
 
     @Override
     public Void visit(GetCC inst) {
+        inst.dst = replacePseudo(inst.dst);
         return null;
     }
 
@@ -183,6 +190,8 @@ public final class ReplacePseudoRegisterPass implements HighLevelVisitor<Void> {
 
     @Override
     public Void visit(DoubleNegate inst) {
+        inst.src = replacePseudo(inst.src);
+        inst.dst = replacePseudo(inst.dst);
         return null;
     }
 
