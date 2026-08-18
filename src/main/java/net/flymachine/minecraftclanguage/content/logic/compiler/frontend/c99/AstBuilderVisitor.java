@@ -290,9 +290,34 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         return new TypeAndSpecifiers(new BasicTypeNode(helper.loc, helper.t), storageClassNode);
     }
 
+    private PointerTypeNode parsePointer(TypeNode baseType, C99Parser.PointerContext ctx) {
+        // pointer
+        //   : Star pointer?
+        //   ;
+        TerminalNode star = ctx.Star();
+        if (baseType instanceof FunctionTypeNode) {
+            error();
+            String msg = "function pointers are not supported";
+            logErrorWithSourceLine(getSourceLocation(star), msg);
+        }
+        if (baseType instanceof BasicTypeNode b && b.getType() == BasicType.VOID) {
+            error();
+            String msg = "pointers to void are not supported";
+            logErrorWithSourceLine(getSourceLocation(star), msg);
+        }
+
+        PointerTypeNode pointerType = new PointerTypeNode(getSourceLocation(star), baseType);
+        if (ctx.pointer() != null) {
+            return parsePointer(pointerType, ctx.pointer());
+        }
+        return pointerType;
+    }
+
     private DeclarationLikeResult parseFromDeclarator(TypeNode baseType, C99Parser.DeclaratorContext ctx) {
-        var directDeclarator = ctx.directDeclarator();
-        return parseFromDirectDeclarator(baseType, directDeclarator);
+        if (ctx.pointer() != null) {
+            baseType = parsePointer(baseType, ctx.pointer());
+        }
+        return parseFromDirectDeclarator(baseType, ctx.directDeclarator());
     }
 
     private DeclarationLikeResult parseFromDirectDeclarator(TypeNode baseType, C99Parser.DirectDeclaratorContext ctx) {
@@ -321,8 +346,13 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
     }
 
     private TypeNode parseFromAbstractDeclarator(TypeNode baseType, C99Parser.AbstractDeclaratorContext ctx) {
-        var directAbstractDeclarator = ctx.directAbstractDeclarator();
-        return parseFromDirectAbstractDeclarator(baseType, directAbstractDeclarator);
+        if (ctx.pointer() != null) {
+            baseType = parsePointer(baseType, ctx.pointer());
+        }
+        if (ctx.directAbstractDeclarator() != null) {
+            baseType = parseFromDirectAbstractDeclarator(baseType, ctx.directAbstractDeclarator());
+        }
+        return baseType;
     }
 
     private TypeNode parseFromDirectAbstractDeclarator(
@@ -753,8 +783,14 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
             ExpressionNode operand = (ExpressionNode) visit(ctx.unaryExpression());
             return new IncrementDecrementNode(getSourceLocation(ctx.MinusMinus()), false, true, operand);
         } else if (ctx.unaryOperator() != null) {
-            UnaryOperatorNode operator = (UnaryOperatorNode) visit(ctx.unaryOperator());
             ExpressionNode operand = (ExpressionNode) visit(ctx.castExpression());
+            if (ctx.unaryOperator().And() != null) {
+                return new AddressOfNode(getSourceLocation(ctx.unaryOperator().And()), operand);
+            }
+            if (ctx.unaryOperator().Star() != null) {
+                return new DereferenceNode(getSourceLocation(ctx.unaryOperator().Star()), operand);
+            }
+            UnaryOperatorNode operator = (UnaryOperatorNode) visit(ctx.unaryOperator());
             return new UnaryExpressionNode(operator, operand);
         } else {
             throw new IllegalStateException("Unknown unary operator");

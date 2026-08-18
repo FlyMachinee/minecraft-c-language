@@ -460,4 +460,14 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
     public Void visit(CastExpressionNode node) {
         return node.exp.accept(this);
     }
+
+    @Override
+    public Void visit(AddressOfNode node) {
+        return null;
+    }
+
+    @Override
+    public Void visit(DereferenceNode node) {
+        return null;
+    }
 }

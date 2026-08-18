@@ -37,6 +37,10 @@ public interface ExpressionBoolVisitor {
 
     BoolGenResult visit(CastExpressionNode castExp, String jumpTarget, boolean inverse);
 
+    BoolGenResult visit(AddressOfNode addrOf, String jumpTarget, boolean inverse);
+
+    BoolGenResult visit(DereferenceNode deref, String jumpTarget, boolean inverse);
+
     /**
      * 作为该 visitor 的返回值
      */

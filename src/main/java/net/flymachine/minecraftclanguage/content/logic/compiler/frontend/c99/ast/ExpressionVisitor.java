@@ -25,4 +25,8 @@ public interface ExpressionVisitor {
     TacValue visit(FunctionCallNode funcCall);
 
     TacValue visit(CastExpressionNode castExp);
+
+    TacValue visit(AddressOfNode addrOf);
+    
+    TacValue visit(DereferenceNode deref);
 }

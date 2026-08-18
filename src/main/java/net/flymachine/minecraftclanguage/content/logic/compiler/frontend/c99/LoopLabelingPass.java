@@ -228,4 +228,14 @@ public final class LoopLabelingPass extends SemanticAnalysePass implements AstVi
     public Void visit(CastExpressionNode node) {
         return null;
     }
+
+    @Override
+    public Void visit(AddressOfNode node) {
+        return null;
+    }
+
+    @Override
+    public Void visit(DereferenceNode node) {
+        return null;
+    }
 }

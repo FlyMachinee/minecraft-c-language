@@ -4,4 +4,6 @@ public interface TypeVisitor<R> {
     R visit(BasicType t);
 
     R visit(FunctionType t);
+
+    R visit(PointerType t);
 }

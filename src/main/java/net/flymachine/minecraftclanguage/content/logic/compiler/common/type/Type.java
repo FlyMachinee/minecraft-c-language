@@ -50,9 +50,9 @@ public interface Type {
         }
     }
 
-    static BasicType commonRealType(BasicType t1, BasicType t2) {
+    static Type commonRealType(BasicType t1, BasicType t2) {
         if (!t1.isArithmetic() || !t2.isArithmetic()) {
-            throw new IllegalArgumentException("Both types must be arithmetic");
+            return ErrorType.INSTANCE;
         }
         // 否则，若一个操作数是 double、double complex 或 double imaginary，则会按下列方式隐式转换另一操作数：
         // 整数或实浮点数类型转换成 double

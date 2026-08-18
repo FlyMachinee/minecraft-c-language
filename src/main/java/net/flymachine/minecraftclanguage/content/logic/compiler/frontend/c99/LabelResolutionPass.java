@@ -337,4 +337,14 @@ public final class LabelResolutionPass extends SemanticAnalysePass implements As
     public Void visit(CastExpressionNode node) {
         return null;
     }
+
+    @Override
+    public Void visit(AddressOfNode node) {
+        return null;
+    }
+
+    @Override
+    public Void visit(DereferenceNode node) {
+        return null;
+    }
 }

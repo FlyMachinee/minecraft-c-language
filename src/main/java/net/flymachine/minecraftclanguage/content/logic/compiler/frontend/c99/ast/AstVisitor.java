@@ -48,4 +48,8 @@ public interface AstVisitor<T> {
     T visit(ConstantNode node);
 
     T visit(CastExpressionNode node);
+
+    T visit(AddressOfNode node);
+
+    T visit(DereferenceNode node);
 }

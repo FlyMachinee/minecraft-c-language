@@ -5,7 +5,7 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
 
-public record FunctionType(Type returnType, List<Type> parameterTypes) implements Type {
+public record FunctionType(@NotNull Type returnType, List<Type> parameterTypes) implements Type {
 
     @Override
     public boolean isCompatible(Type other) {

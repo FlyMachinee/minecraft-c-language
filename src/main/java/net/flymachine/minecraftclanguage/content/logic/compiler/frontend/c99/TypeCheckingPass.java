@@ -990,4 +990,14 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         }
         return null;
     }
+
+    @Override
+    public Void visit(AddressOfNode node) {
+        return null;
+    }
+
+    @Override
+    public Void visit(DereferenceNode node) {
+        return null;
+    }
 }

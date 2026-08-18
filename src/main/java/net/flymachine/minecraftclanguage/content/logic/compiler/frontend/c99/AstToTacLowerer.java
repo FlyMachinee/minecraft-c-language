@@ -722,6 +722,16 @@ public final class AstToTacLowerer implements StatementVisitor, ExpressionVisito
     }
 
     @Override
+    public TacValue visit(AddressOfNode addrOf) {
+        return null;
+    }
+
+    @Override
+    public TacValue visit(DereferenceNode deref) {
+        return null;
+    }
+
+    @Override
     public BoolGenResult visit(ConstantNode constant, String jumpTarget, boolean inverse) {
         // 常量，生成无条件跳转
         if ((!constant.value.isZero()) ^ inverse) {
@@ -919,5 +929,15 @@ public final class AstToTacLowerer implements StatementVisitor, ExpressionVisito
     @Override
     public BoolGenResult visit(CastExpressionNode castExp, String jumpTarget, boolean inverse) {
         return visitFallback(castExp, jumpTarget, inverse);
+    }
+
+    @Override
+    public BoolGenResult visit(AddressOfNode addrOf, String jumpTarget, boolean inverse) {
+        return null;
+    }
+
+    @Override
+    public BoolGenResult visit(DereferenceNode deref, String jumpTarget, boolean inverse) {
+        return null;
     }
 }
