@@ -5,12 +5,18 @@ import net.flymachine.minecraftclanguage.content.logic.architecture.la64.util.Bi
 public enum LA64OperandType {
     GPR, FPR, UI5, UI6, SI12, SI20, UI12, OFFS16, OFFS21, OFFS26, CFR;
 
+    public final static LA64OperandType[] FORMAT_2FPR_OPTYPE
+        = new LA64OperandType[]{LA64OperandType.FPR, LA64OperandType.FPR};
     public final static LA64OperandType[] FORMAT_3GPR_OPTYPE
         = new LA64OperandType[]{LA64OperandType.GPR, LA64OperandType.GPR, LA64OperandType.GPR};
+    public final static LA64OperandType[] FORMAT_3FPR_OPTYPE
+        = new LA64OperandType[]{LA64OperandType.FPR, LA64OperandType.FPR, LA64OperandType.FPR};
     public final static LA64OperandType[] FORMAT_2GPR_UI5_OPTYPE
         = new LA64OperandType[]{LA64OperandType.GPR, LA64OperandType.GPR, LA64OperandType.UI5};
     public final static LA64OperandType[] FORMAT_2GPR_SI12_OPTYPE
         = new LA64OperandType[]{LA64OperandType.GPR, LA64OperandType.GPR, LA64OperandType.SI12};
+    public final static LA64OperandType[] FORMAT_FPR_GPR_SI12_OPTYPE
+        = new LA64OperandType[]{LA64OperandType.FPR, LA64OperandType.GPR, LA64OperandType.SI12};
     public final static LA64OperandType[] FORMAT_2GPR_UI12_OPTYPE
         = new LA64OperandType[]{LA64OperandType.GPR, LA64OperandType.GPR, LA64OperandType.UI12};
     public final static LA64OperandType[] FORMAT_2GPR_OFFS16_OPTYPE

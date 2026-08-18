@@ -68,7 +68,7 @@ public final class LA64Assembler {
                             }
                         }
                     }
-                    case "text", "data", "bss" -> {
+                    case "text", "data", "bss", "rodata" -> {
                         if (directive.argCount() != 0) {
                             throw new IllegalArgumentException(
                                 "Expected no argument for text, but got: " + directive.args());
@@ -273,6 +273,7 @@ public final class LA64Assembler {
         offsets.put(SectionType.TEXT, 0);
         offsets.put(SectionType.DATA, 0);
         offsets.put(SectionType.BSS, 0);
+        offsets.put(SectionType.RODATA, 0);
 
         for (LA64AsmStatement statement : assembly.stmts()) {
 
@@ -290,7 +291,7 @@ public final class LA64Assembler {
                         }
                         globalSymbols.add(symbolName);
                     }
-                    case "text", "data", "bss" ->
+                    case "text", "data", "bss", "rodata" ->
                         currentSectionType = SectionType.valueOf(directive.name().toUpperCase());
                     case "align", "balign" -> {
                         long alignment = directive.arg(0).asNum();
@@ -398,9 +399,9 @@ public final class LA64Assembler {
         symbolNames = new ArrayList<>();
         for (Map.Entry<String, SymbolLocation> entry : symbolTable.entrySet()) {
             String symbolName = entry.getKey();
-            if (symbolName.startsWith(".L")) {
-                continue;
-            }
+            // if (symbolName.startsWith(".L")) {
+            //     continue;
+            // }
 
             SymbolLocation loc = entry.getValue();
             int symbolNameIndex = symbolNames.size();
@@ -425,7 +426,7 @@ public final class LA64Assembler {
             if (statement instanceof LA64AsmDirective directive) {
                 switch (directive.name()) {
                     case "globl", "global" -> { }
-                    case "text", "data", "bss" ->
+                    case "text", "data", "bss", "rodata" ->
                         currentSectionType = SectionType.valueOf(directive.name().toUpperCase());
                     case "align", "balign" -> {
                         int align = (int) directive.arg(0).asNum();
@@ -545,7 +546,7 @@ public final class LA64Assembler {
 
     private static RelocationType getRelocationType(String mnemonic) {
         return switch (mnemonic) {
-            case "beqz", "bnez" -> RelocationType.R_LARCH_B21;
+            case "beqz", "bnez", "bceqz", "bcnez" -> RelocationType.R_LARCH_B21;
             case "b", "bl" -> RelocationType.R_LARCH_B26;
             case "jirl", "beq", "bne", "blt", "bge" -> RelocationType.R_LARCH_B16;
             default ->

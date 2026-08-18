@@ -14,6 +14,7 @@ public final class LA64Encoder {
 
     public static int encode(LA64InstructionInfo info, LA64Operand... ops) {
         return switch (info.format()) {
+            case FORMAT_2R -> encode2R(info.opcode(), ops);
             case FORMAT_3R -> encode3R(info.opcode(), ops);
             case FORMAT_2RI12 -> encode2RI12(info.opcode(), ops);
             case FORMAT_2RI16 -> encode2RI16(info.opcode(), ops);
@@ -31,12 +32,19 @@ public final class LA64Encoder {
         };
     }
 
+    private static int encode2R(int opcode, LA64Operand[] ops) {
+        // rd, rj
+        int rd = ops[0].value();
+        int rj = ops[1].value();
+        return opcode | (rj << 5) | rd;
+    }
+
     private static int encode3R(int opcode, LA64Operand[] ops) {
         // rd, rj, rk
         int rd = ops[0].value();
         int rj = ops[1].value();
         int rk = ops[2].value();
-        return (opcode << 15) | (rk << 10) | (rj << 5) | rd;
+        return opcode | (rk << 10) | (rj << 5) | rd;
     }
 
     private static int encode2RI12(int opcode, LA64Operand[] ops) {
@@ -44,7 +52,7 @@ public final class LA64Encoder {
         int rd = ops[0].value();
         int rj = ops[1].value();
         int imm12 = ops[2].value();
-        return (opcode << 22) | ((imm12 & 0xFFF) << 10) | (rj << 5) | rd;
+        return opcode | ((imm12 & 0xFFF) << 10) | (rj << 5) | rd;
     }
 
     private static int encode2RI16(int opcode, LA64Operand[] ops) {
@@ -52,7 +60,7 @@ public final class LA64Encoder {
         int rd = ops[0].value();
         int rj = ops[1].value();
         int imm16 = ops[2].value();
-        return (opcode << 26) | ((imm16 & 0xFFFF) << 10) | (rj << 5) | rd;
+        return opcode | ((imm16 & 0xFFFF) << 10) | (rj << 5) | rd;
     }
 
     private static int encode1RI21(int opcode, LA64Operand[] ops) {
@@ -61,7 +69,7 @@ public final class LA64Encoder {
         int imm21 = ops[1].value();
 
         // opcode | i21[15:0] | rj | i21[20:16]
-        return (opcode << 26) | ((imm21 & 0xFFFF) << 10) | (rj << 5) | ((imm21 >> 16) & 0x1F);
+        return opcode | ((imm21 & 0xFFFF) << 10) | (rj << 5) | ((imm21 >> 16) & 0x1F);
     }
 
     private static int encodeI26(int opcode, LA64Operand[] ops) {
@@ -69,7 +77,7 @@ public final class LA64Encoder {
         int imm26 = ops[0].value();
 
         // opcode | i26[15:0] | i21[25:16]
-        return (opcode << 26) | ((imm26 & 0xFFFF) << 10) | ((imm26 >> 16) & 0x3FF);
+        return opcode | ((imm26 & 0xFFFF) << 10) | ((imm26 >> 16) & 0x3FF);
     }
 
 }

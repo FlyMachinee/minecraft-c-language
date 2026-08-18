@@ -13,8 +13,8 @@ import java.util.function.Function;
 
 /**
  * @param mnemonic     指令助记符
- * @param opcode       指令操作码，不需要添加后缀零来凑 32 位
- * @param opcodeLength 操作码长度，单位为比特
+ * @param opcode       指令操作码
+ * @param mask         操作码掩码，指示操作码的位置
  * @param format       指令格式，当值为 MISCELLANEOUS 时，指令格式由自定义编码器/解码器逻辑决定
  * @param operandTypes 指令操作数类型，按指令的汇编操作数顺序排列，而不是机器码中的顺序
  * @param encoder      自定义编码器，将指令信息和操作数转换为机器码
@@ -24,7 +24,7 @@ import java.util.function.Function;
 public record LA64InstructionInfo(
     @NotBlank String mnemonic,
     int opcode,
-    int opcodeLength,
+    int mask,
     LA64InstructionFormat format,
     LA64OperandType[] operandTypes,
     @Nullable BiFunction<LA64InstructionInfo, LA64Operand[], Integer> encoder,
@@ -34,11 +34,25 @@ public record LA64InstructionInfo(
     public LA64InstructionInfo(
         @NotBlank String mnemonic,
         int opcode,
-        int opcodeLength,
+        int mask,
         LA64InstructionFormat format,
         LA64OperandType[] operandTypes,
         @NotNull BiConsumer<LA64EmulatorHandler, LA64Operand[]> executor) {
-        this(mnemonic, opcode, opcodeLength, format, operandTypes, null, null, executor);
+        this(mnemonic, opcode, mask, format, operandTypes, null, null, executor);
+    }
+
+    public static LA64InstructionInfo format2Fpr(
+        @NotBlank String mnemonic,
+        int opcode,
+        @NotNull BiConsumer<LA64EmulatorHandler, LA64Operand[]> executor) {
+        return new LA64InstructionInfo(
+            mnemonic,
+            opcode << 10,
+            ((1 << 22) - 1) << 10,
+            LA64InstructionFormat.FORMAT_2R,
+            LA64OperandType.FORMAT_2FPR_OPTYPE,
+            executor
+        );
     }
 
     public static LA64InstructionInfo format3Gpr(
@@ -47,10 +61,24 @@ public record LA64InstructionInfo(
         @NotNull BiConsumer<LA64EmulatorHandler, LA64Operand[]> executor) {
         return new LA64InstructionInfo(
             mnemonic,
-            opcode,
-            17,
+            opcode << 15,
+            ((1 << 17) - 1) << 15,
             LA64InstructionFormat.FORMAT_3R,
             LA64OperandType.FORMAT_3GPR_OPTYPE,
+            executor
+        );
+    }
+
+    public static LA64InstructionInfo format3Fpr(
+        @NotBlank String mnemonic,
+        int opcode,
+        @NotNull BiConsumer<LA64EmulatorHandler, LA64Operand[]> executor) {
+        return new LA64InstructionInfo(
+            mnemonic,
+            opcode << 15,
+            ((1 << 17) - 1) << 15,
+            LA64InstructionFormat.FORMAT_3R,
+            LA64OperandType.FORMAT_3FPR_OPTYPE,
             executor
         );
     }
@@ -61,10 +89,24 @@ public record LA64InstructionInfo(
         @NotNull BiConsumer<LA64EmulatorHandler, LA64Operand[]> executor) {
         return new LA64InstructionInfo(
             mnemonic,
-            opcode,
-            10,
+            opcode << 22,
+            ((1 << 10) - 1) << 22,
             LA64InstructionFormat.FORMAT_2RI12,
             LA64OperandType.FORMAT_2GPR_SI12_OPTYPE,
+            executor
+        );
+    }
+
+    public static LA64InstructionInfo formatFprGprSi12(
+        @NotBlank String mnemonic,
+        int opcode,
+        @NotNull BiConsumer<LA64EmulatorHandler, LA64Operand[]> executor) {
+        return new LA64InstructionInfo(
+            mnemonic,
+            opcode << 22,
+            ((1 << 10) - 1) << 22,
+            LA64InstructionFormat.FORMAT_2RI12,
+            LA64OperandType.FORMAT_FPR_GPR_SI12_OPTYPE,
             executor
         );
     }
@@ -75,8 +117,8 @@ public record LA64InstructionInfo(
         @NotNull BiConsumer<LA64EmulatorHandler, LA64Operand[]> executor) {
         return new LA64InstructionInfo(
             mnemonic,
-            opcode,
-            10,
+            opcode << 22,
+            ((1 << 10) - 1) << 22,
             LA64InstructionFormat.FORMAT_2RI12,
             LA64OperandType.FORMAT_2GPR_UI12_OPTYPE,
             executor
@@ -89,8 +131,8 @@ public record LA64InstructionInfo(
         @NotNull BiConsumer<LA64EmulatorHandler, LA64Operand[]> executor) {
         return new LA64InstructionInfo(
             mnemonic,
-            opcode,
-            6,
+            opcode << 26,
+            ((1 << 6) - 1) << 26,
             LA64InstructionFormat.FORMAT_2RI16,
             LA64OperandType.FORMAT_2GPR_OFFS16_OPTYPE,
             executor
@@ -103,8 +145,8 @@ public record LA64InstructionInfo(
         @NotNull BiConsumer<LA64EmulatorHandler, LA64Operand[]> executor) {
         return new LA64InstructionInfo(
             mnemonic,
-            opcode,
-            6,
+            opcode << 26,
+            ((1 << 6) - 1) << 26,
             LA64InstructionFormat.FORMAT_1RI21,
             LA64OperandType.FORMAT_1GPR_OFFS21_OPTYPE,
             executor
@@ -117,8 +159,8 @@ public record LA64InstructionInfo(
         @NotNull BiConsumer<LA64EmulatorHandler, LA64Operand[]> executor) {
         return new LA64InstructionInfo(
             mnemonic,
-            opcode,
-            6,
+            opcode << 26,
+            ((1 << 6) - 1) << 26,
             LA64InstructionFormat.FORMAT_I26,
             LA64OperandType.FORMAT_OFFS26_OPTYPE,
             executor

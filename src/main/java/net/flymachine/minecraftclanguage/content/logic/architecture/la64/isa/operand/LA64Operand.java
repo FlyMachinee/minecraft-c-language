@@ -43,6 +43,10 @@ public record LA64Operand(LA64OperandType type, int value) {
         return new LA64Operand(LA64OperandType.FPR, fprNumber);
     }
 
+    public static LA64Operand cfr(int cc) {
+        return new LA64Operand(LA64OperandType.CFR, cc);
+    }
+
     public static LA64Operand reg(LA64Register register) {
         return switch (register.getType()) {
             case GPR -> new LA64Operand(LA64OperandType.GPR, register.getNumber());

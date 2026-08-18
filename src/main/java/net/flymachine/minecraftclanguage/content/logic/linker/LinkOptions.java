@@ -40,7 +40,8 @@ public record LinkOptions(
         List.of(
             new SegmentMapping(SectionType.TEXT, 0),
             new SegmentMapping(SectionType.DATA, 1),
-            new SegmentMapping(SectionType.BSS, 1)),
+            new SegmentMapping(SectionType.BSS, 1),
+            new SegmentMapping(SectionType.RODATA, 0)),
         List.of(
             new SegmentConfig(0, 0x80000000L, Set.of(SegmentPermission.READ, SegmentPermission.EXEC)),
             new SegmentConfig(1, 0, Set.of(SegmentPermission.READ, SegmentPermission.WRITE)))

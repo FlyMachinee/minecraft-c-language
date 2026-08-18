@@ -7,13 +7,16 @@ import net.flymachine.minecraftclanguage.content.logic.architecture.la64.isa.ope
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.isa.operand.LA64OperandType;
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.util.BitMath;
 import net.flymachine.minecraftclanguage.content.logic.cpu.la64.LA64CpuState;
+import net.flymachine.minecraftclanguage.content.logic.cpu.la64.LA64FpuState;
 import net.flymachine.minecraftclanguage.content.logic.cpu.la64.LA64MemoryManagementUnit;
 import net.flymachine.minecraftclanguage.content.logic.cpu.la64.exception.LA64RuntimeException;
 import net.flymachine.minecraftclanguage.content.logic.emulator.la64.LA64EmulatorHandler;
 import net.flymachine.minecraftclanguage.content.logic.memory.MemoryLikeDevice;
+import org.apache.commons.lang3.function.TriFunction;
 
 import java.util.*;
 import java.util.function.BiFunction;
+import java.util.function.Function;
 
 public final class LA64InstructionSet {
 
@@ -44,7 +47,7 @@ public final class LA64InstructionSet {
     /**
      * 通过指令操作码来查询指令信息
      *
-     * @param opcode 指令操作码，必须是左对齐的，即已经左移到最高位
+     * @param opcode 指令操作码
      * @return 指令信息
      */
     public static Optional<LA64InstructionInfo> getByOpcode(int opcode) {
@@ -52,16 +55,16 @@ public final class LA64InstructionSet {
     }
 
     /**
-     * 通过机器码来查询指令信息，方法会自动根据已知指令的操作码长度进行匹配，返回最长匹配成功的指令信息
+     * 通过机器码来查询指令信息，方法会根据已知指令的操作码进行匹配
      *
      * @param machineCode 机器码
-     * @return 最长匹配的指令信息，或 {@code null} 若该机器码不匹配任何已知指令
+     * @return 匹配的指令信息，或 {@code null} 若该机器码不匹配任何已知指令
      */
     public static Optional<LA64InstructionInfo> getByMachineCode(int machineCode) {
-        for (int len = maxOpcodeLength; len >= minOpcodeLength; len--) {
-            int mask = 0xFFFFFFFF << (32 - len);
-            Optional<LA64InstructionInfo> info = getByOpcode(machineCode & mask);
-            if (info.isPresent()) {
+        for (int mask : MASK_SET) {
+            int opcode = machineCode & mask;
+            Optional<LA64InstructionInfo> info = getByOpcode(opcode);
+            if (info.isPresent() && info.get().mask() == mask) {
                 return info;
             }
         }
@@ -79,33 +82,36 @@ public final class LA64InstructionSet {
 
     private static final Map<String, LA64InstructionInfo> BY_MNEMONIC = new HashMap<>();
     private static final Int2ObjectMap<LA64InstructionInfo> BY_OPCODE = new Int2ObjectOpenHashMap<>();
+    // mask 最高位始终是1 所以是负数 使用降序排列
+    private static final Set<Integer> MASK_SET = new TreeSet<>(Collections.reverseOrder());
 
-    private static int maxOpcodeLength = 0;
-    private static int minOpcodeLength = 32;
-
-    private static int lastLeftAlignedOpcode = 0;
+    private static int lastOpcode = 0;
 
     private static void add(LA64InstructionInfo info) {
+        if ((info.opcode() & info.mask()) != info.opcode()) {
+            throw new IllegalArgumentException("Instruction mask cannot cover its opcode");
+        }
+
         if (BY_MNEMONIC.containsKey(info.mnemonic())) {
             throw new IllegalArgumentException("Duplicate instruction mnemonic: " + info.mnemonic());
         }
         BY_MNEMONIC.put(info.mnemonic(), info);
 
-        int leftAlignedOpcode = info.opcode() << (32 - info.opcodeLength());
-        if (BY_OPCODE.containsKey(leftAlignedOpcode)) {
-            throw new IllegalArgumentException("Duplicate instruction opcode: " + leftAlignedOpcode);
+        if (BY_OPCODE.containsKey(info.opcode())) {
+            throw new IllegalArgumentException("Duplicate instruction opcode: " + info.opcode());
         }
-        if (lastLeftAlignedOpcode > leftAlignedOpcode) {
+        BY_OPCODE.put(info.opcode(), info);
+
+        MASK_SET.add(info.mask());
+
+        if (Integer.compareUnsigned(lastOpcode, info.opcode()) > 0) {
             throw new IllegalArgumentException(
                 "Opcode are not added in ascending order, current mnemonic: " + info.mnemonic() + ", last mnemonic: " +
-                BY_OPCODE.get(lastLeftAlignedOpcode).mnemonic());
+                BY_OPCODE.get(lastOpcode).mnemonic());
         }
-        BY_OPCODE.put(leftAlignedOpcode, info);
-        lastLeftAlignedOpcode = leftAlignedOpcode;
+        lastOpcode = info.opcode();
 
         ALL_INSTRUCTIONS.add(info);
-        maxOpcodeLength = Math.max(maxOpcodeLength, info.opcodeLength());
-        minOpcodeLength = Math.min(minOpcodeLength, info.opcodeLength());
     }
 
     @FunctionalInterface
@@ -129,6 +135,20 @@ public final class LA64InstructionSet {
             BiFunction<Integer, Integer, Integer> binaryFunction);
     }
 
+    @FunctionalInterface
+    private interface BinaryDoubleExecutor {
+        void execute(
+            LA64EmulatorHandler emulator, LA64Operand[] operands,
+            BiFunction<Double, Double, Double> binaryFunction);
+    }
+
+    @FunctionalInterface
+    private interface UnaryDoubleExecutor {
+        void execute(
+            LA64EmulatorHandler emulator, LA64Operand[] operands,
+            Function<Double, Double> unaryFunction);
+    }
+
     private static final BinaryDoubleWordExecutor BINARY_DOUBLE_WORD_EXECUTOR =
         (emulator, operands, binaryFunction) -> {
             LA64CpuState cpu = emulator.getCpuState();
@@ -146,6 +166,27 @@ public final class LA64InstructionSet {
             int rkValue = cpu.getGrWord(operands[2].value());
             int result = binaryFunction.apply(rjValue, rkValue);
             cpu.setGr(operands[0].value(), result);
+            cpu.pcNext();
+        };
+
+    private static final BinaryDoubleExecutor BINARY_DOUBLE_EXECUTOR =
+        (emulator, operands, binaryFunction) -> {
+            LA64CpuState cpu = emulator.getCpuState();
+            LA64FpuState fpu = emulator.getFpuState();
+            double fjValue = fpu.getFr(operands[1].value());
+            double fkValue = fpu.getFr(operands[2].value());
+            double result = binaryFunction.apply(fjValue, fkValue);
+            fpu.setFr(operands[0].value(), result);
+            cpu.pcNext();
+        };
+
+    private static final UnaryDoubleExecutor UNARY_DOUBLE_EXECUTOR =
+        (emulator, operands, unaryFunction) -> {
+            LA64CpuState cpu = emulator.getCpuState();
+            LA64FpuState fpu = emulator.getFpuState();
+            double fjValue = fpu.getFr(operands[1].value());
+            double result = unaryFunction.apply(fjValue);
+            fpu.setFr(operands[0].value(), result);
             cpu.pcNext();
         };
 
@@ -463,8 +504,8 @@ public final class LA64InstructionSet {
             }));
         add(new LA64InstructionInfo(
             "slli.w",
-            0b0000_0000_0100_0000_1,
-            17,
+            0b0000_0000_0100_0000_1 << 15,
+            ((1 << 17) - 1) << 15,
             LA64InstructionFormat.FORMAT_3R,
             LA64OperandType.FORMAT_2GPR_UI5_OPTYPE,
             (emulator, operands) -> {
@@ -482,8 +523,8 @@ public final class LA64InstructionSet {
             }));
         add(new LA64InstructionInfo(
             "slli.d",
-            0b0000_0000_0100_0001,
-            16,
+            0b0000_0000_0100_0001 << 16,
+            ((1 << 16) - 1) << 16,
             LA64InstructionFormat.MISCELLANEOUS,
             new LA64OperandType[]{LA64OperandType.GPR, LA64OperandType.GPR, LA64OperandType.UI6},
             (info, ops) -> {
@@ -491,7 +532,7 @@ public final class LA64InstructionSet {
                 int rd = ops[0].value();
                 int rj = ops[1].value();
                 int ui6 = ops[2].value();
-                return (info.opcode() << 16) | (ui6 << 10) | (rj << 5) | rd;
+                return info.opcode() | (ui6 << 10) | (rj << 5) | rd;
             },
             (machineCode) -> {
                 // rd, rj, ui6
@@ -515,8 +556,8 @@ public final class LA64InstructionSet {
             }));
         add(new LA64InstructionInfo(
             "srli.w",
-            0b0000_0000_0100_0100_1,
-            17,
+            0b0000_0000_0100_0100_1 << 15,
+            ((1 << 17) - 1) << 15,
             LA64InstructionFormat.FORMAT_3R,
             LA64OperandType.FORMAT_2GPR_UI5_OPTYPE,
             (emulator, operands) -> {
@@ -534,8 +575,8 @@ public final class LA64InstructionSet {
             }));
         add(new LA64InstructionInfo(
             "srli.d",
-            0b0000_0000_0100_0101,
-            16,
+            0b0000_0000_0100_0101 << 16,
+            ((1 << 16) - 1) << 16,
             LA64InstructionFormat.MISCELLANEOUS,
             new LA64OperandType[]{LA64OperandType.GPR, LA64OperandType.GPR, LA64OperandType.UI6},
             (info, ops) -> {
@@ -543,7 +584,7 @@ public final class LA64InstructionSet {
                 int rd = ops[0].value();
                 int rj = ops[1].value();
                 int ui6 = ops[2].value();
-                return (info.opcode() << 16) | (ui6 << 10) | (rj << 5) | rd;
+                return info.opcode() | (ui6 << 10) | (rj << 5) | rd;
             },
             (machineCode) -> {
                 // rd, rj, ui6
@@ -567,8 +608,8 @@ public final class LA64InstructionSet {
             }));
         add(new LA64InstructionInfo(
             "srai.w",
-            0b0000_0000_0100_1000_1,
-            17,
+            0b0000_0000_0100_1000_1 << 15,
+            ((1 << 17) - 1) << 15,
             LA64InstructionFormat.FORMAT_3R,
             LA64OperandType.FORMAT_2GPR_UI5_OPTYPE,
             (emulator, operands) -> {
@@ -586,8 +627,8 @@ public final class LA64InstructionSet {
             }));
         add(new LA64InstructionInfo(
             "srai.d",
-            0b0000_0000_0100_1001,
-            16,
+            0b0000_0000_0100_1001 << 16,
+            ((1 << 16) - 1) << 16,
             LA64InstructionFormat.MISCELLANEOUS,
             new LA64OperandType[]{LA64OperandType.GPR, LA64OperandType.GPR, LA64OperandType.UI6},
             (info, ops) -> {
@@ -595,7 +636,7 @@ public final class LA64InstructionSet {
                 int rd = ops[0].value();
                 int rj = ops[1].value();
                 int ui6 = ops[2].value();
-                return (info.opcode() << 16) | (ui6 << 10) | (rj << 5) | rd;
+                return info.opcode() | (ui6 << 10) | (rj << 5) | rd;
             },
             (machineCode) -> {
                 // rd, rj, ui6
@@ -617,12 +658,10 @@ public final class LA64InstructionSet {
                 cpuState.setGr(operands[0].value(), rjValue >> ui6Value);
                 cpuState.pcNext();
             }));
-
-
         add(new LA64InstructionInfo(
             "bstrpick.d",
-            0b0000_0000_11,
-            10,
+            0b0000_0000_11 << 22,
+            ((1 << 10) - 1) << 22,
             LA64InstructionFormat.MISCELLANEOUS,
             new LA64OperandType[]{LA64OperandType.GPR, LA64OperandType.GPR, LA64OperandType.UI6, LA64OperandType.UI6},
             (info, ops) -> {
@@ -631,7 +670,7 @@ public final class LA64InstructionSet {
                 int rj = ops[1].value();
                 int msbd = ops[2].value();
                 int lsbd = ops[3].value();
-                return (info.opcode() << 22) | (msbd << 16) | (lsbd << 10) | (rj << 5) | rd;
+                return info.opcode() | (msbd << 16) | (lsbd << 10) | (rj << 5) | rd;
             },
             (machineCode) -> {
                 // rd, rj, msbd(ui6), lsbd(ui6)
@@ -655,8 +694,207 @@ public final class LA64InstructionSet {
                 cpuState.setGr(operands[0].value(), BitMath.extractBits(rjValue, lsbdValue, msbdValue - lsbdValue + 1));
                 cpuState.pcNext();
             }));
-
-
+        add(LA64InstructionInfo.format3Fpr(
+            "fadd.d",
+            0b0000_0001_0000_0001_0,
+            (emulator, operands) -> {
+                // fadd.d fd, fj, fk
+                /*
+                    FR[fd] = FP64_addition(FR[fj], FR[fk])
+                 */
+                BINARY_DOUBLE_EXECUTOR.execute(emulator, operands, Double::sum);
+            }));
+        add(LA64InstructionInfo.format3Fpr(
+            "fsub.d",
+            0b0000_0001_0000_0011_0,
+            (emulator, operands) -> {
+                // fsub.d fd, fj, fk
+                /*
+                    FR[fd] = FP64_subtraction(FR[fj], FR[fk])
+                 */
+                BINARY_DOUBLE_EXECUTOR.execute(emulator, operands, (a, b) -> a - b);
+            }));
+        add(LA64InstructionInfo.format3Fpr(
+            "fmul.d",
+            0b0000_0001_0000_0101_0,
+            (emulator, operands) -> {
+                // fmul.d fd, fj, fk
+                /*
+                    FR[fd] = FP64_multiplication(FR[fj], FR[fk])
+                 */
+                BINARY_DOUBLE_EXECUTOR.execute(emulator, operands, (a, b) -> a * b);
+            }));
+        add(LA64InstructionInfo.format3Fpr(
+            "fdiv.d",
+            0b0000_0001_0000_0111_0,
+            (emulator, operands) -> {
+                // fdiv.d fd, fj, fk
+                /*
+                    FR[fd] = FP64_division(FR[fj], FR[fk])
+                 */
+                BINARY_DOUBLE_EXECUTOR.execute(emulator, operands, (a, b) -> a / b);
+            }));
+        add(LA64InstructionInfo.format2Fpr(
+            "fneg.d",
+            0b0000_0001_0001_0100_0001_10,
+            (emulator, operands) -> {
+                // fneg.d fd, fj
+                /*
+                    FR[fd] = FP64_negate(FR[fj])
+                 */
+                UNARY_DOUBLE_EXECUTOR.execute(emulator, operands, (fj) -> -fj);
+            }));
+        add(LA64InstructionInfo.format2Fpr(
+            "fmov.d",
+            0b0000_0001_0001_0100_1001_10,
+            (emulator, operands) -> {
+                // fmov.d fd, fj
+                /*
+                    FR[fd] = FR[fj]
+                 */
+                UNARY_DOUBLE_EXECUTOR.execute(emulator, operands, (fj) -> fj);
+            }));
+        add(new LA64InstructionInfo(
+            "movgr2fr.d",
+            0b0000_0001_0001_0100_1010_10 << 10,
+            ((1 << 22) - 1) << 10,
+            LA64InstructionFormat.FORMAT_2R,
+            new LA64OperandType[]{LA64OperandType.FPR, LA64OperandType.GPR},
+            (info, ops) -> {
+                // fd, rj
+                int fd = ops[0].value();
+                int rj = ops[1].value();
+                return info.opcode() | rj << 5 | fd;
+            },
+            (machineCode) -> {
+                // fd, rj
+                int fd = BitMath.getRd(machineCode);
+                int rj = BitMath.getRj(machineCode);
+                return new LA64Operand[]{LA64Operand.fpr(fd), LA64Operand.gpr(rj)};
+            },
+            (emulator, operands) -> {
+                // movgr2fr.d fd, rj
+                /*
+                    FR[fd] = GR[rj]
+                 */
+                LA64CpuState cpuState = emulator.getCpuState();
+                LA64FpuState fpuState = emulator.getFpuState();
+                fpuState.setFrL(operands[0].value(), cpuState.getGr(operands[1].value()));
+                cpuState.pcNext();
+            }));
+        add(new LA64InstructionInfo(
+            "movfr2gr.d",
+            0b0000_0001_0001_0100_1011_10 << 10,
+            ((1 << 22) - 1) << 10,
+            LA64InstructionFormat.FORMAT_2R,
+            new LA64OperandType[]{LA64OperandType.GPR, LA64OperandType.FPR},
+            (info, ops) -> {
+                // rd, fj
+                int rd = ops[0].value();
+                int fj = ops[1].value();
+                return info.opcode() | fj << 5 | rd;
+            },
+            (machineCode) -> {
+                // rd, fj
+                int rd = BitMath.getRd(machineCode);
+                int fj = BitMath.getRj(machineCode);
+                return new LA64Operand[]{LA64Operand.gpr(rd), LA64Operand.fpr(fj)};
+            },
+            (emulator, operands) -> {
+                // movfr2gr.d rd, fj
+                /*
+                    GR[rd] = FR[fj]
+                 */
+                LA64CpuState cpuState = emulator.getCpuState();
+                LA64FpuState fpuState = emulator.getFpuState();
+                cpuState.setGr(operands[0].value(), fpuState.getFrL(operands[1].value()));
+                cpuState.pcNext();
+            }));
+        add(new LA64InstructionInfo(
+            "movcf2gr",
+            0b0000_0001_0001_0100_1101_1100 << 8,
+            ((1 << 24) - 1) << 8,
+            LA64InstructionFormat.MISCELLANEOUS,
+            new LA64OperandType[]{LA64OperandType.GPR, LA64OperandType.CFR},
+            (info, ops) -> {
+                // rd, cj
+                int rd = ops[0].value();
+                int cj = ops[1].value();
+                return info.opcode() | ((cj & 0b111) << 5) | rd;
+            },
+            (machineCode) -> {
+                // rd, cj
+                int rd = BitMath.getRd(machineCode);
+                int cj = BitMath.extractBits(machineCode, 5, 3);
+                return new LA64Operand[]{LA64Operand.gpr(rd), LA64Operand.cfr(cj)};
+            },
+            (emulator, operands) -> {
+                // movcf2gr rd, cf
+                /*
+                    GR[rd] = ZeroExtend(CFR[cj], GRLEN)
+                 */
+                LA64CpuState cpuState = emulator.getCpuState();
+                LA64FpuState fpuState = emulator.getFpuState();
+                cpuState.setGr(operands[0].value(), fpuState.getCfr(operands[1].value()) ? 1 : 0);
+                cpuState.pcNext();
+            }
+        ));
+        add(LA64InstructionInfo.format2Fpr(
+            "ftintrz.w.d",
+            0b0000_0001_0001_1010_1000_10,
+            (emulator, operands) -> {
+                // ftintrz.w.d fd, fj
+                /*
+                    FR[fd] = FP64convertToSint32(FR[fj], 1)
+                 */
+                LA64CpuState cpuState = emulator.getCpuState();
+                LA64FpuState fpuState = emulator.getFpuState();
+                int int32 = (int) fpuState.getFr(operands[1].value());
+                fpuState.setFrL(operands[0].value(), int32);
+                cpuState.pcNext();
+            }));
+        add(LA64InstructionInfo.format2Fpr(
+            "ftintrz.l.d",
+            0b0000_0001_0001_1010_1010_10,
+            (emulator, operands) -> {
+                // ftintrz.l.d fd, fj
+                /*
+                    FR[fd] = FP64convertToSint64(FR[fj], 1)
+                 */
+                LA64CpuState cpuState = emulator.getCpuState();
+                LA64FpuState fpuState = emulator.getFpuState();
+                long int64 = (long) fpuState.getFr(operands[1].value());
+                fpuState.setFrL(operands[0].value(), int64);
+                cpuState.pcNext();
+            }));
+        add(LA64InstructionInfo.format2Fpr(
+            "ffint.d.w",
+            0b0000_0001_0001_1101_0010_00,
+            (emulator, operands) -> {
+                // ffint.d.w fd, fj
+                /*
+                    FR[fd] = FP64_convertFromInt(FR[fj][31:0], SINT32)
+                 */
+                LA64CpuState cpuState = emulator.getCpuState();
+                LA64FpuState fpuState = emulator.getFpuState();
+                int int32 = (int) fpuState.getFrL(operands[1].value());
+                fpuState.setFr(operands[0].value(), int32);
+                cpuState.pcNext();
+            }));
+        add(LA64InstructionInfo.format2Fpr(
+            "ffint.d.l",
+            0b0000_0001_0001_1101_0010_10,
+            (emulator, operands) -> {
+                // ffint.d.l fd, fj
+                /*
+                    FR[fd] = FP64_convertFromInt(FR[fj], SINT64)
+                 */
+                LA64CpuState cpuState = emulator.getCpuState();
+                LA64FpuState fpuState = emulator.getFpuState();
+                long int64 = fpuState.getFrL(operands[1].value());
+                fpuState.setFr(operands[0].value(), int64);
+                cpuState.pcNext();
+            }));
         add(LA64InstructionInfo.format2GprSi12(
             "slti",
             0b0000_0010_00,
@@ -750,17 +988,93 @@ public final class LA64InstructionSet {
                  */
                 BINARY_UI12_EXECUTOR.execute(emulator, operands, (rj, ui12) -> rj ^ ui12);
             }));
+
+        {
+            int commonOpcode = 0b0000_1100_0010;
+            // fcmp.cond.d cd, fj, fk
+
+            TriFunction<Double, Double, Integer, Boolean> fcmpExecutorHelper = (fj, fk, cond) -> {
+                boolean un = Double.isNaN(fj) || Double.isNaN(fk);
+                boolean lt = !un && (fj < fk);
+                boolean gt = !un && (fj > fk);
+                boolean eq = !un && (fj.equals(fk));
+
+                return switch (LA64FloatCompareCondition.fromCode(cond)) {
+                    case CAF -> false;
+                    case CUN -> un;
+                    case CEQ -> eq;
+                    case CUEQ -> un || eq;
+                    case CLT -> lt;
+                    case CULT -> un || lt;
+                    case CLE -> lt || eq;
+                    case CULE -> un || lt || eq;
+                    case CNE -> gt || lt;
+                    case COR -> gt || lt || eq;
+                    case CUNE -> un || gt || lt;
+                    default -> throw new UnsupportedOperationException("Unsupported condition: " + cond);
+                };
+            };
+
+            LA64OperandType[] optypes = new LA64OperandType[]{
+                LA64OperandType.CFR, LA64OperandType.FPR, LA64OperandType.FPR
+            };
+
+            for (LA64FloatCompareCondition cond : LA64FloatCompareCondition.values()) {
+                String condName = cond.mnemonic();
+                int code = cond.getCode();
+                if (condName.charAt(0) == 'S') {
+                    continue;
+                }
+
+                add(new LA64InstructionInfo(
+                    "fcmp." + condName + ".d",
+                    commonOpcode << 20 | code << 15,
+                    0xFFFF8018,
+                    LA64InstructionFormat.MISCELLANEOUS,
+                    optypes,
+                    (info, ops) -> {
+                        // cd, fj, fk
+                        int cd = ops[0].value();
+                        int fj = ops[1].value();
+                        int fk = ops[2].value();
+                        return info.opcode() | fk << 10 | fj << 5 | (cd & 0b111);
+                    },
+                    (machineCode) -> {
+                        // cd, fj, fk
+                        int cd = BitMath.extractBits(machineCode, 3);
+                        int fj = BitMath.getRj(machineCode);
+                        int fk = BitMath.getRk(machineCode);
+                        return new LA64Operand[]{
+                            LA64Operand.cfr(cd), LA64Operand.fpr(fj), LA64Operand.fpr(fk)
+                        };
+                    },
+                    (emulator, operands) -> {
+                        // fcmp.cond.d cd, fj, fk
+                        LA64CpuState cpu = emulator.getCpuState();
+                        LA64FpuState fpu = emulator.getFpuState();
+                        boolean ccRes = fcmpExecutorHelper.apply(
+                            fpu.getFr(operands[1].value()),
+                            fpu.getFr(operands[2].value()),
+                            code
+                        );
+                        fpu.setCfr(operands[0].value(), ccRes);
+                        cpu.pcNext();
+                    }
+                ));
+            }
+        }
+
         add(new LA64InstructionInfo(
             "lu12i.w",
-            0b0001_010,
-            7,
+            0b0001_010 << 25,
+            ((1 << 7) - 1) << 25,
             LA64InstructionFormat.MISCELLANEOUS,
             new LA64OperandType[]{LA64OperandType.GPR, LA64OperandType.SI20},
             (info, ops) -> {
                 // rd, si20
                 int rd = ops[0].value();
                 int si20 = ops[1].value();
-                return (info.opcode() << 25) | ((si20 & 0xFFFFF) << 5) | rd;
+                return info.opcode() | ((si20 & 0xFFFFF) << 5) | rd;
             },
             (machineCode) -> {
                 // rd, si20
@@ -781,15 +1095,15 @@ public final class LA64InstructionSet {
             }));
         add(new LA64InstructionInfo(
             "lu32i.d",
-            0b0001_011,
-            7,
+            0b0001_011 << 25,
+            ((1 << 7) - 1) << 25,
             LA64InstructionFormat.MISCELLANEOUS,
             new LA64OperandType[]{LA64OperandType.GPR, LA64OperandType.SI20},
             (info, ops) -> {
                 // rd, si20
                 int rd = ops[0].value();
                 int si20 = ops[1].value();
-                return (info.opcode() << 25) | ((si20 & 0xFFFFF) << 5) | rd;
+                return info.opcode() | ((si20 & 0xFFFFF) << 5) | rd;
             },
             (machineCode) -> {
                 // rd, si20
@@ -811,15 +1125,15 @@ public final class LA64InstructionSet {
             }));
         add(new LA64InstructionInfo(
             "pcalau12i",
-            0b0001_101,
-            7,
+            0b0001_101 << 25,
+            ((1 << 7) - 1) << 25,
             LA64InstructionFormat.MISCELLANEOUS,
             new LA64OperandType[]{LA64OperandType.GPR, LA64OperandType.SI20},
             (info, ops) -> {
                 // rd, si20
                 int rd = ops[0].value();
                 int si20 = ops[1].value();
-                return (info.opcode() << 25) | ((si20 & 0xFFFFF) << 5) | rd;
+                return info.opcode() | ((si20 & 0xFFFFF) << 5) | rd;
             },
             (machineCode) -> {
                 // rd, si20
@@ -942,6 +1256,63 @@ public final class LA64InstructionSet {
                 memory.storeDoubleWord(paddr, cpu.getGr(operands[0].value()));
                 cpu.pcNext();
             }));
+
+        add(LA64InstructionInfo.formatFprGprSi12(
+            "fld.d",
+            0b0010_1011_10,
+            (emulator, operands) -> {
+                // fld.d fd, rj, si12
+                /*
+                    vaddr = GR[rj] + SignExtend(si12, GRLEN)
+                    AddressComplianceCheck(vaddr)
+                    paddr = AddressTranslation(vaddr)
+                    doubleword = MemoryLoad(paddr, DOUBLEWORD)
+                    FR[fd] = doubleword
+                 */
+                LA64CpuState cpu = emulator.getCpuState();
+                LA64FpuState fpu = emulator.getFpuState();
+                MemoryLikeDevice memory = emulator.getMemory();
+                LA64MemoryManagementUnit mmu = emulator.getMemoryManagementUnit();
+
+                long rjValue = cpu.getGr(operands[1].value());
+                long offset = operands[2].value();
+                long vaddr = rjValue + offset;
+                if ((vaddr & 0b111) != 0) {
+                    throw new LA64RuntimeException(LA64Exception.ALE);
+                }
+                long paddr = mmu.translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.LOAD);
+                fpu.setFrL(operands[0].value(), memory.loadDoubleWord(paddr));
+                cpu.pcNext();
+            }
+        ));
+        add(LA64InstructionInfo.formatFprGprSi12(
+            "fst.d",
+            0b0010_1011_11,
+            (emulator, operands) -> {
+                // fst.d fd, rj, si12
+                /*
+                    vaddr = GR[rj] + SignExtend(si12, GRLEN)
+                    AddressComplianceCheck(vaddr)
+                    paddr = AddressTranslation(vaddr)
+                    MemoryStore(FR[fd][63:0], paddr, DOUBLEWORD)
+                 */
+                LA64CpuState cpu = emulator.getCpuState();
+                LA64FpuState fpu = emulator.getFpuState();
+                MemoryLikeDevice memory = emulator.getMemory();
+                LA64MemoryManagementUnit mmu = emulator.getMemoryManagementUnit();
+
+                long rjValue = cpu.getGr(operands[1].value());
+                long offset = operands[2].value();
+                long vaddr = rjValue + offset;
+                if ((vaddr & 0b111) != 0) {
+                    throw new LA64RuntimeException(LA64Exception.ALE);
+                }
+                long paddr = mmu.translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.STORE);
+                memory.storeDoubleWord(paddr, fpu.getFrL(operands[0].value()));
+                cpu.pcNext();
+            }
+        ));
+
         add(LA64InstructionInfo.format1GPROffs21(
             "beqz",
             0b0100_00,
@@ -980,6 +1351,74 @@ public final class LA64InstructionSet {
                     cpu.pcNext();
                 }
             }));
+        {
+            LA64OperandType[] operandTypes = new LA64OperandType[]{LA64OperandType.CFR, LA64OperandType.OFFS21};
+            BiFunction<LA64InstructionInfo, LA64Operand[], Integer> encoder = (info, ops) -> {
+                // cj, offs21
+                int cj = ops[0].value();
+                int offs21 = ops[1].value();
+                return info.opcode() | (offs21 & 0xFFFF) << 10 | (cj & 0b111) << 5 | (offs21 >> 16) & 0x1F;
+            };
+            Function<Integer, LA64Operand[]> decoder = (machineCode) -> {
+                // cj, offs21
+                int cj = BitMath.extractBits(machineCode, 5, 3);
+                int offs21 = ((machineCode >> 10) & 0xFFFF) | ((machineCode & 0x1F) << 16);
+                return new LA64Operand[]{LA64Operand.cfr(cj), LA64Operand.offs21(offs21)};
+            };
+
+            add(new LA64InstructionInfo(
+                "bceqz",
+                0b0100_10 << 26,
+                0xFC000300,
+                LA64InstructionFormat.MISCELLANEOUS,
+                operandTypes,
+                encoder,
+                decoder,
+                (emulator, operands) -> {
+                    // bceqz cj, offs21
+                    /*
+                        if CFR[cj]==0 :
+                            PC = PC + SignExtend({offs21, 2'b0}, GRLEN)
+                     */
+                    LA64CpuState cpu = emulator.getCpuState();
+                    LA64FpuState fpu = emulator.getFpuState();
+                    int cj = operands[0].value();
+                    if (!fpu.getCfr(cj)) {
+                        long offset = ((long) operands[1].value()) << 2;
+                        long target = cpu.getPc() + offset;
+                        cpu.setPc(target);
+                    } else {
+                        cpu.pcNext();
+                    }
+                }
+            ));
+            add(new LA64InstructionInfo(
+                "bcnez",
+                0b0100_10 << 26 | 0b01 << 8,
+                0xFC000300,
+                LA64InstructionFormat.MISCELLANEOUS,
+                operandTypes,
+                encoder,
+                decoder,
+                (emulator, operands) -> {
+                    // bcnez cj, offs21
+                    /*
+                        if CFR[cj]!=0 :
+                            PC = PC + SignExtend({offs21, 2'b0}, GRLEN)
+                     */
+                    LA64CpuState cpu = emulator.getCpuState();
+                    LA64FpuState fpu = emulator.getFpuState();
+                    int cj = operands[0].value();
+                    if (fpu.getCfr(cj)) {
+                        long offset = ((long) operands[1].value()) << 2;
+                        long target = cpu.getPc() + offset;
+                        cpu.setPc(target);
+                    } else {
+                        cpu.pcNext();
+                    }
+                }
+            ));
+        }
         add(LA64InstructionInfo.format2GPROffs16(
             "jirl",
             0b0100_11,

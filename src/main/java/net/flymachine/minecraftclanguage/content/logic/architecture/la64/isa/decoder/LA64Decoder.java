@@ -30,6 +30,7 @@ public final class LA64Decoder {
         LA64Operand[] ops;
         switch (info.format()) {
             case FORMAT_3R -> ops = decode3R(info, machineCode);
+            case FORMAT_2R -> ops = decode2R(info, machineCode);
             case FORMAT_2RI12 -> ops = decode2RI12(info, machineCode);
             case FORMAT_2RI16 -> ops = decode2RI16(info, machineCode);
             case FORMAT_1RI21 -> ops = decode1RI21(info, machineCode);
@@ -45,6 +46,15 @@ public final class LA64Decoder {
             default -> throw new IllegalArgumentException("Unsupported instruction format: " + info.format());
         }
         return new LA64Instruction(info, ops);
+    }
+
+    private static LA64Operand[] decode2R(LA64InstructionInfo info, int machineCode) {
+        // rd, rj
+        int rd = BitMath.getRd(machineCode);
+        int rj = BitMath.getRj(machineCode);
+        return new LA64Operand[]{
+            new LA64Operand(info.operandTypes()[0], rd),
+            new LA64Operand(info.operandTypes()[1], rj)};
     }
 
     private static LA64Operand[] decode3R(LA64InstructionInfo info, int machineCode) {
