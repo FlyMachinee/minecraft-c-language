@@ -182,7 +182,7 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
                 loadImm(asmType, dstReg, srcImm, T0);
             } else if (src instanceof LA64Register srcReg) {
                 // 寄存器 -> 寄存器
-                lowerRegMove(srcReg, dstReg);
+                lowerRegMove(asmType, srcReg, dstReg);
             } else if (src instanceof Stack srcStack) {
                 // 栈 -> 寄存器
                 loadStack(asmType, dstReg, srcStack);
@@ -227,13 +227,17 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
         return null;
     }
 
-    private void lowerRegMove(LA64Register srcReg, LA64Register dstReg) {
-        if (srcReg == dstReg) {
+    private void lowerRegMove(AsmType asmType, LA64Register srcReg, LA64Register dstReg) {
+        if (srcReg == dstReg && asmType != AsmType.WORD) {
             return;
         }
         if (srcReg instanceof GeneralPurposeRegister srcGpr) {
             if (dstReg instanceof GeneralPurposeRegister dstGpr) {
-                emitInst("move", dstGpr, srcGpr);
+                if (asmType == AsmType.WORD) {
+                    emitInst("add.w", dstGpr, srcGpr, ZERO);
+                } else {
+                    emitInst("move", dstGpr, srcGpr);
+                }
                 return;
             } else if (dstReg instanceof FloatingPointRegister dstFpr) {
                 emitInst("movgr2fr.d", dstFpr, srcGpr);
@@ -624,7 +628,7 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
 
         String mnemonic = srcAsmType == AsmType.WORD ? "ffint.d.w" : "ffint.d.l";
         GeneralPurposeRegister srcReg = (GeneralPurposeRegister) loadOperand(srcAsmType, src, T0, T0);
-        lowerRegMove(srcReg, FT0);
+        lowerRegMove(null, srcReg, FT0);
         FloatingPointRegister dstReg = (FloatingPointRegister) calcDestination(dst, FT0);
         emitInst(mnemonic, dstReg, FT0);
         storeToDest(AsmType.DOUBLE, dstReg, dst, T0);
@@ -642,7 +646,7 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
         FloatingPointRegister srcReg = (FloatingPointRegister) loadOperand(AsmType.DOUBLE, src, FT0, T0);
         emitInst(mnemonic, FT0, srcReg);
         GeneralPurposeRegister dstReg = (GeneralPurposeRegister) calcDestination(dst, T0);
-        lowerRegMove(FT0, dstReg);
+        lowerRegMove(null, FT0, dstReg);
         storeToDest(dstAsmType, dstReg, dst, T1);
         return null;
     }
@@ -723,9 +727,8 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
     }
 
     private void signedExtend(GeneralPurposeRegister src, GeneralPurposeRegister dst) {
-        // add.w rd, rj, r0
-        // emitInst("add.w", dst, src, ZERO);
         // 默认内容均为符号拓展，无需显式处理
+        lowerRegMove(AsmType.DWORD, src, dst);
     }
 
     /**
@@ -805,7 +808,7 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
 
         // 将先前存放在寄存器的结果写回目标地点
         if (dest instanceof LA64Register reg) {
-            lowerRegMove(val, reg);
+            lowerRegMove(asmType, val, reg);
         } else if (dest instanceof Stack dstStack) {
             storeStack(asmType, val, dstStack);
         } else if (dest instanceof Data dstData) {
@@ -832,7 +835,7 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
                 throw new UnsupportedOperationException("Invalid asmType: " + asmType);
             }
             emitInst("li.d", tmp, new LA64AsmImmOperand(imm));
-            lowerRegMove(tmp, dstFpr);
+            lowerRegMove(null, tmp, dstFpr);
         } else {
             throw new UnsupportedOperationException("Invalid register: " + dst);
         }
