@@ -5,6 +5,7 @@ import net.flymachine.minecraftclanguage.content.logic.architecture.la64.isa.exc
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.isa.instruction.LA64Instruction;
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.register.GeneralPurposeRegister;
 import net.flymachine.minecraftclanguage.content.logic.cpu.la64.LA64CpuState;
+import net.flymachine.minecraftclanguage.content.logic.cpu.la64.LA64FpuState;
 import net.flymachine.minecraftclanguage.content.logic.cpu.la64.LA64MemoryManagementUnit;
 import net.flymachine.minecraftclanguage.content.logic.cpu.la64.exception.LA64RuntimeException;
 import net.flymachine.minecraftclanguage.content.logic.device.la64.Teletypewriter;
@@ -17,6 +18,7 @@ import net.flymachine.minecraftclanguage.content.logic.memory.SimpleRam;
 public final class LA64Emulator {
 
     private final LA64CpuState cpuState = new LA64CpuState();
+    private final LA64FpuState fpuState = new LA64FpuState();
     private final SimpleRam ram = new SimpleRam(256 * SimpleRam.PAGE_SIZE); // 1 MB
     private final MemoryCrossbar memoryCrossbar = new MemoryCrossbar(ram);
     private final LA64MemoryManagementUnit mmu = new LA64MemoryManagementUnit();
@@ -129,6 +131,11 @@ public final class LA64Emulator {
 
         public MemoryLikeDevice getMemory() {
             return emulator.memoryCrossbar;
+        }
+
+        @Override
+        public LA64FpuState getFpuState() {
+            return emulator.fpuState;
         }
     }
 
