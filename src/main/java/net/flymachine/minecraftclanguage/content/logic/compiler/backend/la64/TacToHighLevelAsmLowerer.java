@@ -596,7 +596,7 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
                 long rawDigits = Double.doubleToLongBits(doubleValue);
 
                 // 如果浮点数可被简易加载 (2条指令内)，则直接使用 Immediate
-                if (LA64Assembler.getExpandLiDSize(rawDigits) <= 2 * 4) {
+                if (LA64Assembler.getExpandLiDSize(rawDigits) <= 2) {
                     return new Immediate(rawDigits);
                 }
                 // 否则使用浮点常量池
