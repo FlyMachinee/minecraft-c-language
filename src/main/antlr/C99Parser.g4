@@ -44,7 +44,9 @@ unaryExpression
     ;
 
 unaryOperator
-    : Minus
+    : And
+    | Star
+    | Minus
     | Tilde
     | Not
     ;
@@ -216,13 +218,16 @@ specifierQualifier // added
     ;
 
 // ISO 6.7.5, Declarators
-declarator:
-    directDeclarator
+declarator
+    : pointer? directDeclarator
     ;
 directDeclarator
     : Identifier
     | LeftParen declarator RightParen
     | directDeclarator LeftParen parameterTypeList RightParen
+    ;
+pointer
+    : Star pointer?
     ;
 parameterTypeList
     : parameterList
@@ -240,7 +245,8 @@ typeName
     : specifierQualifierList abstractDeclarator?
     ;
 abstractDeclarator
-    : directAbstractDeclarator
+    : pointer
+    | pointer? directAbstractDeclarator
     ;
 directAbstractDeclarator
     : LeftParen abstractDeclarator RightParen
