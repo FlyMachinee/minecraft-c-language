@@ -42,17 +42,9 @@ public interface Type {
 
     <R> R accept(TypeVisitor<R> visitor);
 
-    static Type commonRealType(Type t1, Type t2) {
-        if (!(t1 instanceof BasicType basicType1) || !(t2 instanceof BasicType basicType2)) {
-            return ErrorType.INSTANCE;
-        } else {
-            return commonRealType(basicType1, basicType2);
-        }
-    }
-
-    static Type commonRealType(BasicType t1, BasicType t2) {
+    static BasicType commonRealType(BasicType t1, BasicType t2) {
         if (!t1.isArithmetic() || !t2.isArithmetic()) {
-            return ErrorType.INSTANCE;
+            throw new IllegalArgumentException("can only handle arithmetic types");
         }
         // 否则，若一个操作数是 double、double complex 或 double imaginary，则会按下列方式隐式转换另一操作数：
         // 整数或实浮点数类型转换成 double
