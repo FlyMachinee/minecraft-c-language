@@ -1,13 +1,14 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64;
 
+import net.flymachine.minecraftclanguage.content.logic.architecture.la64.register.GeneralPurposeRegister;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.HighLevelFunction;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.HighLevelProgram;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.HighLevelTopLevel;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.instruction.*;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.Data;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.HighLevelOperand;
+import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.Memory;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.Pseudo;
-import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.Stack;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -195,11 +196,32 @@ public final class ReplacePseudoRegisterPass implements HighLevelVisitor<Void> {
         return null;
     }
 
+    @Override
+    public Void visit(LoadAddress inst) {
+        inst.obj = replacePseudo(inst.obj);
+        inst.dst = replacePseudo(inst.dst);
+        return null;
+    }
+
+    @Override
+    public Void visit(Load inst) {
+        inst.ptr = replacePseudo(inst.ptr);
+        inst.dst = replacePseudo(inst.dst);
+        return null;
+    }
+
+    @Override
+    public Void visit(Store inst) {
+        inst.src = replacePseudo(inst.src);
+        inst.ptr = replacePseudo(inst.ptr);
+        return null;
+    }
+
     private HighLevelOperand replacePseudo(HighLevelOperand operand) {
         if (operand instanceof Pseudo pseudo) {
             String id = pseudo.name();
             if (registers.containsKey(id)) {
-                return new Stack(registers.get(id));
+                return new Memory(GeneralPurposeRegister.FP, registers.get(id));
             } else {
                 BackendSymbolTable.Entry entry = backendSymbolTable.get(id);
                 if (entry == null || entry instanceof BackendSymbolTable.FuncEntry) {
@@ -214,7 +236,7 @@ public final class ReplacePseudoRegisterPass implements HighLevelVisitor<Void> {
                     // 向负无穷对齐至 alignment
                     stackOffset = Math.floorDiv(stackOffset, alignment) * alignment;
                     registers.put(id, stackOffset);
-                    return new Stack(stackOffset);
+                    return new Memory(GeneralPurposeRegister.FP, stackOffset);
                 }
             }
         }

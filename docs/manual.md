@@ -13,6 +13,7 @@
 - unsigned int
 - unsigned long
 - double
+- 指针
 
 ### 语句
 

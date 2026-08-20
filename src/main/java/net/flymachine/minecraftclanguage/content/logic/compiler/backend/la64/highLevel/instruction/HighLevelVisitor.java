@@ -46,4 +46,10 @@ public interface HighLevelVisitor<T> {
     T visit(BranchIfCCNotZero inst);
 
     T visit(DoubleNegate inst);
+
+    T visit(LoadAddress inst);
+
+    T visit(Load inst);
+
+    T visit(Store inst);
 }

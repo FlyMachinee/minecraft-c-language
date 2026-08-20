@@ -14,6 +14,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.DoubleInit;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.BasicType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.FunctionType;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.PointerType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.SymbolTable;
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.*;
@@ -150,7 +151,7 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
         for (int argIndex : argPassingInfo.stackArgs) {
             String name = tacFunction.params.get(argIndex);
             AsmType asmType = asmTypes.get(argIndex);
-            target.add(new Move(asmType, new Stack(stackOffset, true), new Pseudo(name)));
+            target.add(new Move(asmType, new Memory(FP, stackOffset), new Pseudo(name)));
             stackOffset += 8;
         }
 
@@ -233,6 +234,12 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
         } else {
             Type lhsType = getType(inst.lhs);
             AsmType asmType = lhsType.toAsmType();
+            boolean isUnsigned = false;
+            if (lhsType instanceof BasicType bt && bt.isUnsigned()) {
+                isUnsigned = true;
+            } else if (lhsType instanceof PointerType) {
+                isUnsigned = true;
+            }
             switch (inst.op) {
                 case ADD, SUBTRACT, MULTIPLY -> {
                     target.add(new Binary(
@@ -245,14 +252,12 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
                         lowerValue(inst.lhs), lowerValue(inst.rhs), lowerValue(inst.dst)));
                 }
                 case DIVIDE, MODULO -> {
-                    boolean isUnsigned = ((BasicType) lhsType).isUnsigned();
                     target.add(new DivOrMod(
                         inst.op == BinaryOperator.DIVIDE, asmType, isUnsigned,
                         lowerValue(inst.lhs), lowerValue(inst.rhs), lowerValue(inst.dst)));
                 }
                 case LEFT_SHIFT, RIGHT_SHIFT -> {
                     boolean isLeftShift = inst.op == BinaryOperator.LEFT_SHIFT;
-                    boolean isUnsigned = ((BasicType) lhsType).isUnsigned();
                     target.add(new BitwiseShift(
                         isLeftShift, asmType, isUnsigned,
                         lowerValue(inst.lhs), lowerValue(inst.rhs), lowerValue(inst.dst)));
@@ -285,7 +290,6 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
                         return null;
                     }
 
-                    boolean isUnsigned = ((BasicType) getType(inst.lhs)).isUnsigned();
                     target.add(new Compare(
                         cmp, isUnsigned, asmType,
                         lowerValue(inst.lhs), lowerValue(inst.rhs), lowerValue(inst.dst)));
@@ -371,7 +375,8 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
             return null;
         }
 
-        AsmType asmType = getType(inst.lhs).toAsmType();
+        Type type = getType(inst.lhs);
+        AsmType asmType = type.toAsmType();
 
         if (asmType == AsmType.DOUBLE) {
             boolean swap = false;
@@ -401,7 +406,12 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
             return null;
         }
 
-        boolean isUnsigned = ((BasicType) getType(inst.lhs)).isUnsigned();
+        boolean isUnsigned = false;
+        if (type instanceof BasicType bt && bt.isUnsigned()) {
+            isUnsigned = true;
+        } else if (type instanceof PointerType) {
+            isUnsigned = true;
+        }
         Comparison cmp = switch (inst.cond) {
             case EQUAL -> inst.inverse ? Comparison.NOT_EQUAL : Comparison.EQUAL;
             case NOT_EQUAL -> inst.inverse ? Comparison.EQUAL : Comparison.NOT_EQUAL;
@@ -445,7 +455,7 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
         for (int argIndex : argPassingInfo.stackArgs) {
             HighLevelOperand arg = lowerValue(inst.args.get(argIndex));
             AsmType asmType = asmTypes.get(argIndex);
-            target.add(new Move(asmType, arg, new Stack(stackOffset, false)));
+            target.add(new Move(asmType, arg, new Memory(SP, stackOffset)));
             stackOffset += 8;
         }
 
@@ -587,16 +597,25 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
 
     @Override
     public Void visit(TacGetAddress inst) {
+        HighLevelOperand src = lowerValue(inst.src);
+        HighLevelOperand dst = lowerValue(inst.dst);
+        target.add(new LoadAddress(src, dst));
         return null;
     }
 
     @Override
     public Void visit(TacLoad inst) {
+        HighLevelOperand src = lowerValue(inst.srcPtr);
+        HighLevelOperand dst = lowerValue(inst.dst);
+        target.add(new Load(getType(inst.dst).toAsmType(), src, dst));
         return null;
     }
 
     @Override
     public Void visit(TacStore inst) {
+        HighLevelOperand src = lowerValue(inst.src);
+        HighLevelOperand dst = lowerValue(inst.dstPtr);
+        target.add(new Store(getType(inst.src).toAsmType(), src, dst));
         return null;
     }
 
