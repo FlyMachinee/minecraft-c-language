@@ -6,11 +6,12 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.Compariso
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.UnaryOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.StaticInit;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.BasicType;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.PointerType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
 
 public sealed interface Constant
-    permits ConstantInt, ConstantLong, ConstantUnsignedInt, ConstantUnsignedLong, ConstantDouble {
-    
+    permits ConstantInt, ConstantLong, ConstantUnsignedInt, ConstantUnsignedLong, ConstantDouble, ConstantPointer {
+
     ConstantInt toInt();
 
     ConstantLong toLong();
@@ -21,15 +22,23 @@ public sealed interface Constant
 
     ConstantDouble toDouble();
 
-    default Constant castTo(BasicType type) {
-        return switch (type) {
-            case INT -> toInt();
-            case LONG -> toLong();
-            case UNSIGNED_INT -> toUnsignedInt();
-            case UNSIGNED_LONG -> toUnsignedLong();
-            case DOUBLE -> toDouble();
-            default -> throw new IllegalStateException("Unsupported type for constant cast: " + type);
-        };
+    ConstantPointer toPointer(Type referencedType);
+
+    default Constant castTo(Type type) {
+        if (type instanceof BasicType bt) {
+            return switch (bt) {
+                case INT -> toInt();
+                case LONG -> toLong();
+                case UNSIGNED_INT -> toUnsignedInt();
+                case UNSIGNED_LONG -> toUnsignedLong();
+                case DOUBLE -> toDouble();
+                default -> throw new IllegalStateException("Unsupported type for constant cast: " + type);
+            };
+        }
+        if (type instanceof PointerType pt) {
+            return toPointer(pt.referencedType());
+        }
+        throw new UnsupportedOperationException("Unsupported type for constant cast: " + type);
     }
 
     StaticInit toStaticInit();
@@ -45,4 +54,6 @@ public sealed interface Constant
     Type getType();
 
     AsmType getAsmType();
+
+    boolean isNullPointer();
 }

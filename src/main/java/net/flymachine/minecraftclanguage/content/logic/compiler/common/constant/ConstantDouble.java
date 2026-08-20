@@ -6,6 +6,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.Compariso
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.UnaryOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.DoubleInit;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.BasicType;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
 import org.jetbrains.annotations.NotNull;
 
 public record ConstantDouble(double value) implements Constant {
@@ -48,6 +49,11 @@ public record ConstantDouble(double value) implements Constant {
     }
 
     @Override
+    public ConstantPointer toPointer(Type referencedType) {
+        throw new UnsupportedOperationException("Invalid cast");
+    }
+
+    @Override
     public DoubleInit toStaticInit() {
         return new DoubleInit(value);
     }
@@ -64,12 +70,59 @@ public record ConstantDouble(double value) implements Constant {
 
     @Override
     public Constant apply(BinaryOperator op, Constant rhs) {
-        return apply(op, rhs.toDouble());
+        BasicType lhsType = getType();
+        Type rhsType = rhs.getType();
+
+        return switch (op) {
+            case ADD, SUBTRACT, MULTIPLY, DIVIDE -> {
+                if (rhsType.isArithmetic()) {
+                    if (lhsType != rhsType) {
+                        throw new UnsupportedOperationException("Cast to their common real type first");
+                    }
+                    yield apply(op, (ConstantDouble) rhs);
+                }
+                throw new UnsupportedOperationException("Unsupported operation");
+            }
+            case MODULO, BITWISE_AND, BITWISE_OR, BITWISE_XOR, LEFT_SHIFT, RIGHT_SHIFT ->
+                throw new UnsupportedOperationException("Unsupported operation");
+            case LOGICAL_AND, LOGICAL_OR -> {
+                if (rhsType.isScalar()) {
+                    if (op == BinaryOperator.LOGICAL_AND) {
+                        yield new ConstantInt(this.isZero() || rhs.isZero() ? 0 : 1);
+                    } else {
+                        yield new ConstantInt(this.isZero() && rhs.isZero() ? 0 : 1);
+                    }
+                }
+                throw new UnsupportedOperationException("Unsupported operation");
+            }
+            case LESS_THAN, LESS_OR_EQUAL, GREATER_THAN, GREATER_OR_EQUAL -> {
+                if (!rhsType.isReal()) {
+                    if (lhsType != rhsType) {
+                        throw new UnsupportedOperationException("Cast to their common real type first");
+                    }
+                    yield apply(op, (ConstantDouble) rhs);
+                }
+                throw new UnsupportedOperationException("Unsupported operation");
+            }
+            case EQUAL, NOT_EQUAL -> {
+                if (!rhsType.isArithmetic()) {
+                    if (lhsType != rhsType) {
+                        throw new UnsupportedOperationException("Cast to their common real type first");
+                    }
+                    yield apply(op, (ConstantDouble) rhs);
+                }
+                throw new UnsupportedOperationException("Unsupported operation");
+            }
+        };
+
     }
 
     @Override
     public ConstantInt apply(Comparison cmp, Constant rhs) {
-        return apply(cmp, rhs.toDouble());
+        if (!(rhs instanceof ConstantDouble doubleRhs)) {
+            throw new UnsupportedOperationException("Cast rhs to double first");
+        }
+        return apply(cmp, doubleRhs);
     }
 
     @Override
@@ -110,6 +163,11 @@ public record ConstantDouble(double value) implements Constant {
 
     public ConstantInt apply(Comparison cmp, ConstantDouble rhs) {
         return (ConstantInt) apply(cmp.toBinaryOperator(), rhs);
+    }
+
+    @Override
+    public boolean isNullPointer() {
+        return false;
     }
 
 }

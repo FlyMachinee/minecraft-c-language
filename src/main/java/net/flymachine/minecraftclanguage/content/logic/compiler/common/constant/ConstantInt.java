@@ -6,6 +6,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.Compariso
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.UnaryOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.IntInit;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.BasicType;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
 import org.jetbrains.annotations.NotNull;
 
 public record ConstantInt(int value) implements Constant {
@@ -44,6 +45,11 @@ public record ConstantInt(int value) implements Constant {
     }
 
     @Override
+    public ConstantPointer toPointer(Type referencedType) {
+        return new ConstantPointer(value, referencedType);
+    }
+
+    @Override
     public IntInit toStaticInit() {
         return new IntInit(value);
     }
@@ -59,18 +65,63 @@ public record ConstantInt(int value) implements Constant {
 
     @Override
     public Constant apply(BinaryOperator op, Constant rhs) {
-        if (rhs instanceof ConstantInt intRhs) {
-            return apply(op, intRhs);
-        } else if (rhs instanceof ConstantLong longRhs) {
-            return toLong().apply(op, longRhs);
-        } else if (rhs instanceof ConstantUnsignedInt unsignedIntRhs) {
-            return toUnsignedInt().apply(op, unsignedIntRhs);
-        } else if (rhs instanceof ConstantUnsignedLong unsignedLongRhs) {
-            return toUnsignedLong().apply(op, unsignedLongRhs);
-        } else if (rhs instanceof ConstantDouble doubleRhs) {
-            return toDouble().apply(op, doubleRhs);
-        }
-        throw new IllegalStateException("Unsupported constant type: " + rhs.getClass());
+        BasicType lhsType = getType();
+        Type rhsType = rhs.getType();
+
+        return switch (op) {
+            case ADD, SUBTRACT, MULTIPLY, DIVIDE -> {
+                if (rhsType.isArithmetic()) {
+                    if (lhsType != rhsType) {
+                        throw new UnsupportedOperationException("Cast to their common real type first");
+                    }
+                    yield apply(op, (ConstantInt) rhs);
+                }
+                throw new UnsupportedOperationException("Unsupported operation");
+            }
+            case MODULO, BITWISE_AND, BITWISE_OR, BITWISE_XOR -> {
+                if (rhsType.isInteger()) {
+                    if (lhsType != rhsType) {
+                        throw new UnsupportedOperationException("Cast to their common real type first");
+                    }
+                    yield apply(op, (ConstantInt) rhs);
+                }
+                throw new UnsupportedOperationException("Unsupported operation");
+            }
+            case LEFT_SHIFT, RIGHT_SHIFT -> {
+                if (rhsType.isInteger()) {
+                    yield apply(op, rhs.toInt());
+                }
+                throw new UnsupportedOperationException("Unsupported operation");
+            }
+            case LOGICAL_AND, LOGICAL_OR -> {
+                if (rhsType.isScalar()) {
+                    if (op == BinaryOperator.LOGICAL_AND) {
+                        yield new ConstantInt(this.isZero() || rhs.isZero() ? 0 : 1);
+                    } else {
+                        yield new ConstantInt(this.isZero() && rhs.isZero() ? 0 : 1);
+                    }
+                }
+                throw new UnsupportedOperationException("Unsupported operation");
+            }
+            case LESS_THAN, LESS_OR_EQUAL, GREATER_THAN, GREATER_OR_EQUAL -> {
+                if (!rhsType.isReal()) {
+                    if (lhsType != rhsType) {
+                        throw new UnsupportedOperationException("Cast to their common real type first");
+                    }
+                    yield apply(op, (ConstantInt) rhs);
+                }
+                throw new UnsupportedOperationException("Unsupported operation");
+            }
+            case EQUAL, NOT_EQUAL -> {
+                if (!rhsType.isArithmetic()) {
+                    if (lhsType != rhsType) {
+                        throw new UnsupportedOperationException("Cast to their common real type first");
+                    }
+                    yield apply(op, (ConstantInt) rhs);
+                }
+                throw new UnsupportedOperationException("Unsupported operation");
+            }
+        };
     }
 
     @Override
@@ -105,8 +156,7 @@ public record ConstantInt(int value) implements Constant {
             case BITWISE_AND -> new ConstantInt(value & rhs.value);
             case BITWISE_OR -> new ConstantInt(value | rhs.value);
             case BITWISE_XOR -> new ConstantInt(value ^ rhs.value);
-            case LOGICAL_AND -> new ConstantInt((value != 0 && rhs.value != 0) ? 1 : 0);
-            case LOGICAL_OR -> new ConstantInt((value != 0 || rhs.value != 0) ? 1 : 0);
+            case LOGICAL_AND, LOGICAL_OR -> throw new UnsupportedOperationException("Should be handled earlier");
             case LESS_THAN -> new ConstantInt(value < rhs.value ? 1 : 0);
             case GREATER_THAN -> new ConstantInt(value > rhs.value ? 1 : 0);
             case EQUAL -> new ConstantInt(value == rhs.value ? 1 : 0);
@@ -118,5 +168,10 @@ public record ConstantInt(int value) implements Constant {
 
     public ConstantInt apply(Comparison cmp, ConstantInt rhs) {
         return apply(cmp.toBinaryOperator(), rhs);
+    }
+
+    @Override
+    public boolean isNullPointer() {
+        return value == 0;
     }
 }
