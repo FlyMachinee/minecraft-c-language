@@ -187,7 +187,7 @@ declarationSpecifier // added
     | typeSpecifier
     ;
 initDeclaratorList
-    : initDeclarator
+    : initDeclarator (Comma initDeclarator)*
     ;
 initDeclarator
     : declarator (Assign initializer)?

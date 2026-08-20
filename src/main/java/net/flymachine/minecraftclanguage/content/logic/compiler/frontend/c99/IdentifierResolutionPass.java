@@ -183,14 +183,16 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
 
     @Override
     public Void visit(DeclarationNode node) {
-        if (node.type instanceof FunctionTypeNode funcType) {
-            visitFunctionTypeNode(funcType, false);
-        }
-        visitDeclarationLike(
-            node.id, node.type, node.storageClass,
-            !(node.type instanceof FunctionTypeNode) && node.init != null);
-        if (node.init != null) {
-            node.init.accept(this);
+        for (InitDeclaratorNode initDecl : node.initDeclarators) {
+            if (initDecl.finalType instanceof FunctionTypeNode funcType) {
+                visitFunctionTypeNode(funcType, false);
+            }
+            visitDeclarationLike(
+                initDecl.id, initDecl.finalType, node.storageClass,
+                !(initDecl.finalType instanceof FunctionTypeNode) && initDecl.init != null);
+            if (initDecl.init != null) {
+                initDecl.init.accept(this);
+            }
         }
         return null;
     }

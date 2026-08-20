@@ -2,44 +2,25 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.as
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.PrintStream;
+import java.util.List;
 
 public final class DeclarationNode extends AstNode implements ExternalDeclarationNode {
     public @Nullable StorageClassSpecifierNode storageClass;
-    public TypeNode type;
-    public IdentifierNode id;
-    public @Nullable ExpressionNode init;
+    public TypeNode baseType;
+    public final @NotNull List<InitDeclaratorNode> initDeclarators;
 
     public DeclarationNode(
-        SourceLocation wholeLocation, @Nullable StorageClassSpecifierNode storageClass, TypeNode type,
-        IdentifierNode id, @Nullable ExpressionNode init) {
+        SourceLocation wholeLocation, @Nullable StorageClassSpecifierNode storageClass, TypeNode baseType,
+        @NotNull List<InitDeclaratorNode> initDeclarators) {
 
         super(wholeLocation);
         this.storageClass = storageClass;
-        this.type = type;
-        this.id = id;
-        this.init = init;
-    }
-
-    public DeclarationNode(
-        SourceLocation wholeLocation, @Nullable StorageClassSpecifierNode storageClass, TypeNode type,
-        IdentifierNode id) {
-
-        super(wholeLocation);
-        this.storageClass = storageClass;
-        this.type = type;
-        this.id = id;
-        this.init = null;
-    }
-
-    public DeclarationNode(SourceLocation wholeLocation, TypeNode type, IdentifierNode id) {
-        super(wholeLocation);
-        this.storageClass = null;
-        this.type = type;
-        this.id = id;
-        this.init = null;
+        this.baseType = baseType;
+        this.initDeclarators = initDeclarators;
     }
 
     @Override
@@ -65,22 +46,39 @@ public final class DeclarationNode extends AstNode implements ExternalDeclaratio
         }
 
         indent(stream, indentLevel + 1);
-        stream.print("type=");
-        type.dump(stream);
+        stream.print("baseType=");
+        baseType.dump(stream);
         stream.println(',');
 
         indent(stream, indentLevel + 1);
-        stream.print("id=");
-        id.dump(stream);
-        stream.println(',');
-
-        indent(stream, indentLevel + 1);
-        stream.print("init=");
-        if (init != null) {
-            init.dump(stream, indentLevel + 1, false);
-            stream.println(',');
+        if (initDeclarators.isEmpty()) {
+            stream.println("list=[]");
         } else {
-            stream.println("null,");
+            stream.print("list=[");
+            for (InitDeclaratorNode initDeclarator : initDeclarators) {
+                stream.println("{");
+
+                indent(stream, indentLevel + 2);
+                stream.print("id=");
+                initDeclarator.id.dump(stream);
+                stream.println(",");
+
+                indent(stream, indentLevel + 2);
+                stream.print("finalType=");
+                initDeclarator.finalType.dump(stream);
+                stream.println(",");
+
+                if (initDeclarator.init != null) {
+                    indent(stream, indentLevel + 2);
+                    stream.print("init=");
+                    initDeclarator.init.dump(stream, indentLevel + 2, false);
+                    stream.println(",");
+                }
+
+                indent(stream, indentLevel + 1);
+                stream.print("}, ");
+            }
+            stream.println("],");
         }
 
         indent(stream, indentLevel);

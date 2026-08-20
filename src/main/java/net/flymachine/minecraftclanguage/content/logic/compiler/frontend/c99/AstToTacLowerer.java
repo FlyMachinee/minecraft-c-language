@@ -122,9 +122,13 @@ public final class AstToTacLowerer implements StatementVisitor, ExpressionVisito
     private void lowerDecl(DeclarationNode decl) {
         // 一定为块作用域
         // 无存储类且有初始化时，生成初始化三地址码
-        if (decl.init != null && decl.storageClass == null) {
-            TacValue initValue = evalAndLvalueConvert(decl.init);
-            emitTac(new TacCopy(initValue, new TacVariable(decl.id.name)));
+        if (decl.storageClass == null) {
+            for (InitDeclaratorNode initDecl : decl.initDeclarators) {
+                if (initDecl.init != null) {
+                    TacValue initValue = evalAndLvalueConvert(initDecl.init);
+                    emitTac(new TacCopy(initValue, new TacVariable(initDecl.id.name)));
+                }
+            }
         }
     }
 

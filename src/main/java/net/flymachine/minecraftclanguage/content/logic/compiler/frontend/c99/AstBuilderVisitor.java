@@ -459,39 +459,48 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
     @Override
     public DeclarationNode visitDeclaration(C99Parser.DeclarationContext ctx) {
         // declaration -> declarationSpecifiers initDeclaratorList? Semicolon
+        TypeAndSpecifiers typeAndSpecifiers = parseDeclarationSpecifiers(ctx.declarationSpecifiers());
+        TypeNode baseType = typeAndSpecifiers.t;
+        boolean isBaseTypeError = baseType == null || baseType.getType() == null;
+        if (isBaseTypeError) {
+            // 没有类型
+            baseType = new BasicTypeNode(null, BasicType.INT);
+        }
+
         var list = ctx.initDeclaratorList();
         if (list != null) {
             // initDeclaratorList
-            // -> initDeclarator
-            // -> declarator (Assign initializer)?
-            var initDeclarator = list.initDeclarator();
-            TypeAndSpecifiers typeAndSpecifiers = parseDeclarationSpecifiers(ctx.declarationSpecifiers());
-            TypeNode baseType = typeAndSpecifiers.t;
-            boolean isBaseTypeError = baseType == null || baseType.getType() == null;
-            if (isBaseTypeError) {
-                // 没有类型
-                baseType = new BasicTypeNode(null, BasicType.INT);
-            }
-            DeclarationLikeResult res = parseFromDeclarator(baseType, initDeclarator.declarator());
+            // -> initDeclarator (Comma initDeclarator)*
+            List<InitDeclaratorNode> initDeclarators = new ArrayList<>();
 
-            if (isBaseTypeError) {
-                error();
-                String msg =
-                    "type defaults to '" + logger.white("int") + "' in declaration of '"
-                    + logger.white(res.id.name) + "'";
-                logErrorWithSourceLine(res.id.wholeLoc, msg);
-            }
+            for (var initDeclarator : list.initDeclarator()) {
+                // -> initDeclarator
+                // -> declarator (Assign initializer)?
+                DeclarationLikeResult res = parseFromDeclarator(baseType, initDeclarator.declarator());
 
-            IdentifierNode id = res.id;
-            TypeNode t = res.t;
-            if (initDeclarator.initializer() != null) {
-                ExpressionNode init = (ExpressionNode) visit(initDeclarator.initializer());
-                return new DeclarationNode(getSourceLocation(ctx), typeAndSpecifiers.storageClass, t, id, init);
-            } else {
-                return new DeclarationNode(getSourceLocation(ctx), typeAndSpecifiers.storageClass, t, id);
+                if (isBaseTypeError) {
+                    error();
+                    String msg =
+                        "type defaults to '" + logger.white("int") + "' in declaration of '"
+                        + logger.white(res.id.name) + "'";
+                    logErrorWithSourceLine(res.id.wholeLoc, msg);
+                }
+
+                IdentifierNode id = res.id;
+                TypeNode t = res.t;
+                if (initDeclarator.initializer() != null) {
+                    ExpressionNode init = (ExpressionNode) visit(initDeclarator.initializer());
+                    initDeclarators.add(new InitDeclaratorNode(
+                        getSourceLocation(initDeclarator), t, id, init));
+                } else {
+                    initDeclarators.add(new InitDeclaratorNode(getSourceLocation(initDeclarator), t, id));
+                }
             }
+            return new DeclarationNode(
+                getSourceLocation(ctx), typeAndSpecifiers.storageClass, typeAndSpecifiers.t, initDeclarators);
         } else {
-            return null;
+            return new DeclarationNode(
+                getSourceLocation(ctx), typeAndSpecifiers.storageClass, typeAndSpecifiers.t, List.of());
         }
     }
 
@@ -581,9 +590,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
             StatementNode body = (StatementNode) visit(ctx.statement());
             if (ctx.declaration() != null) {
                 DeclarationNode decl = visitDeclaration(ctx.declaration());
-                if (decl != null) {
-                    init = new ForInitDeclarationNode(decl);
-                }
+                init = new ForInitDeclarationNode(decl);
             } else {
                 if (ctx.init != null) {
                     init = new ForInitExpressionNode((ExpressionNode) visit(ctx.init));

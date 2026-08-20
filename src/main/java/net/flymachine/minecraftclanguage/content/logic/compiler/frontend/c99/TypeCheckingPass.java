@@ -288,34 +288,38 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
 
     @Override
     public Void visit(DeclarationNode node) {
-        if (!node.type.getType().isComplete()) {
-            // 不完整类型
-            error();
-            String msg =
-                "storage size of '" + getLogger().white(getSourceFile().getByLocation(node.id.wholeLoc)) +
-                "' isn't known; have type '" + getLogger().white(node.type.getType().toString()) + "'";
-            logErrorWithSourceLine(node.id.wholeLoc, msg);
-            return null;
-        }
-
-        if (node.type instanceof FunctionTypeNode funcType) {
-            // 函数声明
-            visitFunctionDeclaration(node.id, funcType, node.storageClass, false);
-            checkFunctionParameter(funcType, false);
-
-            if (node.init != null) {
-                // 函数类型不能使用赋值初始化
+        for (InitDeclaratorNode initDecl : node.initDeclarators) {
+            if (!initDecl.finalType.getType().isComplete()) {
+                // 不完整类型
                 error();
-                String msg = "function '" + getLogger().white(node.id.name) + "' is initialized like a variable";
-                logErrorWithSourceLine(node.init.wholeLoc, msg);
+                String msg =
+                    "storage size of '" + getLogger().white(getSourceFile().getByLocation(initDecl.id.wholeLoc)) +
+                    "' isn't known; have type '" + getLogger().white(initDecl.finalType.getType().toString()) + "'";
+                logErrorWithSourceLine(initDecl.id.wholeLoc, msg);
+                return null;
             }
-        } else {
-            // 变量声明
-            boolean isFileScope = functionContext == null;
-            if (isFileScope) {
-                visitFileScopeVariableDeclaration(node);
+
+            if (initDecl.finalType instanceof FunctionTypeNode funcType) {
+                // 函数声明
+                visitFunctionDeclaration(initDecl.id, funcType, node.storageClass, false);
+                checkFunctionParameter(funcType, false);
+
+                if (initDecl.init != null) {
+                    // 函数类型不能使用赋值初始化
+                    error();
+                    String msg = "function '" + getLogger().white(initDecl.id.name) +
+                                 "' is initialized like a variable";
+                    logErrorWithSourceLine(initDecl.init.wholeLoc, msg);
+                }
             } else {
-                visitBlockScopeVariableDeclaration(node);
+                // 变量声明
+                boolean isFileScope = functionContext == null;
+                if (isFileScope) {
+                    visitFileScopeVariableDeclaration(
+                        initDecl.id, initDecl.finalType, node.storageClass, initDecl.init);
+                } else {
+                    visitBlockScopeVariableDeclaration(node.storageClass, initDecl);
+                }
             }
         }
         return null;
@@ -450,11 +454,8 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         }
     }
 
-    public void visitFileScopeVariableDeclaration(DeclarationNode decl) {
-        IdentifierNode id = decl.id;
-        TypeNode type = decl.type;
-        StorageClassSpecifierNode storageClass = decl.storageClass;
-        ExpressionNode init = decl.init;
+    public void visitFileScopeVariableDeclaration(
+        IdentifierNode id, TypeNode type, StorageClassSpecifierNode storageClass, ExpressionNode init) {
 
         // 获取定义类型
         SymbolTable.Entry.StaticAttr.DefinitionType defType;
@@ -545,11 +546,11 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         prevAttr.global = global;
     }
 
-    public void visitBlockScopeVariableDeclaration(DeclarationNode decl) {
-        IdentifierNode id = decl.id;
-        TypeNode type = decl.type;
-        StorageClassSpecifierNode storageClass = decl.storageClass;
-        ExpressionNode init = decl.init;
+    public void visitBlockScopeVariableDeclaration(
+        StorageClassSpecifierNode storageClass, InitDeclaratorNode initDecl) {
+        IdentifierNode id = initDecl.id;
+        TypeNode type = initDecl.finalType;
+        ExpressionNode init = initDecl.init;
 
         if (storageClass == null) {
             // 无存储类说明符，不可能重复定义
@@ -571,7 +572,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                                  "' using type '" + getLogger().white(init.expType.toString()) + "'";
                     logErrorWithSourceLine(init.wholeLoc, msg);
                 } else {
-                    decl.init = convertTo(init, type.getType());
+                    initDecl.init = convertTo(init, type.getType());
                 }
             }
             return;
@@ -942,20 +943,22 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         if (node.init != null) {
             if (node.init instanceof ForInitDeclarationNode forInitDecl) {
                 DeclarationNode decl = forInitDecl.decl;
-                if (decl.type instanceof FunctionTypeNode) {
-                    // for 初始化语句中不允许声明函数类型
-                    error();
-                    String msg = "declaration of non-variable '" + getLogger().white(decl.id.name) +
-                                 "' in for loop initial declaration";
-                    logErrorWithSourceLine(decl.wholeLoc, msg);
-                }
-                if (decl.storageClass != null) {
-                    // for 初始化语句中不允许有存储类说明符
-                    error();
-                    String msg = "declaration of " + decl.storageClass.storageClass + " variable '" +
-                                 getLogger().white(getSourceFile().getByLocation(decl.id.wholeLoc)) +
-                                 "' in for loop initial declaration";
-                    logErrorWithSourceLine(decl.id.wholeLoc, msg);
+                for (InitDeclaratorNode initDecl : decl.initDeclarators) {
+                    if (initDecl.finalType instanceof FunctionTypeNode) {
+                        // for 初始化语句中不允许声明函数类型
+                        error();
+                        String msg = "declaration of non-variable '" + getLogger().white(initDecl.id.name) +
+                                     "' in for loop initial declaration";
+                        logErrorWithSourceLine(decl.wholeLoc, msg);
+                    }
+                    if (decl.storageClass != null) {
+                        // for 初始化语句中不允许有存储类说明符
+                        error();
+                        String msg = "declaration of " + decl.storageClass.storageClass + " variable '" +
+                                     getLogger().white(getSourceFile().getByLocation(initDecl.id.wholeLoc)) +
+                                     "' in for loop initial declaration";
+                        logErrorWithSourceLine(initDecl.id.wholeLoc, msg);
+                    }
                 }
             }
             node.init.accept(this);
