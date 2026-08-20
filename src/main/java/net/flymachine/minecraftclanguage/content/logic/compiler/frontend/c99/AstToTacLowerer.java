@@ -589,6 +589,7 @@ public final class AstToTacLowerer implements StatementVisitor, ExpressionVisito
         ExpEvalResult dst = eval(assignment.lhs);
         if (assignment.op.op == AssignmentOperator.ASSIGN) {
             // 普通赋值
+            // 已经在类型检查中进行了可能的 cast 了
             if (dst instanceof PlainOperand objDst) {
                 emitTac(new TacCopy(rhs, objDst.object()));
                 if (rhs instanceof TacConstant constant) {
@@ -604,6 +605,43 @@ public final class AstToTacLowerer implements StatementVisitor, ExpressionVisito
             }
         } else {
             // 复合赋值
+            TypeCheckingPass.TypeCheckCompoundAssignmentResult checkRes =
+                TypeCheckingPass.typeCheckCompoundAssignment(assignment);
+            // 表达式 lhs @= rhs 与 lhs = lhs @ (rhs) 完全相同，但只求值一次 lhs
+            if (dst instanceof PlainOperand objDst) {
+                // 只可能是 Variable
+                TacVariable varDst = (TacVariable) objDst.object();
+                // 进行可能的 cast
+                TacValue lhsCastRes = cast(varDst, checkRes.lhsTargetType(), assignment.lhs.expType);
+                TacValue rhsCastRes = cast(rhs, checkRes.rhsTargetType(), assignment.rhs.expType);
+                // 发生计算
+                TacVariable tmp = makeTempVar(checkRes.tmpType());
+                emitTac(new TacBinaryOperation(assignment.op.op.toBinaryOperator(), lhsCastRes, rhsCastRes, tmp));
+                // 结果进行 cast
+                TacValue castRes = cast(tmp, assignment.expType, checkRes.tmpType());
+                // 写回
+                emitTac(new TacCopy(castRes, varDst));
+                return objDst;
+            }
+            if (dst instanceof DereferencedPointer derefPtr) {
+                // *ptr ?= rhs => *ptr = *ptr ? rhs
+                // 保证指针只求值一次
+                TacValue ptr = derefPtr.pointer();
+                // 加载 *ptr
+                TacVariable loadRes = makeTempVar(assignment.lhs.expType);
+                emitTac(new TacLoad(ptr, loadRes));
+                // 进行可能的 cast
+                TacValue lhsCastRes = cast(loadRes, checkRes.lhsTargetType(), assignment.lhs.expType);
+                TacValue rhsCastRes = cast(rhs, checkRes.rhsTargetType(), assignment.rhs.expType);
+                // 发生计算
+                TacVariable tmp = makeTempVar(checkRes.tmpType());
+                emitTac(new TacBinaryOperation(assignment.op.op.toBinaryOperator(), lhsCastRes, rhsCastRes, tmp));
+                // 结果进行 cast
+                TacValue castRes = cast(tmp, assignment.expType, checkRes.tmpType());
+                // 写回
+                emitTac(new TacStore(castRes, ptr));
+                return new PlainOperand(castRes);
+            }
             throw new IllegalStateException("Should be adjust to plain assignment earlier");
         }
     }
@@ -730,17 +768,12 @@ public final class AstToTacLowerer implements StatementVisitor, ExpressionVisito
         return new PlainOperand(dst);
     }
 
-    @Override
-    public ExpEvalResult visit(CastExpressionNode castExp) {
-        TacValue toCast = evalAndLvalueConvert(castExp.exp);
-        Type targetType = castExp.targetType.getType();
-        Type originType = castExp.exp.expType;
-
+    private TacValue cast(TacValue toCast, Type targetType, Type originType) {
         if (targetType.isCompatible(originType)) {
-            return new PlainOperand(toCast);
+            return toCast;
         }
         if (toCast instanceof TacConstant constant) {
-            return new PlainOperand(constant.value.castTo(targetType));
+            return new TacConstant(constant.value.castTo(targetType));
         }
         TacVariable dst = makeTempVar(targetType);
 
@@ -753,7 +786,7 @@ public final class AstToTacLowerer implements StatementVisitor, ExpressionVisito
                 case UNSIGNED_INT, UNSIGNED_LONG -> emitTac(new TacUnsignedIntToDouble(toCast, dst));
                 default -> throw new IllegalStateException("Unexpected value: " + originBasic);
             }
-            return new PlainOperand(dst);
+            return dst;
         }
         if (originBasic == BasicType.DOUBLE) {
             switch (targetBasic) {
@@ -761,7 +794,7 @@ public final class AstToTacLowerer implements StatementVisitor, ExpressionVisito
                 case UNSIGNED_INT, UNSIGNED_LONG -> emitTac(new TacDoubleToUnsignedInt(toCast, dst));
                 default -> throw new IllegalStateException("Unexpected value: " + targetBasic);
             }
-            return new PlainOperand(dst);
+            return dst;
         }
 
         if (targetBasic.sizeof() == originBasic.sizeof()) {
@@ -773,7 +806,16 @@ public final class AstToTacLowerer implements StatementVisitor, ExpressionVisito
         } else {
             emitTac(new TacZeroExtend(toCast, dst));
         }
-        return new PlainOperand(dst);
+        return dst;
+    }
+
+    @Override
+    public ExpEvalResult visit(CastExpressionNode castExp) {
+        TacValue toCast = evalAndLvalueConvert(castExp.exp);
+        Type targetType = castExp.targetType.getType();
+        Type originType = castExp.exp.expType;
+
+        return new PlainOperand(cast(toCast, targetType, originType));
     }
 
     @Override

@@ -268,6 +268,24 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         };
     }
 
+    public record TypeCheckCompoundAssignmentResult(Type lhsTargetType, Type rhsTargetType, Type tmpType) { }
+
+    public static TypeCheckCompoundAssignmentResult typeCheckCompoundAssignment(AssignmentNode node) {
+        final Type lhsType = node.lhs.expType;
+        final Type rhsType = node.rhs.expType;
+
+        return switch (node.op.op) {
+            case ASSIGN -> throw new IllegalArgumentException("Cannot handle simple assignment");
+            case MULTIPLY_ASSIGN, DIVIDE_ASSIGN, ADD_ASSIGN, SUBTRACT_ASSIGN, MODULO_ASSIGN, BITWISE_AND_ASSIGN,
+                 BITWISE_OR_ASSIGN, BITWISE_XOR_ASSIGN -> {
+                BasicType commonType = Type.commonRealType((BasicType) lhsType, (BasicType) rhsType);
+                yield new TypeCheckCompoundAssignmentResult(commonType, commonType, commonType);
+            }
+            case LEFT_SHIFT_ASSIGN, RIGHT_SHIFT_ASSIGN ->
+                new TypeCheckCompoundAssignmentResult(lhsType, rhsType, lhsType);
+        };
+    }
+
     @Override
     public Void visit(DeclarationNode node) {
         if (!node.type.getType().isComplete()) {
@@ -726,47 +744,44 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             return null;
         }
 
-        // 简单赋值
-        // rhs 与 lhs 必须满足下列条件之一
-        // lhs 与 rhs 拥有兼容的 struct 或 union 类型，或……
-        // rhs 必须可隐式转换成 lhs，这表示
-        // lhs 与 rhs 均拥有算术类型
-        if (node.op.op != AssignmentOperator.ASSIGN) {
-            // 复合赋值
-            // lhs, rhs	- 拥有算术类型的表达式
-            if (!node.lhs.expType.isArithmetic() || !node.rhs.expType.isArithmetic()) {
+        if (node.op.op == AssignmentOperator.ASSIGN) {
+            // 简单赋值
+            if (!validConvertAsIfByAssignment(node.rhs, node.lhs.expType)) {
                 error();
-                String msg = "operands of compound assignment operator " + node.op.op.getSymbol() +
-                             " must have arithmetic type; have '" + getLogger().white(node.lhs.expType.toString()) +
-                             "' and '" + getLogger().white(node.rhs.expType.toString()) + "'";
-                logErrorWithSourceLine(node.op.wholeLoc, msg);
+                String msg =
+                    "incompatible types when assigning type '" + getLogger().white(node.lhs.expType.toString()) +
+                    "' using type '" + getLogger().white(node.rhs.expType.toString()) + "'";
+                logErrorWithSourceLine(node.rhs.wholeLoc, msg);
                 node.expType = ErrorType.INSTANCE;
                 return null;
             }
 
-            // 表达式 lhs @= rhs 与 lhs = lhs @ (rhs) 完全相同
-            // 替换右表达式为新表达式
-            BinaryExpressionNode binaryExp =
-                new BinaryExpressionNode(
-                    new BinaryOperatorNode(node.op.wholeLoc, node.op.op.toBinaryOperator()), node.lhs, node.rhs);
-            typeCheckBinaryExp(binaryExp);
-            node.op = new AssignmentOperatorNode(node.op.wholeLoc, AssignmentOperator.ASSIGN);
-            node.rhs = binaryExp;
-            // 回到简单赋值的情形
+            node.rhs = convertTo(node.rhs, node.lhs.expType);
+            node.expType = node.lhs.expType;
+            return null;
         }
 
-        if (!validConvertAsIfByAssignment(node.rhs, node.lhs.expType)) {
+        // 复合赋值
+        // lhs, rhs	- 拥有算术类型的表达式
+        if (!node.lhs.expType.isArithmetic() || !node.rhs.expType.isArithmetic()) {
             error();
-            String msg =
-                "incompatible types when assigning type '" + getLogger().white(node.lhs.expType.toString()) +
-                "' using type '" + getLogger().white(node.rhs.expType.toString()) + "'";
-            logErrorWithSourceLine(node.rhs.wholeLoc, msg);
+            String msg = "operands of compound assignment operator " + node.op.op.getSymbol() +
+                         " must have arithmetic type; have '" + getLogger().white(node.lhs.expType.toString()) +
+                         "' and '" + getLogger().white(node.rhs.expType.toString()) + "'";
+            logErrorWithSourceLine(node.op.wholeLoc, msg);
             node.expType = ErrorType.INSTANCE;
             return null;
         }
 
-        node.rhs = convertTo(node.rhs, node.lhs.expType);
-        node.expType = node.lhs.expType;
+        // 表达式 lhs @= rhs 与 lhs = lhs @ (rhs) 完全相同，但只求值一次 lhs
+        // 复用检查逻辑
+        BinaryExpressionNode binaryExp =
+            new BinaryExpressionNode(
+                new BinaryOperatorNode(node.op.wholeLoc, node.op.op.toBinaryOperator()), node.lhs, node.rhs);
+        typeCheckBinaryExp(binaryExp);
+        // 推迟到生成 TAC 时再进行 cast
+        // 目前始终能进行 cast
+        node.expType = binaryExp.expType instanceof ErrorType ? ErrorType.INSTANCE : node.lhs.expType;
         return null;
     }
 
