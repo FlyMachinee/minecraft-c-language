@@ -3,7 +3,6 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.as
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.ExpressionBoolVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.ExpressionVisitor;
-import net.flymachine.minecraftclanguage.content.logic.compiler.ir.TacValue;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
 import java.io.PrintStream;
@@ -54,7 +53,7 @@ public final class AssignmentNode extends ExpressionNode {
     }
 
     @Override
-    public TacValue accept(ExpressionVisitor visitor) {
+    public ExpressionVisitor.ExpEvalResult accept(ExpressionVisitor visitor) {
         return visitor.visit(this);
     }
 

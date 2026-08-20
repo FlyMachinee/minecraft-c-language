@@ -3,7 +3,6 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.as
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.ExpressionBoolVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.ExpressionVisitor;
-import net.flymachine.minecraftclanguage.content.logic.compiler.ir.TacValue;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
 import java.io.PrintStream;
@@ -15,7 +14,7 @@ public abstract class ExpressionNode extends AstNode {
         super(wholeLocation);
     }
 
-    public abstract TacValue accept(ExpressionVisitor visitor);
+    public abstract ExpressionVisitor.ExpEvalResult accept(ExpressionVisitor visitor);
 
     public abstract ExpressionBoolVisitor.BoolGenResult accept(
         ExpressionBoolVisitor visitor, String jumpTarget, boolean inverse);

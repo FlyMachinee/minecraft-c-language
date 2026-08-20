@@ -34,4 +34,10 @@ public interface TacVisitor<T> {
     T visit(TacIntToDouble inst);
 
     T visit(TacUnsignedIntToDouble inst);
+
+    T visit(TacGetAddress inst);
+
+    T visit(TacLoad inst);
+
+    T visit(TacStore inst);
 }

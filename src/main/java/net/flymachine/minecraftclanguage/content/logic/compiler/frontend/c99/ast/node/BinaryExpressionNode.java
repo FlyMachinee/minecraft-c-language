@@ -55,7 +55,7 @@ public final class BinaryExpressionNode extends ExpressionNode {
     }
 
     @Override
-    public TacValue accept(ExpressionVisitor visitor) {
+    public ExpressionVisitor.ExpEvalResult accept(ExpressionVisitor visitor) {
         return visitor.visit(this);
     }
 

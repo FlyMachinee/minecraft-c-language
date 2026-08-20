@@ -585,6 +585,21 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
         return null;
     }
 
+    @Override
+    public Void visit(TacGetAddress inst) {
+        return null;
+    }
+
+    @Override
+    public Void visit(TacLoad inst) {
+        return null;
+    }
+
+    @Override
+    public Void visit(TacStore inst) {
+        return null;
+    }
+
     // 浮点常量池
     private final Map<Double, String> doubleConstants = new HashMap<>();
 

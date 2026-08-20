@@ -1,6 +1,8 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast;
 
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.Constant;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.*;
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.TacConstant;
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.TacValue;
 
 /**
@@ -8,25 +10,36 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.ir.TacValue;
  */
 public interface ExpressionVisitor {
 
-    TacValue visit(ConstantNode constant);
+    ExpEvalResult visit(ConstantNode constant);
 
-    TacValue visit(UnaryExpressionNode unaryExp);
+    ExpEvalResult visit(UnaryExpressionNode unaryExp);
 
-    TacValue visit(BinaryExpressionNode binaryExp);
+    ExpEvalResult visit(BinaryExpressionNode binaryExp);
 
-    TacValue visit(AssignmentNode assignment);
+    ExpEvalResult visit(AssignmentNode assignment);
 
-    TacValue visit(VariableNode variable);
+    ExpEvalResult visit(VariableNode variable);
 
-    TacValue visit(IncrementDecrementNode incrementDecrement);
+    ExpEvalResult visit(IncrementDecrementNode incrementDecrement);
 
-    TacValue visit(ConditionalExpressionNode condExp);
+    ExpEvalResult visit(ConditionalExpressionNode condExp);
 
-    TacValue visit(FunctionCallNode funcCall);
+    ExpEvalResult visit(FunctionCallNode funcCall);
 
-    TacValue visit(CastExpressionNode castExp);
+    ExpEvalResult visit(CastExpressionNode castExp);
 
-    TacValue visit(AddressOfNode addrOf);
-    
-    TacValue visit(DereferenceNode deref);
+    ExpEvalResult visit(AddressOfNode addrOf);
+
+    ExpEvalResult visit(DereferenceNode deref);
+
+    sealed interface ExpEvalResult { }
+
+    record PlainOperand(TacValue object) implements ExpEvalResult {
+        public PlainOperand(Constant constant) {
+            this(new TacConstant(constant));
+        }
+    }
+
+    record DereferencedPointer(TacValue pointer) implements ExpEvalResult { }
+
 }
