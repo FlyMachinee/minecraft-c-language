@@ -60,4 +60,8 @@ public class SemanticAnalysePass {
     protected void logNoteWithSourceLine(SourceLocation sourceLocation, String message) {
         ErrorHandleUtil.logNoteWithSourceLine(getLogger(), getSourceFile(), sourceLocation, message);
     }
+
+    protected void logWarningWithSourceLine(SourceLocation sourceLocation, String message) {
+        ErrorHandleUtil.logWarningWithSourceLine(getLogger(), getSourceFile(), sourceLocation, message);
+    }
 }

@@ -82,7 +82,14 @@ public final class C99Frontend {
             return null;
         }
 
-        TacProgram tacProgram = new AstToTacLowerer(symbolTable).lower((ProgramNode) ast);
+        AstToTacLowerer astToTacLowerer = new AstToTacLowerer(symbolTable);
+        astToTacLowerer.setSourceFile(sourceFile);
+        TacProgram tacProgram = astToTacLowerer.lower((ProgramNode) ast);
+
+        if (astToTacLowerer.hasSemanticError()) {
+            return null;
+        }
+
         return new Result(symbolTable, tacProgram);
     }
 

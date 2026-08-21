@@ -225,78 +225,82 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
 
     @Override
     public Void visit(TacBinaryOperation inst) {
-        if (inst.lhs instanceof TacConstant tacLhsConstant &&
-            inst.rhs instanceof TacConstant tacRhsConstant) {
+        // noinspection EmptyStatement
+        if ((inst.op == BinaryOperator.DIVIDE || inst.op == BinaryOperator.MODULO) &&
+            inst.rhs instanceof TacConstant rhsConst && rhsConst.value.getType().isInteger() &&
+            rhsConst.value.isZero()) {
+            // 除0
+        } else if (inst.lhs instanceof TacConstant tacLhsConstant &&
+                   inst.rhs instanceof TacConstant tacRhsConstant) {
             // 若左、右操作数均为常量，直接计算结果并生成 Move 指令
             Constant result = tacLhsConstant.value.apply(inst.op, tacRhsConstant.value);
             AsmType asmType = getType(inst.dst).toAsmType();
             target.add(new Move(asmType, immediate(result), lowerValue(inst.dst)));
-        } else {
-            Type lhsType = getType(inst.lhs);
-            AsmType asmType = lhsType.toAsmType();
-            boolean isUnsigned = false;
-            if (lhsType instanceof BasicType bt && bt.isUnsigned()) {
-                isUnsigned = true;
-            } else if (lhsType instanceof PointerType) {
-                isUnsigned = true;
+            return null;
+        }
+        Type lhsType = getType(inst.lhs);
+        AsmType asmType = lhsType.toAsmType();
+        boolean isUnsigned = false;
+        if (lhsType instanceof BasicType bt && bt.isUnsigned()) {
+            isUnsigned = true;
+        } else if (lhsType instanceof PointerType) {
+            isUnsigned = true;
+        }
+        switch (inst.op) {
+            case ADD, SUBTRACT, MULTIPLY -> {
+                target.add(new Binary(
+                    inst.op, asmType,
+                    lowerValue(inst.lhs), lowerValue(inst.rhs), lowerValue(inst.dst)));
             }
-            switch (inst.op) {
-                case ADD, SUBTRACT, MULTIPLY -> {
-                    target.add(new Binary(
-                        inst.op, asmType,
-                        lowerValue(inst.lhs), lowerValue(inst.rhs), lowerValue(inst.dst)));
-                }
-                case BITWISE_AND, BITWISE_OR, BITWISE_XOR -> {
-                    target.add(new Bitwise(
-                        inst.op, asmType,
-                        lowerValue(inst.lhs), lowerValue(inst.rhs), lowerValue(inst.dst)));
-                }
-                case DIVIDE, MODULO -> {
-                    target.add(new DivOrMod(
-                        inst.op == BinaryOperator.DIVIDE, asmType, isUnsigned,
-                        lowerValue(inst.lhs), lowerValue(inst.rhs), lowerValue(inst.dst)));
-                }
-                case LEFT_SHIFT, RIGHT_SHIFT -> {
-                    boolean isLeftShift = inst.op == BinaryOperator.LEFT_SHIFT;
-                    target.add(new BitwiseShift(
-                        isLeftShift, asmType, isUnsigned,
-                        lowerValue(inst.lhs), lowerValue(inst.rhs), lowerValue(inst.dst)));
-                }
-                case LOGICAL_AND, LOGICAL_OR ->
-                    throw new UnsupportedOperationException("Logical operators should be lowered to branches");
-                case LESS_THAN, GREATER_THAN, LESS_OR_EQUAL, GREATER_OR_EQUAL, EQUAL, NOT_EQUAL -> {
-                    Comparison cmp = inst.op.toComparison();
-                    if (asmType == AsmType.DOUBLE) {
-                        boolean swap = false;
-                        LA64FloatCompareCondition cond = switch (cmp) {
-                            case EQUAL -> CEQ;
-                            case NOT_EQUAL -> CUNE;
-                            case LESS -> CLT;
-                            case GREATER -> {
-                                swap = true;
-                                yield CLT;
-                            }
-                            case LESS_EQUAL -> CLE;
-                            case GREATER_EQUAL -> {
-                                swap = true;
-                                yield CLE;
-                            }
-                        };
-                        target.add(new CompareDouble(
-                            cond,
-                            swap ? lowerValue(inst.rhs) : lowerValue(inst.lhs),
-                            swap ? lowerValue(inst.lhs) : lowerValue(inst.rhs), FCC0));
-                        target.add(new GetCC(FCC0, lowerValue(inst.dst)));
-                        return null;
-                    }
-
-                    target.add(new Compare(
-                        cmp, isUnsigned, asmType,
-                        lowerValue(inst.lhs), lowerValue(inst.rhs), lowerValue(inst.dst)));
-                }
-                default -> throw new UnsupportedOperationException("Unsupported binary operator: " + inst.op);
+            case BITWISE_AND, BITWISE_OR, BITWISE_XOR -> {
+                target.add(new Bitwise(
+                    inst.op, asmType,
+                    lowerValue(inst.lhs), lowerValue(inst.rhs), lowerValue(inst.dst)));
             }
+            case DIVIDE, MODULO -> {
+                target.add(new DivOrMod(
+                    inst.op == BinaryOperator.DIVIDE, asmType, isUnsigned,
+                    lowerValue(inst.lhs), lowerValue(inst.rhs), lowerValue(inst.dst)));
+            }
+            case LEFT_SHIFT, RIGHT_SHIFT -> {
+                boolean isLeftShift = inst.op == BinaryOperator.LEFT_SHIFT;
+                target.add(new BitwiseShift(
+                    isLeftShift, asmType, isUnsigned,
+                    lowerValue(inst.lhs), lowerValue(inst.rhs), lowerValue(inst.dst)));
+            }
+            case LOGICAL_AND, LOGICAL_OR ->
+                throw new UnsupportedOperationException("Logical operators should be lowered to branches");
+            case LESS_THAN, GREATER_THAN, LESS_OR_EQUAL, GREATER_OR_EQUAL, EQUAL, NOT_EQUAL -> {
+                Comparison cmp = inst.op.toComparison();
+                if (asmType == AsmType.DOUBLE) {
+                    boolean swap = false;
+                    LA64FloatCompareCondition cond = switch (cmp) {
+                        case EQUAL -> CEQ;
+                        case NOT_EQUAL -> CUNE;
+                        case LESS -> CLT;
+                        case GREATER -> {
+                            swap = true;
+                            yield CLT;
+                        }
+                        case LESS_EQUAL -> CLE;
+                        case GREATER_EQUAL -> {
+                            swap = true;
+                            yield CLE;
+                        }
+                    };
+                    target.add(new CompareDouble(
+                        cond,
+                        swap ? lowerValue(inst.rhs) : lowerValue(inst.lhs),
+                        swap ? lowerValue(inst.lhs) : lowerValue(inst.rhs), FCC0));
+                    target.add(new GetCC(FCC0, lowerValue(inst.dst)));
+                    return null;
+                }
 
+                target.add(new Compare(
+                    cmp, isUnsigned, asmType,
+                    lowerValue(inst.lhs), lowerValue(inst.rhs), lowerValue(inst.dst)));
+            }
+            default -> throw new UnsupportedOperationException("Unsupported binary operator: " + inst.op);
         }
         return null;
     }

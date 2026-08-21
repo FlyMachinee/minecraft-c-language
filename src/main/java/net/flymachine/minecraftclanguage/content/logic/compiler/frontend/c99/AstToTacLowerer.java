@@ -18,7 +18,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.ir.*;
 import java.util.ArrayList;
 import java.util.List;
 
-public final class AstToTacLowerer implements
+public final class AstToTacLowerer extends SemanticAnalysePass implements
     StatementVisitor, ExpressionVisitor<AstToTacLowerer.ExpEvalResult>, ExpressionBoolVisitor {
 
     public AstToTacLowerer(SymbolTable symbolTable) {
@@ -587,7 +587,13 @@ public final class AstToTacLowerer implements
         // 普通求值
         TacValue lhs = evalAndLvalueConvert(binaryExp.lhs);
         TacValue rhs = evalAndLvalueConvert(binaryExp.rhs);
-        if (lhs instanceof TacConstant lhsConst && rhs instanceof TacConstant rhsConst) {
+
+        if ((binaryExp.op.op == BinaryOperator.DIVIDE || binaryExp.op.op == BinaryOperator.MODULO) &&
+            binaryExp.rhs.expType.isInteger() && rhs instanceof TacConstant rhsConst && rhsConst.value.isZero()) {
+            // 除0
+            String msg = "division by zero";
+            logWarningWithSourceLine(binaryExp.op.wholeLoc, msg);
+        } else if (lhs instanceof TacConstant lhsConst && rhs instanceof TacConstant rhsConst) {
             Constant reduced = lhsConst.value.apply(binaryExp.op.op, rhsConst.value);
             return new PlainOperand(reduced);
         }
