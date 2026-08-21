@@ -700,7 +700,9 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
             lhsPtrType.referencedType().removeQualifiers()
                       .isCompatible(rhsPtrType.referencedType().removeQualifiers())) {
             // 而该转换不向所指向类型添加限定符
-            if (!(lhsPtrType.referencedType().isConst() && !rhsPtrType.referencedType().isConst())) {
+            int lhsQualifiers = lhsPtrType.referencedType().isConst() ? 1 : 0;
+            int rhsQualifiers = rhsPtrType.referencedType().isConst() ? 1 : 0;
+            if (lhsQualifiers >= rhsQualifiers) {
                 return true;
             }
         }
