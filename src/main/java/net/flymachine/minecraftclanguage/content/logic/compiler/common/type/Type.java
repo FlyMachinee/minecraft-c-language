@@ -2,47 +2,92 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.common.type;
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.AsmType;
 
-public interface Type {
-    boolean isCompatible(Type other);
+public abstract class Type {
+
+    protected final boolean isConst;
+
+    protected Type(boolean isConst) {
+        this.isConst = isConst;
+    }
+
+    public boolean isConst() {
+        return this.isConst;
+    }
+
+    public abstract Type setConst(boolean isConst);
+
+    public final Type addConst() {
+        return this.setConst(true);
+    }
+
+    public final Type removeConst() {
+        return this.setConst(false);
+    }
+
+    public final Type removeQualifiers() {
+        return this.removeConst();
+    }
+
+    public abstract boolean isCompatible(Type other);
 
     /**
      * 完整类型：在编译期内可确定大小的类型
      * <p>
      * 不完整类型包括：void、大小未知的数组、内容未知的结构体或联合体类型
      */
-    boolean isComplete();
+    public abstract boolean isComplete();
 
     /**
      * 算术类型：整数类型和浮点数类型
      */
-    boolean isArithmetic();
+    public abstract boolean isArithmetic();
 
     /**
      * 标量类型：算术类型和指针类型
      */
-    boolean isScalar();
+    public abstract boolean isScalar();
 
     /**
      * 整数类型：char、有符号整数类型、无符号整数类型、枚举类型
      */
-    boolean isInteger();
+    public abstract boolean isInteger();
 
     /**
      * 实数类型：整数类型和实浮点数类型
      */
-    boolean isReal();
+    public abstract boolean isReal();
 
-    default boolean isVoid() {
-        return this instanceof BasicType basicType && basicType == BasicType.VOID;
+    public final boolean isVoid() {
+        return this instanceof VoidType;
     }
 
-    long sizeof();
+    public final boolean isInt() {
+        return this instanceof BasicType bt && bt.primitive() == BasicType.Primitive.INT;
+    }
 
-    AsmType toAsmType();
+    public final boolean isLong() {
+        return this instanceof BasicType bt && bt.primitive() == BasicType.Primitive.LONG;
+    }
 
-    <R> R accept(TypeVisitor<R> visitor);
+    public final boolean isUnsignedInt() {
+        return this instanceof BasicType bt && bt.primitive() == BasicType.Primitive.UNSIGNED_INT;
+    }
 
-    static BasicType commonRealType(BasicType t1, BasicType t2) {
+    public final boolean isUnsignedLong() {
+        return this instanceof BasicType bt && bt.primitive() == BasicType.Primitive.UNSIGNED_LONG;
+    }
+
+    public final boolean isDouble() {
+        return this instanceof BasicType bt && bt.primitive() == BasicType.Primitive.DOUBLE;
+    }
+
+    public abstract long sizeof();
+
+    public abstract AsmType toAsmType();
+
+    public abstract <R> R accept(TypeVisitor<R> visitor);
+
+    public static BasicType commonRealType(BasicType t1, BasicType t2) {
         if (!t1.isArithmetic() || !t2.isArithmetic()) {
             throw new IllegalArgumentException("can only handle arithmetic types");
         }
@@ -50,7 +95,7 @@ public interface Type {
         // 整数或实浮点数类型转换成 double
         // 复数类型转换成 double complex
         // 虚数类型转换成 double imaginary
-        if (t1 == BasicType.DOUBLE || t2 == BasicType.DOUBLE) {
+        if (t1.isDouble() || t2.isDouble()) {
             return BasicType.DOUBLE;
         }
         // 否则两个操作数均为整数。两个操作数都会经历整数提升；经过整数提升后，适用于以下情况之一：

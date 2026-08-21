@@ -4,6 +4,7 @@ lexer grammar C99Lexer;
 
 Break: 'break';
 Case: 'case';
+Const: 'const';
 Continue: 'continue';
 Default: 'default';
 Do: 'do';

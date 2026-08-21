@@ -1,16 +1,27 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node;
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.*;
+import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
-public interface TypeNode extends AstInterface {
-    Type getType();
+public abstract class TypeNode extends AstNode {
+    public ConstQualifierNode constQualifier = null;
 
-    static TypeNode fromType(Type type) {
+    protected TypeNode(SourceLocation wholeLoc) {
+        super(wholeLoc);
+    }
+
+    public abstract Type getType();
+
+    public static TypeNode fromType(Type type) {
         if (type instanceof ErrorType) {
             throw new IllegalArgumentException("Cannot create TypeNode from ErrorType");
         }
         if (type instanceof BasicType bt) {
-            return new BasicTypeNode(null, bt);
+            BasicTypeNode node = new BasicTypeNode(null, bt.primitive());
+            if (bt.isConst()) {
+                node.constQualifier = new ConstQualifierNode(null);
+            }
+            return node;
         }
         if (type instanceof FunctionType ft) {
             return new FunctionTypeNode(
@@ -18,7 +29,11 @@ public interface TypeNode extends AstInterface {
                 ft.parameterTypes().stream().map(TypeNode::fromType).toList(), null);
         }
         if (type instanceof PointerType pt) {
-            return new PointerTypeNode(null, fromType(pt.referencedType()));
+            PointerTypeNode node = new PointerTypeNode(null, fromType(pt.referencedType()));
+            if (pt.isConst()) {
+                node.constQualifier = new ConstQualifierNode(null);
+            }
+            return node;
         }
         throw new IllegalArgumentException("Unknown Type " + type);
     }

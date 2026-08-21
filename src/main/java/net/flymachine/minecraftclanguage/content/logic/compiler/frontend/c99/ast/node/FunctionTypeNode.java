@@ -1,6 +1,5 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node;
 
-import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.BasicType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.FunctionType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
@@ -8,7 +7,7 @@ import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocatio
 import java.io.PrintStream;
 import java.util.List;
 
-public final class FunctionTypeNode extends AstNode implements TypeNode {
+public final class FunctionTypeNode extends TypeNode {
     public TypeNode retType;
     public List<TypeNode> paramTypes;
     public List<IdentifierNode> params;
@@ -40,7 +39,6 @@ public final class FunctionTypeNode extends AstNode implements TypeNode {
 
     public boolean hasNoParameters() {
         if (paramTypes.isEmpty()) { return true; }
-        return paramTypes.size() == 1 && paramTypes.get(0) instanceof BasicTypeNode basicType &&
-               basicType.getType() == BasicType.VOID && params.get(0) == null;
+        return paramTypes.size() == 1 && paramTypes.get(0).getType().isVoid() && params.get(0) == null;
     }
 }

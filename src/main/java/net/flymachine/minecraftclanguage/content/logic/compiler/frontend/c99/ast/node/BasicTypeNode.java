@@ -6,12 +6,12 @@ import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocatio
 
 import java.io.PrintStream;
 
-public final class BasicTypeNode extends AstNode implements TypeNode {
-    public BasicType type;
+public final class BasicTypeNode extends TypeNode {
+    public BasicType.Primitive primitive;
 
-    public BasicTypeNode(SourceLocation wholeLocation, BasicType type) {
+    public BasicTypeNode(SourceLocation wholeLocation, BasicType.Primitive primitive) {
         super(wholeLocation);
-        this.type = type;
+        this.primitive = primitive;
     }
 
     @Override
@@ -21,11 +21,11 @@ public final class BasicTypeNode extends AstNode implements TypeNode {
 
     @Override
     public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
-        stream.print(type);
+        stream.print(getType());
     }
 
     @Override
     public BasicType getType() {
-        return type;
+        return new BasicType(primitive, constQualifier != null);
     }
 }

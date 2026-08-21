@@ -1,22 +1,21 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node;
 
-import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.PointerType;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.VoidType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
 import java.io.PrintStream;
 
-public final class PointerTypeNode extends TypeNode {
-    public TypeNode referencedType;
+public final class VoidTypeNode extends TypeNode {
 
-    public PointerTypeNode(SourceLocation wholeLocation, TypeNode referencedType) {
-        super(wholeLocation);
-        this.referencedType = referencedType;
+    public VoidTypeNode(SourceLocation wholeLoc) {
+        super(wholeLoc);
     }
 
     @Override
-    public PointerType getType() {
-        return new PointerType(referencedType.getType(), constQualifier != null);
+    public Type getType() {
+        return VoidType.INSTANCE;
     }
 
     @Override
@@ -26,6 +25,6 @@ public final class PointerTypeNode extends TypeNode {
 
     @Override
     public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
-        stream.print(getType());
+        stream.print("void");
     }
 }

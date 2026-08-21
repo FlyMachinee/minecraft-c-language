@@ -11,6 +11,8 @@ public record SourceLocation(int line, int column, int startIndex, int endIndex)
     }
 
     public static SourceLocation concat(SourceLocation a, SourceLocation b) {
+        if (a == null) { return b; }
+        if (b == null) { return a; }
         if (a.startIndex < b.startIndex) {
             return new SourceLocation(a.line, a.column, a.startIndex, Math.max(a.endIndex, b.endIndex));
         } else {

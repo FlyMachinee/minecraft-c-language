@@ -60,6 +60,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
     public Void visit(ReturnNode node) {
         node.exp.accept(this);
         if (node.exp.expType instanceof ErrorType) { return null; }
+        node.exp.expType = node.exp.expType.removeConst();
 
         if (functionContext.funcType instanceof FunctionTypeNode funcType) {
             // 若表达式的类型与函数的返回类型不同，则如同赋值给该函数返回类型的对象一般对其值进行转换
@@ -103,6 +104,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             node.expType = ErrorType.INSTANCE;
             return null;
         }
+        node.exp.expType = node.exp.expType.removeConst();
 
         node.expType = switch (node.op.op) {
             case NEGATE -> {
@@ -154,20 +156,20 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         return constExp.value.isNullPointer();
     }
 
-    private Type getCommonPointerType(ExpressionNode lhs, ExpressionNode rhs) {
-        Type lhsType = lhs.expType;
-        Type rhsType = rhs.expType;
-        if (lhsType.isCompatible(rhsType)) {
-            return lhsType;
-        }
-        if (isNullPointerConstant(lhs)) {
-            return rhsType;
-        }
-        if (isNullPointerConstant(rhs)) {
-            return lhsType;
-        }
-        return ErrorType.INSTANCE;
-    }
+    // private Type getCommonPointerType(ExpressionNode lhs, ExpressionNode rhs) {
+    //     Type lhsType = lhs.expType;
+    //     Type rhsType = rhs.expType;
+    //     if (lhsType.isCompatible(rhsType)) {
+    //         return lhsType;
+    //     }
+    //     if (isNullPointerConstant(lhs)) {
+    //         return rhsType;
+    //     }
+    //     if (isNullPointerConstant(rhs)) {
+    //         return lhsType;
+    //     }
+    //     return ErrorType.INSTANCE;
+    // }
 
     private void typeCheckBinaryExp(BinaryExpressionNode node) {
         final Type lhsType = node.lhs.expType;
@@ -177,6 +179,8 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             node.expType = ErrorType.INSTANCE;
             return;
         }
+        node.lhs.expType = node.lhs.expType.removeConst();
+        node.rhs.expType = node.rhs.expType.removeConst();
 
         node.expType = switch (node.op.op) {
             case MULTIPLY, DIVIDE, ADD, SUBTRACT -> {
@@ -250,9 +254,21 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             case EQUAL, NOT_EQUAL -> {
                 Type commonType = ErrorType.INSTANCE;
                 if (lhsType.isArithmetic() && rhsType.isArithmetic()) {
+                    // 若两个运算数都拥有算术类型，则进行一般算术转换，而以通常数学意义比较所得值
                     commonType = Type.commonRealType((BasicType) lhsType, (BasicType) rhsType);
                 } else if (lhsType instanceof PointerType || rhsType instanceof PointerType) {
-                    commonType = getCommonPointerType(node.lhs, node.rhs);
+                    // 若一个操作数为指针而另一空指针常量，则首先转换空指针常量为该指针的类型（给出空指针值），并以后述方式比较两个指针
+                    if (isNullPointerConstant(node.lhs)) {
+                        commonType = rhsType;
+                    } else if (isNullPointerConstant(node.rhs)) {
+                        commonType = lhsType;
+                    } else if (lhsType instanceof PointerType lhsPt && rhsType instanceof PointerType rhsPt) {
+                        // 都是指向兼容类型的对象或函数的指针，忽略所指向类型的限定符
+                        if (lhsPt.referencedType().removeQualifiers()
+                                 .isCompatible(rhsPt.referencedType().removeQualifiers())) {
+                            commonType = lhsPt;
+                        }
+                    }
                 }
                 if (commonType instanceof ErrorType) {
                     error();
@@ -311,15 +327,15 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                                  "' is initialized like a variable";
                     logErrorWithSourceLine(initDecl.init.wholeLoc, msg);
                 }
+                return null;
+            }
+            // 变量声明
+            boolean isFileScope = functionContext == null;
+            if (isFileScope) {
+                visitFileScopeVariableDeclaration(
+                    initDecl.id, initDecl.finalType, node.storageClass, initDecl.init);
             } else {
-                // 变量声明
-                boolean isFileScope = functionContext == null;
-                if (isFileScope) {
-                    visitFileScopeVariableDeclaration(
-                        initDecl.id, initDecl.finalType, node.storageClass, initDecl.init);
-                } else {
-                    visitBlockScopeVariableDeclaration(node.storageClass, initDecl);
-                }
+                visitBlockScopeVariableDeclaration(node.storageClass, initDecl);
             }
         }
         return null;
@@ -560,6 +576,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             if (init == null) { return; }
             init.accept(this);
             if (init.expType instanceof ErrorType) { return; }
+            init.expType = init.expType.removeConst();
 
             // 若提供了初始化式，对于
             // 标量类型初始化，见标量初始化
@@ -622,7 +639,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             if (t instanceof PointerType) {
                 initialValue = SymbolTable.Entry.StaticAttr.Defined.UNSIGNED_LONG_ZERO;
             } else if (t instanceof BasicType bt) {
-                initialValue = switch (bt) {
+                initialValue = switch (bt.primitive()) {
                     // 整数类型对象被初始化成无符号的零
                     case INT -> SymbolTable.Entry.StaticAttr.Defined.INT_ZERO;
                     case LONG -> SymbolTable.Entry.StaticAttr.Defined.LONG_ZERO;
@@ -630,7 +647,6 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                     case UNSIGNED_LONG -> SymbolTable.Entry.StaticAttr.Defined.UNSIGNED_LONG_ZERO;
                     // 浮点类型对象被初始化成正零
                     case DOUBLE -> SymbolTable.Entry.StaticAttr.Defined.DOUBLE_ZERO;
-                    default -> throw new IllegalStateException("unexpected static initializer: " + t);
                 };
             } else {
                 throw new IllegalStateException("unexpected static initializer: " + t);
@@ -667,6 +683,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
     @Override
     public Void visit(ExpressionStatementNode node) {
         node.exp.accept(this);
+        node.exp.expType = node.exp.expType.removeConst();
         return null;
     }
 
@@ -704,8 +721,12 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         }
         // lhs 与 rhs 均拥有指向兼容类型（忽略限定符）的指针类型
         if (lhsType instanceof PointerType lhsPtrType && rhs.expType instanceof PointerType rhsPtrType &&
-            lhsPtrType.referencedType().isCompatible(rhsPtrType.referencedType())) {
-            return true;
+            lhsPtrType.referencedType().removeQualifiers()
+                      .isCompatible(rhsPtrType.referencedType().removeQualifiers())) {
+            // 而该转换不向所指向类型添加限定符
+            if (!(lhsPtrType.referencedType().isConst() && !rhsPtrType.referencedType().isConst())) {
+                return true;
+            }
         }
         // lhs 是指针，而 rhs 是空指针常量
         if (lhsType instanceof PointerType && isNullPointerConstant(rhs)) {
@@ -725,7 +746,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
     }
 
     private boolean isModifiableLvalueExpression(ExpressionNode exp) {
-        return isLvalueExpression(exp);
+        return isLvalueExpression(exp) && !exp.expType.isConst();
     }
 
     @Override
@@ -737,9 +758,12 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             node.expType = ErrorType.INSTANCE;
             return null;
         }
+        node.rhs.expType = node.rhs.expType.removeConst();
+
         if (!isModifiableLvalueExpression(node.lhs)) {
             error();
-            String msg = "modifiable lvalue required as left operand of assignment";
+            String msg = "modifiable lvalue required as left operand of assignment; has type '" +
+                         getLogger().white(node.lhs.expType.toString()) + "'";
             logErrorWithSourceLine(node.op.wholeLoc, msg);
             node.expType = ErrorType.INSTANCE;
             return null;
@@ -798,6 +822,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             String msg = node.isIncrement ?
                 "modifiable lvalue required as increment operand" :
                 "modifiable lvalue required as decrement operand";
+            msg += "; has type '" + getLogger().white(node.operand.expType.toString()) + "'";
             logErrorWithSourceLine(node.operatorLoc, msg);
             node.expType = ErrorType.INSTANCE;
             return null;
@@ -820,6 +845,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
     @Override
     public Void visit(IfStatementNode node) {
         node.cond.accept(this);
+        node.cond.expType = node.cond.expType.removeConst();
         if (!(node.cond.expType instanceof ErrorType) && !node.cond.expType.isScalar()) {
             error();
             String msg = "condition of if statement must have scalar type; have '" +
@@ -838,6 +864,9 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         node.cond.accept(this);
         node.thenExp.accept(this);
         node.elseExp.accept(this);
+        node.cond.expType = node.cond.expType.removeConst();
+        node.thenExp.expType = node.thenExp.expType.removeConst();
+        node.elseExp.expType = node.elseExp.expType.removeConst();
 
         Type thenExpType = node.thenExp.expType;
         Type elseExpType = node.elseExp.expType;
@@ -862,8 +891,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         }
         if (thenExpType.isArithmetic() && elseExpType.isArithmetic()) {
             // 若表达式拥有算术类型，则公共类型为一般算术转换后的类型
-            BasicType commonType = Type.commonRealType(
-                (BasicType) thenExpType, (BasicType) elseExpType);
+            BasicType commonType = Type.commonRealType((BasicType) thenExpType, (BasicType) elseExpType);
             node.thenExp = convertTo(node.thenExp, commonType);
             node.elseExp = convertTo(node.elseExp, commonType);
             node.expType = commonType;
@@ -871,13 +899,28 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         }
         // 两个 void 类型的表达式
         if (thenExpType.isVoid() && elseExpType.isVoid()) {
-            node.expType = BasicType.VOID;
+            node.expType = VoidType.INSTANCE;
             return null;
         }
-        // 两个指针类型的表达式，指向兼容的类型，忽略 cvr 限定符
         // 一个表达式是指针而另一个是空指针常量
         if (thenExpType instanceof PointerType || elseExpType instanceof PointerType) {
-            Type commonType = getCommonPointerType(node.thenExp, node.elseExp);
+            Type commonType = ErrorType.INSTANCE;
+
+            // 若一个表达式为指针而另一个是空指针常量，则类型为该指针的类型
+            if (isNullPointerConstant(node.thenExp)) {
+                commonType = elseExpType;
+            } else if (isNullPointerConstant(node.elseExp)) {
+                commonType = thenExpType;
+            } else if (thenExpType instanceof PointerType thenPt && elseExpType instanceof PointerType elsePt) {
+                // 两个指针类型的表达式，指向兼容的类型，忽略 cvr 限定符
+                if (thenPt.referencedType().removeQualifiers()
+                          .isCompatible(elsePt.referencedType().removeQualifiers())) {
+                    // 若两个表达式都是指针，则结果为指向合并两个被指向类型的 cvr 限定符的类型的指针
+                    boolean mergedConst = thenPt.referencedType().isConst() || elsePt.referencedType().isConst();
+                    commonType = new PointerType(thenPt.referencedType().setConst(mergedConst));
+                }
+            }
+
             if (!(commonType instanceof ErrorType)) {
                 node.thenExp = convertTo(node.thenExp, commonType);
                 node.elseExp = convertTo(node.elseExp, commonType);
@@ -924,8 +967,10 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         if (node.isDoWhile) {
             node.body.accept(this);
             node.cond.accept(this);
+            node.cond.expType = node.cond.expType.removeConst();
         } else {
             node.cond.accept(this);
+            node.cond.expType = node.cond.expType.removeConst();
             node.body.accept(this);
         }
         if (!(node.cond.expType instanceof ErrorType) && !node.cond.expType.isScalar()) {
@@ -962,9 +1007,13 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                 }
             }
             node.init.accept(this);
+            if (node.init instanceof ForInitExpressionNode exp) {
+                exp.exp.expType = exp.exp.expType.removeConst();
+            }
         }
         if (node.cond != null) {
             node.cond.accept(this);
+            node.cond.expType = node.cond.expType.removeConst();
             if (!(node.cond.expType instanceof ErrorType) && !node.cond.expType.isScalar()) {
                 error();
                 String msg = "condition of for statement must have scalar type; have '" +
@@ -974,6 +1023,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         }
         if (node.step != null) {
             node.step.accept(this);
+            node.step.expType = node.step.expType.removeConst();
         }
         node.body.accept(this);
         return null;
@@ -988,6 +1038,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                          getLogger().white(node.exp.expType.toString()) + "'";
             logErrorWithSourceLine(node.exp.wholeLoc, msg);
         }
+        node.exp.expType = node.exp.expType.removeConst();
         node.body.accept(this);
         return null;
     }
@@ -1055,6 +1106,12 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             ExpressionNode arg = node.args.get(i);
             // 检查参数类型
             arg.accept(this);
+            if (arg.expType instanceof ErrorType) {
+                noError = false;
+                continue;
+            }
+            arg.expType = arg.expType.removeConst();
+
             // 必须存在如同赋值的隐式转换，将对应实参的无限定类型转换为形参类型
             Type paramType = funcType.parameterTypes().get(i);
             if (!validConvertAsIfByAssignment(arg, paramType)) {
@@ -1096,7 +1153,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
 
         // 若类型名是 void，则表达式为其副效应求值，并舍弃其返回值，与单独将表达式用作表达式语句时相同
         if (targetType.isVoid()) {
-            node.expType = BasicType.VOID;
+            node.expType = VoidType.INSTANCE;
             return null;
         }
         if (!targetType.isScalar()) {
@@ -1110,6 +1167,8 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             node.expType = ErrorType.INSTANCE;
             return null;
         }
+        node.exp.expType = node.exp.expType.removeConst();
+
         if (!node.exp.expType.isScalar()) {
             error();
             String msg = "cast from non-scalar '" + getLogger().white(node.exp.expType.toString()) +
@@ -1169,7 +1228,8 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         }
         if (!isLvalueExpression(node.exp)) {
             error();
-            String msg = "lvalue required as address-of operand";
+            String msg = "lvalue required as address-of operand; has type '" +
+                         getLogger().white(node.exp.expType.toString()) + "'";
             logErrorWithSourceLine(node.operatorLoc, msg);
             node.expType = ErrorType.INSTANCE;
             return null;
@@ -1185,6 +1245,8 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             node.expType = ErrorType.INSTANCE;
             return null;
         }
+        node.exp.expType = node.exp.expType.removeConst();
+
         if (!(node.exp.expType instanceof PointerType pointerType)) {
             error();
             String msg = "operand of dereference must have pointer type; have '" +

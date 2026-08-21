@@ -2,66 +2,61 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.common.type;
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.AsmType;
 
-public final class ErrorType extends Type {
+public final class VoidType extends Type {
+    public static final VoidType INSTANCE = new VoidType(false);
+    private static final VoidType CONST_VOID = new VoidType(true);
 
-    private ErrorType(boolean isConst) {
+    private VoidType(boolean isConst) {
         super(isConst);
     }
 
-    public static final ErrorType INSTANCE = new ErrorType(false);
-
     @Override
-    public ErrorType setConst(boolean isConst) {
-        return INSTANCE;
-    }
-
-    @Override
-    public boolean isConst() {
-        return false;
+    public VoidType setConst(boolean isConst) {
+        return isConst ? CONST_VOID : INSTANCE;
     }
 
     @Override
     public boolean isCompatible(Type other) {
-        return true;
+        return other.isVoid() && (isConst == other.isConst);
     }
 
     @Override
     public boolean isComplete() {
-        return true;
+        return false;
     }
 
     @Override
     public boolean isArithmetic() {
-        return true;
+        return false;
     }
 
     @Override
     public boolean isScalar() {
-        return true;
+        return false;
     }
 
     @Override
     public boolean isInteger() {
-        return true;
+        return false;
     }
 
     @Override
     public boolean isReal() {
-        return true;
+        return false;
     }
 
     @Override
     public long sizeof() {
-        return -1;
+        throw new UnsupportedOperationException("void size is unknown");
     }
 
     @Override
     public AsmType toAsmType() {
-        throw new UnsupportedOperationException("toAsmType(error) is not defined");
+        throw new UnsupportedOperationException("toAsmType(void) is not defined");
     }
 
     @Override
     public <R> R accept(TypeVisitor<R> visitor) {
-        return null;
+        return visitor.visit(this);
     }
 }

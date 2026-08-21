@@ -8,6 +8,8 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.StorageCl
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.UnaryOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.*;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.BasicType;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.VoidType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.antlr.C99Parser;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.antlr.C99ParserBaseVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.*;
@@ -116,11 +118,13 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
     public FunctionDefinitionNode visitFunctionDefinition(C99Parser.FunctionDefinitionContext ctx) {
         TypeAndSpecifiers typeAndSpecifiers = parseDeclarationSpecifiers(ctx.declarationSpecifiers());
         TypeNode baseType = typeAndSpecifiers.t;
-        boolean isBaseTypeError = baseType == null || baseType.getType() == null;
+        boolean isBaseTypeError = baseType == null;
         if (isBaseTypeError) {
             // 返回值无类型
-            baseType = new BasicTypeNode(null, BasicType.INT);
+            baseType = new BasicTypeNode(null, BasicType.Primitive.INT);
         }
+        baseType.constQualifier = typeAndSpecifiers.constQualifier;
+
         DeclarationLikeResult res = parseFromDeclarator(baseType, ctx.declarator());
         if (isBaseTypeError) {
             error();
@@ -135,10 +139,12 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
 
     private record DeclarationLikeResult(TypeNode t, IdentifierNode id) { }
 
-    private record TypeAndSpecifiers(TypeNode t, @Nullable StorageClassSpecifierNode storageClass) { }
+    private record TypeAndSpecifiers(
+        TypeNode t, @Nullable StorageClassSpecifierNode storageClass,
+        @Nullable ConstQualifierNode constQualifier) { }
 
     private class TypeCombinationHelper {
-        private BasicType t;
+        private Type t;
         private SourceLocation loc;
         private int nonLongCount = 0;
         private int longCount = 0;
@@ -148,11 +154,18 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
             SIGNED, UNSIGNED, NONE
         }
 
+        void assertBothType(String prev, String now) {
+            error();
+            String msg = "both '" + logger.white(prev) + "' and '" + logger.white(now) +
+                         "' in declaration specifiers";
+            logErrorWithSourceLine(loc, msg);
+        }
+
         void append(String typeSpecifierName, SourceLocation loc) {
             if (t == null) {
                 this.loc = loc;
                 switch (typeSpecifierName) {
-                    case "int", "void", "double" -> {
+                    case "int", "double" -> {
                         t = BasicType.fromString(typeSpecifierName);
                         nonLongCount++;
                     }
@@ -167,6 +180,10 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
                     case "unsigned" -> {
                         t = BasicType.UNSIGNED_INT;
                         signedness = Signedness.UNSIGNED;
+                    }
+                    case "void" -> {
+                        t = VoidType.INSTANCE;
+                        nonLongCount++;
                     }
                     default -> throw new IllegalStateException("Unknown type specifier: " + typeSpecifierName);
                 }
@@ -185,7 +202,6 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
                     nonLongCount++;
                 }
                 case "void", "double" -> {
-                    error();
                     String previous;
                     if (longCount > 0) {
                         previous = "long";
@@ -194,26 +210,25 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
                     } else {
                         previous = t.toString();
                     }
-                    String msg = "both '" + logger.white(typeSpecifierName) + "' and '" +
-                                 logger.white(previous) + "' in declaration specifiers";
-                    logErrorWithSourceLine(loc, msg);
+                    assertBothType(typeSpecifierName, previous);
                     nonLongCount++;
                 }
                 case "long" -> {
-                    switch (t) {
-                        case INT -> t = BasicType.LONG;
-                        case UNSIGNED_INT -> t = BasicType.UNSIGNED_LONG;
-                        case LONG, UNSIGNED_LONG -> {
-                            error();
-                            String msg = "'" + logger.white("long long") + "' is too long";
-                            logErrorWithSourceLine(loc, msg);
+                    if (t instanceof BasicType bt) {
+                        switch (bt.primitive()) {
+                            case INT -> t = BasicType.LONG;
+                            case UNSIGNED_INT -> t = BasicType.UNSIGNED_LONG;
+                            case LONG, UNSIGNED_LONG -> {
+                                error();
+                                String msg = "'" + logger.white("long long") + "' is too long";
+                                logErrorWithSourceLine(loc, msg);
+                            }
+                            case DOUBLE -> {
+                                assertBothType("long", "double");
+                            }
                         }
-                        case VOID, DOUBLE -> {
-                            error();
-                            String msg = "both '" + logger.white("long") + "' and '" + logger.white(t.toString()) +
-                                         "' in declaration specifiers";
-                            logErrorWithSourceLine(loc, msg);
-                        }
+                    } else if (t instanceof VoidType) {
+                        assertBothType("long", "void");
                     }
                     ++longCount;
                 }
@@ -227,28 +242,25 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
                     }
 
                     if (signedness != Signedness.NONE) {
-                        error();
-                        String msg =
-                            "both '" + logger.white(typeSpecifierName) + "' and '" +
-                            logger.white(signedness.name().toLowerCase()) + "' in declaration specifiers";
-                        logErrorWithSourceLine(loc, msg);
+                        assertBothType(typeSpecifierName, signedness.name().toLowerCase());
                         return;
                     }
 
                     // Signedness.NONE
-                    switch (t) {
-                        case INT, LONG -> {
-                            signedness = newSignedness;
-                            if (newSignedness == Signedness.UNSIGNED) {
-                                t = t == BasicType.INT ? BasicType.UNSIGNED_INT : BasicType.UNSIGNED_LONG;
+                    if (t instanceof BasicType bt) {
+                        switch (bt.primitive()) {
+                            case INT, LONG -> {
+                                signedness = newSignedness;
+                                if (newSignedness == Signedness.UNSIGNED) {
+                                    t = t == BasicType.INT ? BasicType.UNSIGNED_INT : BasicType.UNSIGNED_LONG;
+                                }
+                            }
+                            case DOUBLE -> {
+                                assertBothType(typeSpecifierName, "double");
                             }
                         }
-                        case VOID, DOUBLE -> {
-                            error();
-                            String msg = "both '" + logger.white(typeSpecifierName) + "' and '" +
-                                         logger.white(t.toString()) + "' in declaration specifiers";
-                            logErrorWithSourceLine(loc, msg);
-                        }
+                    } else if (t instanceof VoidType) {
+                        assertBothType(typeSpecifierName, "void");
                     }
                 }
             }
@@ -268,6 +280,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
 
         // 类型翻译
         TypeCombinationHelper helper = new TypeCombinationHelper();
+        ConstQualifierNode constQualifierNode = null;
 
         for (var specifierCtx : ctx.declarationSpecifier()) {
             if (specifierCtx.typeSpecifier() != null) {
@@ -285,14 +298,32 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
                     logErrorWithSourceLine(getSourceLocation(specifierCtx.storageClassSpecifier()), msg);
                     reportedMultipleStorageClasses = true;
                 }
+            } else if (specifierCtx.typeQualifier() != null) {
+                if (constQualifierNode == null) {
+
+                    constQualifierNode = new ConstQualifierNode(getSourceLocation(specifierCtx.typeQualifier()));
+                } else {
+                    constQualifierNode = new ConstQualifierNode(
+                        SourceLocation.concat(constQualifierNode.wholeLoc,
+                                              getSourceLocation(specifierCtx.typeQualifier())));
+                }
             }
         }
-        return new TypeAndSpecifiers(new BasicTypeNode(helper.loc, helper.t), storageClassNode);
+
+        TypeNode finalTypeNode;
+        if (helper.t == null) {
+            finalTypeNode = null;
+        } else if (helper.t instanceof BasicType bt) {
+            finalTypeNode = new BasicTypeNode(helper.loc, bt.primitive());
+        } else {
+            finalTypeNode = new VoidTypeNode(helper.loc);
+        }
+        return new TypeAndSpecifiers(finalTypeNode, storageClassNode, constQualifierNode);
     }
 
     private PointerTypeNode parsePointer(TypeNode baseType, C99Parser.PointerContext ctx) {
         // pointer
-        //   : Star pointer?
+        //   : Star typeQualifier* pointer?
         //   ;
         TerminalNode star = ctx.Star();
         if (baseType instanceof FunctionTypeNode) {
@@ -300,13 +331,20 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
             String msg = "function pointers are not supported";
             logErrorWithSourceLine(getSourceLocation(star), msg);
         }
-        if (baseType instanceof BasicTypeNode b && b.getType() == BasicType.VOID) {
+        if (baseType.getType().isVoid()) {
             error();
             String msg = "pointers to void are not supported";
             logErrorWithSourceLine(getSourceLocation(star), msg);
         }
 
-        PointerTypeNode pointerType = new PointerTypeNode(getSourceLocation(star), baseType);
+        PointerTypeNode pointerType;
+        SourceLocation loc = SourceLocation.concat(baseType.wholeLoc, getSourceLocation(star));
+        pointerType = new PointerTypeNode(loc, baseType);
+        if (!ctx.typeQualifier().isEmpty()) {
+            pointerType.constQualifier = new ConstQualifierNode(
+                SourceLocation.concat(getSourceLocation(ctx.typeQualifier().get(0)),
+                                      getSourceLocation(ctx.typeQualifier().get(ctx.typeQualifier().size() - 1))));
+        }
         if (ctx.pointer() != null) {
             return parsePointer(pointerType, ctx.pointer());
         }
@@ -381,6 +419,10 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
 
     private FunctionTypeNode parseFromParameterTypeList(
         TypeNode returnType, C99Parser.ParameterTypeListContext ctx, TerminalNode rightParen) {
+
+        // 从返回类型移除 const 限定
+        returnType.constQualifier = null;
+
         // 构造函数类型
         List<TypeNode> parameterTypes = new ArrayList<>();
         List<IdentifierNode> parameters = new ArrayList<>();
@@ -401,11 +443,13 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
 
             if (paramCtx.declarator() != null) {
                 // 具名参数
-                boolean baseTypeError = paramBaseType == null || paramBaseType.getType() == null;
+                boolean baseTypeError = paramBaseType == null;
                 if (baseTypeError) {
                     // 没有类型
-                    paramBaseType = new BasicTypeNode(null, BasicType.INT);
+                    paramBaseType = new BasicTypeNode(null, BasicType.Primitive.INT);
                 }
+                paramBaseType.constQualifier = paramTypeAndSpecifiers.constQualifier;
+
                 // 错误信息需要参数标识符位置，所以先 Parse 再报错
                 DeclarationLikeResult paramRes = parseFromDeclarator(paramBaseType, paramCtx.declarator());
                 if (baseTypeError) {
@@ -429,9 +473,8 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
                     // 没有类型
                     error();
                     String msg = "type defaults to '" + logger.white("int") + "' in type name";
-                    assert paramStorageClass != null; // 没有类型，那么一定有存储类型
-                    logErrorWithSourceLine(paramStorageClass.wholeLoc, msg);
-                    paramBaseType = new BasicTypeNode(null, BasicType.INT);
+                    logErrorWithSourceLine(getSourceLocation(paramCtx.declarationSpecifiers()), msg);
+                    paramBaseType = new BasicTypeNode(null, BasicType.Primitive.INT);
                 }
                 if (paramStorageClass != null && paramStorageClass.storageClass != StorageClassSpecifier.REGISTER) {
                     // 有非 register 的存储类型
@@ -440,6 +483,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
                     logErrorWithSourceLine(paramStorageClass.wholeLoc, msg);
                 }
 
+                paramBaseType.constQualifier = paramTypeAndSpecifiers.constQualifier;
                 if (paramCtx.abstractDeclarator() != null) {
                     // 含抽象声明符，递归处理
                     paramBaseType = parseFromAbstractDeclarator(paramBaseType, paramCtx.abstractDeclarator());
@@ -461,11 +505,12 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         // declaration -> declarationSpecifiers initDeclaratorList? Semicolon
         TypeAndSpecifiers typeAndSpecifiers = parseDeclarationSpecifiers(ctx.declarationSpecifiers());
         TypeNode baseType = typeAndSpecifiers.t;
-        boolean isBaseTypeError = baseType == null || baseType.getType() == null;
+        boolean isBaseTypeError = baseType == null;
         if (isBaseTypeError) {
             // 没有类型
-            baseType = new BasicTypeNode(null, BasicType.INT);
+            baseType = new BasicTypeNode(null, BasicType.Primitive.INT);
         }
+        baseType.constQualifier = typeAndSpecifiers.constQualifier;
 
         var list = ctx.initDeclaratorList();
         if (list != null) {
@@ -813,19 +858,43 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
 
     private TypeNode parseFromTypeName(C99Parser.TypeNameContext ctx) {
         TypeCombinationHelper helper = new TypeCombinationHelper();
+        ConstQualifierNode constQualifierNode = null;
 
-        for (var specifierQualifierCtx : ctx.specifierQualifierList().specifierQualifier()) {
-            if (specifierQualifierCtx.typeSpecifier() != null) {
-                String typeSpecifierText = specifierQualifierCtx.typeSpecifier().getText();
-                helper.append(typeSpecifierText, getSourceLocation(specifierQualifierCtx.typeSpecifier()));
+        for (var specifierCtx : ctx.specifierQualifierList().specifierQualifier()) {
+            if (specifierCtx.typeSpecifier() != null) {
+                String typeSpecifierText = specifierCtx.typeSpecifier().getText();
+                helper.append(typeSpecifierText, getSourceLocation(specifierCtx.typeSpecifier()));
+            } else if (specifierCtx.typeQualifier() != null) {
+                if (constQualifierNode == null) {
+
+                    constQualifierNode = new ConstQualifierNode(getSourceLocation(specifierCtx.typeQualifier()));
+                } else {
+                    constQualifierNode = new ConstQualifierNode(
+                        SourceLocation.concat(constQualifierNode.wholeLoc,
+                                              getSourceLocation(specifierCtx.typeQualifier())));
+                }
             }
         }
 
-        TypeNode type = new BasicTypeNode(helper.loc, helper.t);
-        if (ctx.abstractDeclarator() != null) {
-            type = parseFromAbstractDeclarator(type, ctx.abstractDeclarator());
+        TypeNode finalTypeNode;
+        SourceLocation finalLoc =
+            constQualifierNode == null ? helper.loc :
+                SourceLocation.concat(helper.loc, constQualifierNode.wholeLoc);
+        if (helper.t == null) {
+            error();
+            String msg = "type defaults to '" + logger.white("int") + "' in typename";
+            logErrorWithSourceLine(finalLoc, msg);
+            finalTypeNode = new BasicTypeNode(finalLoc, BasicType.Primitive.INT);
+        } else if (helper.t instanceof BasicType bt) {
+            finalTypeNode = new BasicTypeNode(helper.loc, bt.primitive());
+        } else {
+            finalTypeNode = new VoidTypeNode(helper.loc);
         }
-        return type;
+        finalTypeNode.constQualifier = constQualifierNode;
+        if (ctx.abstractDeclarator() != null) {
+            finalTypeNode = parseFromAbstractDeclarator(finalTypeNode, ctx.abstractDeclarator());
+        }
+        return finalTypeNode;
     }
 
     @Override

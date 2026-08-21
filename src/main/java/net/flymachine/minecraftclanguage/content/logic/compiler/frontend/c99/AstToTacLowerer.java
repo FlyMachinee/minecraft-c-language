@@ -43,7 +43,7 @@ public final class AstToTacLowerer implements StatementVisitor, ExpressionVisito
                         entry.id.name, staticAttr.global, entry.type, defined.init()));
                 } else if (defType instanceof SymbolTable.Entry.StaticAttr.Tentative) {
                     if (entry.type instanceof BasicType bt) {
-                        switch (bt) {
+                        switch (bt.primitive()) {
                             case INT -> topLevels.add(new TacStaticVariable(
                                 entry.id.name, staticAttr.global, BasicType.INT, IntInit.ZERO));
                             case LONG -> topLevels.add(new TacStaticVariable(
@@ -54,7 +54,6 @@ public final class AstToTacLowerer implements StatementVisitor, ExpressionVisito
                                 entry.id.name, staticAttr.global, BasicType.UNSIGNED_LONG, UnsignedLongInit.ZERO));
                             case DOUBLE -> topLevels.add(new TacStaticVariable(
                                 entry.id.name, staticAttr.global, BasicType.DOUBLE, DoubleInit.ZERO));
-                            default -> throw new IllegalStateException("Unexpected value: " + bt);
                         }
                     } else if (entry.type instanceof PointerType pt) {
                         topLevels.add(new TacStaticVariable(
@@ -662,13 +661,12 @@ public final class AstToTacLowerer implements StatementVisitor, ExpressionVisito
         ExpEvalResult dst = eval(incrementDecrement.operand);
 
         BasicType bt = (BasicType) incrementDecrement.expType;
-        TacConstant one = new TacConstant(switch (bt) {
+        TacConstant one = new TacConstant(switch (bt.primitive()) {
             case INT -> ConstantInt.ONE;
             case LONG -> ConstantLong.ONE;
             case UNSIGNED_INT -> ConstantUnsignedInt.ONE;
             case UNSIGNED_LONG -> ConstantUnsignedLong.ONE;
             case DOUBLE -> ConstantDouble.ONE;
-            default -> throw new IllegalStateException("Unexpected value: " + bt);
         });
 
         if (incrementDecrement.isPrefix) {
@@ -785,7 +783,7 @@ public final class AstToTacLowerer implements StatementVisitor, ExpressionVisito
         BasicType originBasic = originType instanceof BasicType ? (BasicType) originType : BasicType.UNSIGNED_LONG;
 
         if (targetBasic == BasicType.DOUBLE) {
-            switch (originBasic) {
+            switch (originBasic.primitive()) {
                 case INT, LONG -> emitTac(new TacIntToDouble(toCast, dst));
                 case UNSIGNED_INT, UNSIGNED_LONG -> emitTac(new TacUnsignedIntToDouble(toCast, dst));
                 default -> throw new IllegalStateException("Unexpected value: " + originBasic);
@@ -793,7 +791,7 @@ public final class AstToTacLowerer implements StatementVisitor, ExpressionVisito
             return dst;
         }
         if (originBasic == BasicType.DOUBLE) {
-            switch (targetBasic) {
+            switch (targetBasic.primitive()) {
                 case INT, LONG -> emitTac(new TacDoubleToInt(toCast, dst));
                 case UNSIGNED_INT, UNSIGNED_LONG -> emitTac(new TacDoubleToUnsignedInt(toCast, dst));
                 default -> throw new IllegalStateException("Unexpected value: " + targetBasic);

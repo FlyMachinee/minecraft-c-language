@@ -26,13 +26,12 @@ public sealed interface Constant
 
     default Constant castTo(Type type) {
         if (type instanceof BasicType bt) {
-            return switch (bt) {
+            return switch (bt.primitive()) {
                 case INT -> toInt();
                 case LONG -> toLong();
                 case UNSIGNED_INT -> toUnsignedInt();
                 case UNSIGNED_LONG -> toUnsignedLong();
                 case DOUBLE -> toDouble();
-                default -> throw new IllegalStateException("Unsupported type for constant cast: " + type);
             };
         }
         if (type instanceof PointerType pt) {

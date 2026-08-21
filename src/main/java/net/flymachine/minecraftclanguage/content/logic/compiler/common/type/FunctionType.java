@@ -5,7 +5,33 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
 
-public record FunctionType(@NotNull Type returnType, List<Type> parameterTypes) implements Type {
+public final class FunctionType extends Type {
+    private final @NotNull Type returnType;
+    private final @NotNull List<Type> parameterTypes;
+
+    public FunctionType(@NotNull Type returnType, @NotNull List<Type> parameterTypes) {
+        super(false);
+        this.returnType = returnType;
+        this.parameterTypes = parameterTypes;
+    }
+
+    @Override
+    public boolean isConst() {
+        return false;
+    }
+
+    public @NotNull Type returnType() {
+        return this.returnType;
+    }
+
+    public @NotNull List<Type> parameterTypes() {
+        return this.parameterTypes;
+    }
+
+    @Override
+    public FunctionType setConst(boolean isConst) {
+        return this;
+    }
 
     @Override
     public boolean isCompatible(Type other) {
@@ -22,7 +48,7 @@ public record FunctionType(@NotNull Type returnType, List<Type> parameterTypes) 
             return false;
         }
         for (int i = 0; i < parameterTypes.size(); i++) {
-            if (!parameterTypes.get(i).isCompatible(o.parameterTypes.get(i))) {
+            if (!parameterTypes.get(i).removeQualifiers().isCompatible(o.parameterTypes.get(i).removeQualifiers())) {
                 return false;
             }
         }
@@ -93,9 +119,7 @@ public record FunctionType(@NotNull Type returnType, List<Type> parameterTypes) 
         }
         if (parameterTypes.size() == 1) {
             Type paramType = parameterTypes.get(0);
-            if (paramType instanceof BasicType basicType) {
-                return basicType == BasicType.VOID;
-            }
+            return paramType.isVoid();
         }
         return false;
     }
@@ -103,7 +127,7 @@ public record FunctionType(@NotNull Type returnType, List<Type> parameterTypes) 
     public int parameterCount() {
         if (parameterTypes.size() == 1) {
             Type paramType = parameterTypes.get(0);
-            if (paramType instanceof BasicType basicType && basicType == BasicType.VOID) {
+            if (paramType.isVoid()) {
                 return 0;
             }
         }

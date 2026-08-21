@@ -185,6 +185,7 @@ declarationSpecifiers // rewrote
 declarationSpecifier // added
     : storageClassSpecifier
     | typeSpecifier
+    | typeQualifier
     ;
 initDeclaratorList
     : initDeclarator (Comma initDeclarator)*
@@ -215,6 +216,12 @@ specifierQualifierList // rewrote
     ;
 specifierQualifier // added
     : typeSpecifier
+    | typeQualifier
+    ;
+
+// ISO 6.7.3, Type Qualifiers
+typeQualifier
+    : Const
     ;
 
 // ISO 6.7.5, Declarators
@@ -227,7 +234,7 @@ directDeclarator
     | directDeclarator LeftParen parameterTypeList RightParen
     ;
 pointer
-    : Star pointer?
+    : Star typeQualifier* pointer?
     ;
 parameterTypeList
     : parameterList
