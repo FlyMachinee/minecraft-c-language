@@ -14,18 +14,21 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.StatementVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.*;
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.*;
+import net.flymachine.minecraftclanguage.content.logic.errorHandle.DiagnosticReporter;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public final class AstToTacLowerer extends SemanticAnalysePass implements
+public final class AstToTacLowerer implements
     StatementVisitor, ExpressionVisitor<AstToTacLowerer.ExpEvalResult>, ExpressionBoolVisitor {
 
-    public AstToTacLowerer(SymbolTable symbolTable) {
-        this.symbolTable = symbolTable;
-    }
-
     private final SymbolTable symbolTable;
+    private final DiagnosticReporter reporter;
+
+    public AstToTacLowerer(SymbolTable symbolTable, DiagnosticReporter reporter) {
+        this.symbolTable = symbolTable;
+        this.reporter = reporter;
+    }
 
     public TacProgram lower(ProgramNode program) {
         List<TacTopLevel> topLevels = new ArrayList<>();
@@ -592,7 +595,7 @@ public final class AstToTacLowerer extends SemanticAnalysePass implements
             binaryExp.rhs.expType.isInteger() && rhs instanceof TacConstant rhsConst && rhsConst.value.isZero()) {
             // 除0
             String msg = "division by zero";
-            logWarningWithSourceLine(binaryExp.op.wholeLoc, msg);
+            reporter.note(binaryExp.op.wholeLoc, msg);
         } else if (lhs instanceof TacConstant lhsConst && rhs instanceof TacConstant rhsConst) {
             Constant reduced = lhsConst.value.apply(binaryExp.op.op, rhsConst.value);
             return new PlainOperand(reduced);

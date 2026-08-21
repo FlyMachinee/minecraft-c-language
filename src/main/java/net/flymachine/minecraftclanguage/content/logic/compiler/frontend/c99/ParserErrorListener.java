@@ -1,45 +1,16 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99;
 
-import net.flymachine.minecraftclanguage.content.logger.ConsoleLogger;
-import net.flymachine.minecraftclanguage.content.logger.Logger;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.antlr.C99Parser;
-import net.flymachine.minecraftclanguage.content.logic.errorHandle.ErrorHandleUtil;
-import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceFile;
+import net.flymachine.minecraftclanguage.content.logic.errorHandle.DiagnosticReporter;
 import org.antlr.v4.runtime.*;
 import org.antlr.v4.runtime.misc.IntervalSet;
 
-public class ParserErrorListener extends BaseErrorListener {
+public final class ParserErrorListener extends BaseErrorListener {
 
-    private Logger logger;
-    private boolean hasErrors = false;
-    private SourceFile sourceFile;
+    private final DiagnosticReporter reporter;
 
-    public ParserErrorListener() {
-        this.logger = new ConsoleLogger();
-    }
-
-    public ParserErrorListener(Logger logger) {
-        this.logger = logger;
-    }
-
-    public Logger getLogger() {
-        return logger;
-    }
-
-    public void setLogger(Logger logger) {
-        this.logger = logger;
-    }
-
-    public boolean hasErrors() {
-        return hasErrors;
-    }
-
-    public SourceFile getSourceFile() {
-        return sourceFile;
-    }
-
-    public void setSourceFile(SourceFile sourceFile) {
-        this.sourceFile = sourceFile;
+    public ParserErrorListener(DiagnosticReporter reporter) {
+        this.reporter = reporter;
     }
 
     @Override
@@ -80,10 +51,9 @@ public class ParserErrorListener extends BaseErrorListener {
         }
 
         String errorInfo =
-            "unexpected '" + logger.formatWithColor(errorToken, Logger.Color.WHITE) +
-            "' after '" + logger.formatWithColor(previousTokenText, Logger.Color.WHITE) +
+            "unexpected '" + reporter.white(errorToken) +
+            "' after '" + reporter.white(previousTokenText) +
             "', expecting " + expectingList;
-        ErrorHandleUtil.logErrorWithSourceLine(logger, sourceFile, line, charPositionInLine, tokenLength, errorInfo);
-        hasErrors = true;
+        reporter.error(line, charPositionInLine, tokenLength, errorInfo);
     }
 }

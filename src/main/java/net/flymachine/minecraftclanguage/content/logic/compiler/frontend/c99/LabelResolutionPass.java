@@ -1,9 +1,8 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99;
 
-import net.flymachine.minecraftclanguage.content.logger.ConsoleLogger;
-import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.BasicType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.*;
+import net.flymachine.minecraftclanguage.content.logic.errorHandle.DiagnosticReporter;
 
 import java.util.*;
 
@@ -14,10 +13,12 @@ import java.util.*;
  * <p>
  * 需要先进行 {@link TypeCheckingPass}
  */
-public final class LabelResolutionPass extends SemanticAnalysePass implements AstVisitor<Void> {
+public final class LabelResolutionPass implements AstVisitor<Void> {
 
-    public LabelResolutionPass() {
-        super(new ConsoleLogger());
+    private final DiagnosticReporter reporter;
+
+    public LabelResolutionPass(DiagnosticReporter reporter) {
+        this.reporter = reporter;
     }
 
     private final Map<String, StatementNode.GotoLabelInfo> labelDefinitionMap = new HashMap<>();
@@ -60,14 +61,12 @@ public final class LabelResolutionPass extends SemanticAnalysePass implements As
         pendingGotoNodes.clear();
         visit(node.body);
         if (!pendingGotoNodes.isEmpty()) {
-            error();
             for (Map.Entry<String, List<GotoNode>> entry : pendingGotoNodes.entrySet()) {
                 String label = entry.getKey();
                 List<GotoNode> gotoNodes = entry.getValue();
                 for (GotoNode gotoNode : gotoNodes) {
-                    String msg =
-                        "label '" + getLogger().white(label) + "' used but not defined";
-                    logErrorWithSourceLine(gotoNode.gotoLoc, msg);
+                    String msg = "label '" + reporter.white(label) + "' used but not defined";
+                    reporter.error(gotoNode.gotoLoc, msg);
                 }
             }
         }
@@ -97,11 +96,8 @@ public final class LabelResolutionPass extends SemanticAnalysePass implements As
         StatementNode.GotoLabelInfo definition = labelDefinitionMap.get(id);
         if (definition != null) {
             // 标签重定义
-            error();
-            String msg = "duplicate label '" + getLogger().white(id) + "'";
-            logErrorWithSourceLine(gotoLabelInfo.label.wholeLoc, msg);
-            msg = "previous definition of '" + getLogger().white(id) + "'";
-            logNoteWithSourceLine(definition.label.wholeLoc, msg);
+            reporter.error(gotoLabelInfo.label.wholeLoc, "duplicate label '" + reporter.white(id) + "'");
+            reporter.note(definition.label.wholeLoc, "previous definition of '" + reporter.white(id) + "'");
         } else {
             // 重命名以函数名开头
             rename(gotoLabelInfo.label);
@@ -122,20 +118,16 @@ public final class LabelResolutionPass extends SemanticAnalysePass implements As
         SwitchStatementNode switchNode = getCurrentSwitch();
         if (switchNode == null) {
             // 当前没有在switch语句内
-            error();
-            String msg = "case label not within a switch statement";
-            logErrorWithSourceLine(caseLabelInfo.caseLocation, msg);
+            reporter.error(caseLabelInfo.caseLocation, "case label not within a switch statement");
         } else {
             if (!(caseLabelInfo.caseValue instanceof ConstantNode)) {
-                error();
-                String msg = "case label does not reduce to an integer constant";
-                logErrorWithSourceLine(caseLabelInfo.caseLocation, msg);
+                reporter.error(caseLabelInfo.caseLocation, "case label does not reduce to an integer constant");
                 return;
             }
             // 在switch中，查询当前的case数值是否已定义
             ConstantNode newConstantNode = new ConstantNode(
                 caseLabelInfo.caseValue.wholeLoc,
-                ((ConstantNode) caseLabelInfo.caseValue).value.castTo((BasicType) switchNode.exp.expType));
+                ((ConstantNode) caseLabelInfo.caseValue).value.castTo(switchNode.exp.expType));
             caseLabelInfo.caseValue = newConstantNode;
 
             // switch 语句体可拥有任意数量的 case: 标号，只要所有常量表达式的值（在转换到表达式的提升后类型后）各不相同
@@ -145,11 +137,8 @@ public final class LabelResolutionPass extends SemanticAnalysePass implements As
             StatementNode.CaseLabelInfo definition = switchNode.caseValues.get(value);
             if (definition != null) {
                 // 已定义
-                error();
-                String msg = "duplicate case value";
-                logErrorWithSourceLine(caseLabelInfo.caseLocation, msg);
-                msg = "previously used here";
-                logNoteWithSourceLine(definition.caseLocation, msg);
+                reporter.error(caseLabelInfo.caseLocation, "duplicate case value");
+                reporter.note(definition.caseLocation, "previously used here");
             } else {
                 // 无定义，进行定义
                 switchNode.caseValues.put(value, caseLabelInfo);
@@ -163,18 +152,14 @@ public final class LabelResolutionPass extends SemanticAnalysePass implements As
         SwitchStatementNode switchNode = getCurrentSwitch();
         if (switchNode == null) {
             // 当前没有在switch语句内
-            error();
-            String msg = "'" + getLogger().white("default") + "' label not within a switch statement";
-            logErrorWithSourceLine(defaultLabelInfo.location, msg);
+            String msg = "'" + reporter.white("default") + "' label not within a switch statement";
+            reporter.error(defaultLabelInfo.location, msg);
         } else {
             // 在switch中，查询当前的default是否已定义
             if (switchNode.defaultLabel != null) {
                 // 已经定义
-                error();
-                String msg = "multiple default labels in one switch";
-                logErrorWithSourceLine(defaultLabelInfo.location, msg);
-                msg = "this is the first default label";
-                logNoteWithSourceLine(switchNode.defaultLabel.location, msg);
+                reporter.error(defaultLabelInfo.location, "multiple default labels in one switch");
+                reporter.note(switchNode.defaultLabel.location, "this is the first default label");
             } else {
                 // 无定义，进行定义
                 switchNode.defaultLabel = defaultLabelInfo;

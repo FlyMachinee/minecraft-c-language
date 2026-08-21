@@ -1,7 +1,5 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99;
 
-import net.flymachine.minecraftclanguage.content.logger.ConsoleLogger;
-import net.flymachine.minecraftclanguage.content.logger.Logger;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.AssignmentOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.BinaryOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.StorageClassSpecifier;
@@ -13,8 +11,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Void
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.antlr.C99Parser;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.antlr.C99ParserBaseVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.*;
-import net.flymachine.minecraftclanguage.content.logic.errorHandle.ErrorHandleUtil;
-import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceFile;
+import net.flymachine.minecraftclanguage.content.logic.errorHandle.DiagnosticReporter;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.Token;
@@ -31,58 +28,10 @@ import java.util.List;
  */
 public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
 
-    // 从 SemanticAnalysePass 复制而来，因为 Java 不支持多继承，不知道怎么改才能更好
-    private Logger logger;
-    private SourceFile sourceFile;
-    private boolean semanticError = false;
+    private final DiagnosticReporter reporter;
 
-    public AstBuilderVisitor(Logger logger, SourceFile sourceFile) {
-        this.logger = logger;
-        this.sourceFile = sourceFile;
-    }
-
-    public AstBuilderVisitor(Logger logger) {
-        this.logger = logger;
-    }
-
-    public AstBuilderVisitor() {
-        this.logger = new ConsoleLogger();
-    }
-
-    public boolean hasSemanticError() {
-        return semanticError;
-    }
-
-    public void setSemanticError(boolean semanticError) {
-        this.semanticError = semanticError;
-    }
-
-    private void error() {
-        semanticError = true;
-    }
-
-    public Logger getLogger() {
-        return logger;
-    }
-
-    public void setLogger(Logger logger) {
-        this.logger = logger;
-    }
-
-    public SourceFile getSourceFile() {
-        return sourceFile;
-    }
-
-    public void setSourceFile(SourceFile sourceFile) {
-        this.sourceFile = sourceFile;
-    }
-
-    private void logErrorWithSourceLine(SourceLocation sourceLocation, String message) {
-        ErrorHandleUtil.logErrorWithSourceLine(getLogger(), getSourceFile(), sourceLocation, message);
-    }
-
-    private void logNoteWithSourceLine(SourceLocation sourceLocation, String message) {
-        ErrorHandleUtil.logNoteWithSourceLine(getLogger(), getSourceFile(), sourceLocation, message);
+    public AstBuilderVisitor(DiagnosticReporter reporter) {
+        this.reporter = reporter;
     }
 
     private static SourceLocation getSourceLocation(ParserRuleContext ctx) {
@@ -127,11 +76,10 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
 
         DeclarationLikeResult res = parseFromDeclarator(baseType, ctx.declarator());
         if (isBaseTypeError) {
-            error();
             String msg =
-                "type defaults to '" + logger.white("int") + "' in declaration of '" + logger.white(res.id.name) +
-                "'";
-            logErrorWithSourceLine(res.id.wholeLoc, msg);
+                "type defaults to '" + reporter.white("int") +
+                "' in declaration of '" + reporter.white(res.id.name) + "'";
+            reporter.error(res.id.wholeLoc, msg);
         }
         CompoundStatementNode body = (CompoundStatementNode) visit(ctx.compoundStatement());
         return new FunctionDefinitionNode(getSourceLocation(ctx), res.id, res.t, typeAndSpecifiers.storageClass, body);
@@ -155,10 +103,9 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         }
 
         void assertBothType(String prev, String now) {
-            error();
-            String msg = "both '" + logger.white(prev) + "' and '" + logger.white(now) +
+            String msg = "both '" + reporter.white(prev) + "' and '" + reporter.white(now) +
                          "' in declaration specifiers";
-            logErrorWithSourceLine(loc, msg);
+            reporter.error(loc, msg);
         }
 
         void append(String typeSpecifierName, SourceLocation loc) {
@@ -194,9 +141,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
             switch (typeSpecifierName) {
                 case "int" -> {
                     if (nonLongCount > 0) {
-                        error();
-                        String msg = "two or more data types in declaration specifiers";
-                        logErrorWithSourceLine(loc, msg);
+                        reporter.error(loc, "two or more data types in declaration specifiers");
                     }
                     // nonLongCount 为 0，可能是 long/signed/unsigned，都不需要变化
                     nonLongCount++;
@@ -219,9 +164,8 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
                             case INT -> t = BasicType.LONG;
                             case UNSIGNED_INT -> t = BasicType.UNSIGNED_LONG;
                             case LONG, UNSIGNED_LONG -> {
-                                error();
-                                String msg = "'" + logger.white("long long") + "' is too long";
-                                logErrorWithSourceLine(loc, msg);
+                                String msg = "'" + reporter.white("long long") + "' is too long";
+                                reporter.error(loc, msg);
                             }
                             case DOUBLE -> {
                                 assertBothType("long", "double");
@@ -235,9 +179,8 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
                 case "signed", "unsigned" -> {
                     Signedness newSignedness = Signedness.valueOf(typeSpecifierName.toUpperCase());
                     if (signedness == newSignedness) {
-                        error();
-                        String msg = "duplicate '" + logger.white(typeSpecifierName) + "'";
-                        logErrorWithSourceLine(loc, msg);
+                        String msg = "duplicate '" + reporter.white(typeSpecifierName) + "'";
+                        reporter.error(loc, msg);
                         return;
                     }
 
@@ -293,9 +236,8 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
                     storageClassNode = new StorageClassSpecifierNode(
                         getSourceLocation(specifierCtx.storageClassSpecifier()), storageClass);
                 } else if (!reportedMultipleStorageClasses) {
-                    error();
                     String msg = "multiple storage classes in declaration specifiers";
-                    logErrorWithSourceLine(getSourceLocation(specifierCtx.storageClassSpecifier()), msg);
+                    reporter.error(getSourceLocation(specifierCtx.storageClassSpecifier()), msg);
                     reportedMultipleStorageClasses = true;
                 }
             } else if (specifierCtx.typeQualifier() != null) {
@@ -327,14 +269,10 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         //   ;
         TerminalNode star = ctx.Star();
         if (baseType instanceof FunctionTypeNode) {
-            error();
-            String msg = "function pointers are not supported";
-            logErrorWithSourceLine(getSourceLocation(star), msg);
+            reporter.error(getSourceLocation(star), "function pointers are not supported");
         }
         if (baseType.getType().isVoid()) {
-            error();
-            String msg = "pointers to void are not supported";
-            logErrorWithSourceLine(getSourceLocation(star), msg);
+            reporter.error(getSourceLocation(star), "pointers to void are not supported");
         }
 
         PointerTypeNode pointerType;
@@ -453,16 +391,14 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
                 // 错误信息需要参数标识符位置，所以先 Parse 再报错
                 DeclarationLikeResult paramRes = parseFromDeclarator(paramBaseType, paramCtx.declarator());
                 if (baseTypeError) {
-                    error();
-                    String msg = "type defaults to '" + logger.white("int") + "' in declaration of '" +
-                                 logger.white(paramRes.id.name) + "'";
-                    logErrorWithSourceLine(paramRes.id.wholeLoc, msg);
+                    String msg = "type defaults to '" + reporter.white("int") + "' in declaration of '" +
+                                 reporter.white(paramRes.id.name) + "'";
+                    reporter.error(paramRes.id.wholeLoc, msg);
                 }
                 if (paramStorageClass != null && paramStorageClass.storageClass != StorageClassSpecifier.REGISTER) {
                     // 有非 register 的存储类型
-                    error();
-                    String msg = "storage class specified for parameter '" + logger.white(paramRes.id.name) + "'";
-                    logErrorWithSourceLine(paramStorageClass.wholeLoc, msg);
+                    String msg = "storage class specified for parameter '" + reporter.white(paramRes.id.name) + "'";
+                    reporter.error(paramStorageClass.wholeLoc, msg);
                 }
 
                 parameterTypes.add(paramRes.t);
@@ -471,16 +407,14 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
                 // 没有参数名
                 if (paramBaseType == null || paramBaseType.getType() == null) {
                     // 没有类型
-                    error();
-                    String msg = "type defaults to '" + logger.white("int") + "' in type name";
-                    logErrorWithSourceLine(getSourceLocation(paramCtx.declarationSpecifiers()), msg);
+                    String msg = "type defaults to '" + reporter.white("int") + "' in type name";
+                    reporter.error(getSourceLocation(paramCtx.declarationSpecifiers()), msg);
                     paramBaseType = new BasicTypeNode(null, BasicType.Primitive.INT);
                 }
                 if (paramStorageClass != null && paramStorageClass.storageClass != StorageClassSpecifier.REGISTER) {
                     // 有非 register 的存储类型
-                    error();
                     String msg = "storage class specified for unnamed parameter";
-                    logErrorWithSourceLine(paramStorageClass.wholeLoc, msg);
+                    reporter.error(paramStorageClass.wholeLoc, msg);
                 }
 
                 paramBaseType.constQualifier = paramTypeAndSpecifiers.constQualifier;
@@ -524,11 +458,10 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
                 DeclarationLikeResult res = parseFromDeclarator(baseType, initDeclarator.declarator());
 
                 if (isBaseTypeError) {
-                    error();
                     String msg =
-                        "type defaults to '" + logger.white("int") + "' in declaration of '"
-                        + logger.white(res.id.name) + "'";
-                    logErrorWithSourceLine(res.id.wholeLoc, msg);
+                        "type defaults to '" + reporter.white("int") + "' in declaration of '"
+                        + reporter.white(res.id.name) + "'";
+                    reporter.error(res.id.wholeLoc, msg);
                 }
 
                 IdentifierNode id = res.id;
@@ -752,14 +685,13 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
             }
         }
 
-        error();
         String msg;
         if (maxIsUnsignedLong || bitLength > 64) {
             msg = "integer constant is too large for its type";
         } else {
             msg = "integer constant is so large that it is unsigned";
         }
-        logErrorWithSourceLine(loc, msg);
+        reporter.error(loc, msg);
         return new ConstantNode(loc, new ConstantInt(0));
     }
 
@@ -771,9 +703,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
             return new ConstantNode(loc, new ConstantDouble(value));
         } catch (NumberFormatException e) {
             // should never reach here
-            error();
-            String msg = "malformed floating constant";
-            logErrorWithSourceLine(loc, msg);
+            reporter.error(loc, "malformed floating constant");
             return new ConstantNode(loc, new ConstantDouble(0.0));
         }
     }
@@ -881,9 +811,8 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
             constQualifierNode == null ? helper.loc :
                 SourceLocation.concat(helper.loc, constQualifierNode.wholeLoc);
         if (helper.t == null) {
-            error();
-            String msg = "type defaults to '" + logger.white("int") + "' in typename";
-            logErrorWithSourceLine(finalLoc, msg);
+            String msg = "type defaults to '" + reporter.white("int") + "' in typename";
+            reporter.error(finalLoc, msg);
             finalTypeNode = new BasicTypeNode(finalLoc, BasicType.Primitive.INT);
         } else if (helper.t instanceof BasicType bt) {
             finalTypeNode = new BasicTypeNode(helper.loc, bt.primitive());

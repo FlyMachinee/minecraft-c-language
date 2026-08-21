@@ -1,12 +1,12 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99;
 
-import net.flymachine.minecraftclanguage.content.logger.ConsoleLogger;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.AssignmentOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.StorageClassSpecifier;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.Constant;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.*;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.*;
+import net.flymachine.minecraftclanguage.content.logic.errorHandle.DiagnosticReporter;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 import org.jetbrains.annotations.Nullable;
 
@@ -15,10 +15,12 @@ import org.jetbrains.annotations.Nullable;
  * <p>
  * 需要先进行 {@link IdentifierResolutionPass}
  */
-public final class TypeCheckingPass extends SemanticAnalysePass implements AstVisitor<Void> {
+public final class TypeCheckingPass implements AstVisitor<Void> {
 
-    public TypeCheckingPass() {
-        super(new ConsoleLogger());
+    private final DiagnosticReporter reporter;
+
+    public TypeCheckingPass(DiagnosticReporter reporter) {
+        this.reporter = reporter;
     }
 
     private final SymbolTable symbolTable = new SymbolTable();
@@ -38,13 +40,11 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
 
     @Override
     public Void visit(FunctionDefinitionNode node) {
-
         if (!(node.funcType instanceof FunctionTypeNode funcType)) {
             // 不是函数类型
-            error();
             String msg = "name declared in a function definition shall have a function type; have '" +
-                         getLogger().white(node.funcType.getType().toString()) + "'";
-            logErrorWithSourceLine(node.id.wholeLoc, msg);
+                         reporter.white(node.funcType.getType().toString()) + "'";
+            reporter.error(node.id.wholeLoc, msg);
         } else {
             visitFunctionDeclaration(node.id, funcType, node.storageClass, true);
             checkFunctionParameter(funcType, true);
@@ -66,11 +66,10 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             // 若表达式的类型与函数的返回类型不同，则如同赋值给该函数返回类型的对象一般对其值进行转换
             Type retType = funcType.retType.getType();
             if (!validConvertAsIfByAssignment(node.exp, retType)) {
-                error();
                 String msg =
-                    "incompatible types when returning type '" + getLogger().white(node.exp.expType.toString()) +
-                    "' but '" + getLogger().white(retType.toString()) + "' was expected";
-                logErrorWithSourceLine(node.exp.wholeLoc, msg);
+                    "incompatible types when returning type '" + reporter.white(node.exp.expType.toString()) +
+                    "' but '" + reporter.white(retType.toString()) + "' was expected";
+                reporter.error(node.exp.wholeLoc, msg);
                 return null;
             }
             node.exp = convertTo(node.exp, retType);
@@ -109,30 +108,27 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         node.expType = switch (node.op.op) {
             case NEGATE -> {
                 if (!node.exp.expType.isArithmetic()) {
-                    error();
                     String msg = "operand of unary minus must have arithmetic type; have '" +
-                                 getLogger().white(node.exp.expType.toString()) + "'";
-                    logErrorWithSourceLine(node.op.wholeLoc, msg);
+                                 reporter.white(node.exp.expType.toString()) + "'";
+                    reporter.error(node.op.wholeLoc, msg);
                     yield ErrorType.INSTANCE;
                 }
                 yield node.exp.expType;
             }
             case COMPLEMENT -> {
                 if (!node.exp.expType.isInteger()) {
-                    error();
                     String msg = "operand of bitwise complement must have integer type; have '" +
-                                 getLogger().white(node.exp.expType.toString()) + "'";
-                    logErrorWithSourceLine(node.op.wholeLoc, msg);
+                                 reporter.white(node.exp.expType.toString()) + "'";
+                    reporter.error(node.op.wholeLoc, msg);
                     yield ErrorType.INSTANCE;
                 }
                 yield node.exp.expType;
             }
             case NOT -> {
                 if (!node.exp.expType.isScalar()) {
-                    error();
                     String msg = "operand of logical negation must have scalar type; have '" +
-                                 getLogger().white(node.exp.expType.toString()) + "'";
-                    logErrorWithSourceLine(node.op.wholeLoc, msg);
+                                 reporter.white(node.exp.expType.toString()) + "'";
+                    reporter.error(node.op.wholeLoc, msg);
                     yield ErrorType.INSTANCE;
                 }
                 yield BasicType.INT;
@@ -185,12 +181,11 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         node.expType = switch (node.op.op) {
             case MULTIPLY, DIVIDE, ADD, SUBTRACT -> {
                 if (!lhsType.isArithmetic() || !rhsType.isArithmetic()) {
-                    error();
                     String msg = "operands of binary operator " + node.op.op.getSymbol() +
                                  " must have arithmetic type; have '" +
-                                 getLogger().white(lhsType.toString()) + "' and '" +
-                                 getLogger().white(rhsType.toString()) + "'";
-                    logErrorWithSourceLine(node.op.wholeLoc, msg);
+                                 reporter.white(lhsType.toString()) + "' and '" +
+                                 reporter.white(rhsType.toString()) + "'";
+                    reporter.error(node.op.wholeLoc, msg);
                     yield ErrorType.INSTANCE;
                 }
                 BasicType commonType = Type.commonRealType((BasicType) lhsType, (BasicType) rhsType);
@@ -200,12 +195,11 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             }
             case MODULO, BITWISE_AND, BITWISE_OR, BITWISE_XOR -> {
                 if (!lhsType.isInteger() || !rhsType.isInteger()) {
-                    error();
                     String msg = "operands of binary operator " + node.op.op.getSymbol() +
                                  " must have integer type; have '" +
-                                 getLogger().white(lhsType.toString()) + "' and '" +
-                                 getLogger().white(rhsType.toString()) + "'";
-                    logErrorWithSourceLine(node.op.wholeLoc, msg);
+                                 reporter.white(lhsType.toString()) + "' and '" +
+                                 reporter.white(rhsType.toString()) + "'";
+                    reporter.error(node.op.wholeLoc, msg);
                     yield ErrorType.INSTANCE;
                 }
                 BasicType commonType = Type.commonRealType((BasicType) lhsType, (BasicType) rhsType);
@@ -215,35 +209,32 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             }
             case LEFT_SHIFT, RIGHT_SHIFT -> {
                 if (!lhsType.isInteger() || !rhsType.isInteger()) {
-                    error();
                     String msg = "operands of binary operator " + node.op.op.getSymbol() +
                                  " must have integer type; have '" +
-                                 getLogger().white(lhsType.toString()) + "' and '" +
-                                 getLogger().white(rhsType.toString()) + "'";
-                    logErrorWithSourceLine(node.op.wholeLoc, msg);
+                                 reporter.white(lhsType.toString()) + "' and '" +
+                                 reporter.white(rhsType.toString()) + "'";
+                    reporter.error(node.op.wholeLoc, msg);
                     yield ErrorType.INSTANCE;
                 }
                 yield lhsType;
             }
             case LOGICAL_AND, LOGICAL_OR -> {
                 if (!lhsType.isScalar() || !rhsType.isScalar()) {
-                    error();
                     String msg = "operands of logical operator " + node.op.op.getSymbol() +
                                  " must have scalar type; have '" +
-                                 getLogger().white(lhsType.toString()) + "' and '" +
-                                 getLogger().white(rhsType.toString()) + "'";
-                    logErrorWithSourceLine(node.op.wholeLoc, msg);
+                                 reporter.white(lhsType.toString()) + "' and '" +
+                                 reporter.white(rhsType.toString()) + "'";
+                    reporter.error(node.op.wholeLoc, msg);
                     yield ErrorType.INSTANCE;
                 }
                 yield BasicType.INT;
             }
             case LESS_THAN, LESS_OR_EQUAL, GREATER_THAN, GREATER_OR_EQUAL -> {
                 if (!lhsType.isReal() || !rhsType.isReal()) {
-                    error();
                     String msg = "operands of relational operator " + node.op.op.getSymbol() +
-                                 " must have real type; have '" + getLogger().white(lhsType.toString()) +
-                                 "' and '" + getLogger().white(rhsType.toString()) + "'";
-                    logErrorWithSourceLine(node.op.wholeLoc, msg);
+                                 " must have real type; have '" + reporter.white(lhsType.toString()) +
+                                 "' and '" + reporter.white(rhsType.toString()) + "'";
+                    reporter.error(node.op.wholeLoc, msg);
                     yield ErrorType.INSTANCE;
                 }
                 BasicType commonType = Type.commonRealType((BasicType) lhsType, (BasicType) rhsType);
@@ -271,10 +262,9 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                     }
                 }
                 if (commonType instanceof ErrorType) {
-                    error();
-                    String msg = "cannot compare between '" + getLogger().white(lhsType.toString()) + "' and '" +
-                                 getLogger().white(rhsType.toString()) + "'";
-                    logErrorWithSourceLine(node.op.wholeLoc, msg);
+                    String msg = "cannot compare between '" + reporter.white(lhsType.toString()) + "' and '" +
+                                 reporter.white(rhsType.toString()) + "'";
+                    reporter.error(node.op.wholeLoc, msg);
                     yield ErrorType.INSTANCE;
                 }
                 node.lhs = convertTo(node.lhs, commonType);
@@ -307,11 +297,11 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         for (InitDeclaratorNode initDecl : node.initDeclarators) {
             if (!initDecl.finalType.getType().isComplete()) {
                 // 不完整类型
-                error();
+                // 可能被重命名，使用 location 获取
                 String msg =
-                    "storage size of '" + getLogger().white(getSourceFile().getByLocation(initDecl.id.wholeLoc)) +
-                    "' isn't known; have type '" + getLogger().white(initDecl.finalType.getType().toString()) + "'";
-                logErrorWithSourceLine(initDecl.id.wholeLoc, msg);
+                    "storage size of '" + reporter.white(reporter.byLocation(initDecl.id.wholeLoc)) +
+                    "' isn't known; have type '" + reporter.white(initDecl.finalType.getType().toString()) + "'";
+                reporter.error(initDecl.id.wholeLoc, msg);
                 return null;
             }
 
@@ -322,10 +312,9 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
 
                 if (initDecl.init != null) {
                     // 函数类型不能使用赋值初始化
-                    error();
-                    String msg = "function '" + getLogger().white(initDecl.id.name) +
+                    String msg = "function '" + reporter.white(initDecl.id.name) +
                                  "' is initialized like a variable";
-                    logErrorWithSourceLine(initDecl.init.wholeLoc, msg);
+                    reporter.error(initDecl.init.wholeLoc, msg);
                 }
                 return null;
             }
@@ -343,11 +332,11 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
 
     private void panicWithPreviousRef(
         String msg, IdentifierNode id, SymbolTable.Entry previous, boolean defined) {
-        logErrorWithSourceLine(id.wholeLoc, msg);
+        reporter.error(id.wholeLoc, msg);
         msg = "previous " + (defined ? "definition" : "declaration") + " of '" +
-              getLogger().white(id.name) + "' with type '" + getLogger().white(previous.type.toString()) +
+              reporter.white(id.name) + "' with type '" + reporter.white(previous.type.toString()) +
               "'";
-        logNoteWithSourceLine(previous.id.wholeLoc, msg);
+        reporter.note(previous.id.wholeLoc, msg);
     }
 
     public void visitFunctionDeclaration(
@@ -363,10 +352,9 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         }
         if (!validRetType) {
             // 返回值类型不合法
-            error();
-            String msg = "function '" + getLogger().white(id.name) + "' has invalid return type '" +
-                         getLogger().white(funcType.retType.getType().toString()) + "'";
-            logErrorWithSourceLine(id.wholeLoc, msg);
+            String msg = "function '" + reporter.white(id.name) + "' has invalid return type '" +
+                         reporter.white(funcType.retType.getType().toString()) + "'";
+            reporter.error(id.wholeLoc, msg);
         }
 
         SymbolTable.Entry previous = symbolTable.get(id.name);
@@ -390,16 +378,14 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
 
         if (alreadyDefined && isDefinition) {
             // 重定义函数
-            error();
-            String msg = "redefinition of '" + getLogger().white(id.name) + "'";
+            String msg = "redefinition of '" + reporter.white(id.name) + "'";
             panicWithPreviousRef(msg, id, previous, true);
             return;
         }
         if (funcAttr.isGlobal() && storageClass != null &&
             storageClass.storageClass.equals(StorageClassSpecifier.STATIC)) {
             // 之前是全局的（External linkage），现在是静态的（Internal linkage），链接冲突
-            error();
-            String msg = "static declaration of '" + getLogger().white(id.name) +
+            String msg = "static declaration of '" + reporter.white(id.name) +
                          "' follows non-static declaration";
             panicWithPreviousRef(msg, id, previous, alreadyDefined);
             return;
@@ -423,18 +409,18 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             IdentifierNode param = funcType.params.get(i);
             if (!paramType.getType().isComplete()) {
                 // 不完整类型
-                error();
                 if (param != null) {
+                    // 可能被重命名，通过 location 获取
                     String msg =
-                        "parameter '" + getLogger().white(getSourceFile().getByLocation(param.wholeLoc)) +
+                        "parameter '" + reporter.white(reporter.byLocation(param.wholeLoc)) +
                         "' has incomplete type '" +
-                        getLogger().white(paramType.getType().toString()) + "'";
-                    logErrorWithSourceLine(param.wholeLoc, msg);
+                        reporter.white(paramType.getType().toString()) + "'";
+                    reporter.error(param.wholeLoc, msg);
                 } else {
                     String msg =
                         "unnamed parameter " + (i + 1) + " has incomplete type '" +
-                        getLogger().white(paramType.getType().toString()) + "'";
-                    logErrorWithSourceLine(paramType.getWholeLocation(), msg);
+                        reporter.white(paramType.getType().toString()) + "'";
+                    reporter.error(paramType.getWholeLocation(), msg);
                 }
             }
             if (isDefinition) {
@@ -456,11 +442,10 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         if (t.isScalar()) {
             // 求值该表达式，而其值在如同赋值般转换到对象类型后，成为被初始化对象的初值
             if (!validConvertAsIfByAssignment(init, t)) {
-                error();
                 String msg = "incompatible types when initializing type '" +
-                             getLogger().white(t.toString()) +
-                             "' using type '" + getLogger().white(init.expType.toString()) + "'";
-                logErrorWithSourceLine(init.wholeLoc, msg);
+                             reporter.white(t.toString()) +
+                             "' using type '" + reporter.white(init.expType.toString()) + "'";
+                reporter.error(init.wholeLoc, msg);
                 return SymbolTable.Entry.StaticAttr.NoDefinition.INSTANCE;
             } else {
                 return new SymbolTable.Entry.StaticAttr.Defined(init.value.castTo(t).toStaticInit());
@@ -491,9 +476,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             defType = getInitialValueFromInitializer(constInit, t);
         } else {
             // 其他类型的初始化表达式不合法
-            error();
-            String msg = "initializer element is not constant";
-            logErrorWithSourceLine(init.wholeLoc, msg);
+            reporter.error(init.wholeLoc, "initializer element is not constant");
             // 给一个 dummy 类型以继续后续检查
             defType = SymbolTable.Entry.StaticAttr.NoDefinition.INSTANCE;
         }
@@ -523,14 +506,13 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             global = prevAttr.isGlobal();
         } else if (prevAttr.isGlobal() != global) {
             // 链接属性不同，冲突
-            error();
             String msg;
             if (global) {
                 // 当前 global（External Linkage），先前非 global（Internal Linkage）
-                msg = "non-static declaration of '" + getLogger().white(id.name) + "' follows static declaration";
+                msg = "non-static declaration of '" + reporter.white(id.name) + "' follows static declaration";
             } else {
                 // 当前非 global（Internal Linkage），先前 global（External Linkage）
-                msg = "static declaration of '" + getLogger().white(id.name) + "' follows non-static declaration";
+                msg = "static declaration of '" + reporter.white(id.name) + "' follows non-static declaration";
             }
             panicWithPreviousRef(msg, id, previous, alreadyDefined);
             return;
@@ -539,8 +521,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         if (prevAttr.defType instanceof SymbolTable.Entry.StaticAttr.Defined prevDef) {
             if (defType instanceof SymbolTable.Entry.StaticAttr.Defined) {
                 // 定义了两次，且都有初始化，冲突
-                error();
-                String msg = "redefinition of '" + getLogger().white(id.name) + "'";
+                String msg = "redefinition of '" + reporter.white(id.name) + "'";
                 panicWithPreviousRef(msg, id, previous, true);
             } else {
                 // 当前无定义，先前有初始化，使用先前的初始化信息
@@ -583,11 +564,10 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             if (type.getType().isScalar()) {
                 // 求值该表达式，而其值在如同赋值般转换到对象类型后，成为被初始化对象的初值
                 if (!validConvertAsIfByAssignment(init, type.getType())) {
-                    error();
                     String msg = "incompatible types when initializing type '" +
-                                 getLogger().white(type.getType().toString()) +
-                                 "' using type '" + getLogger().white(init.expType.toString()) + "'";
-                    logErrorWithSourceLine(init.wholeLoc, msg);
+                                 reporter.white(type.getType().toString()) +
+                                 "' using type '" + reporter.white(init.expType.toString()) + "'";
+                    reporter.error(init.wholeLoc, msg);
                 } else {
                     initDecl.init = convertTo(init, type.getType());
                 }
@@ -598,11 +578,10 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         if (storageClass.storageClass.equals(StorageClassSpecifier.EXTERN)) {
             // 块作用域的 extern 声明不允许有初始化
             if (init != null) {
-                error();
                 String msg =
-                    "'" + getLogger().white(id.name) + "' has both '" + getLogger().white("extern") +
+                    "'" + reporter.white(id.name) + "' has both '" + reporter.white("extern") +
                     "' and initializer";
-                logErrorWithSourceLine(init.wholeLoc, msg);
+                reporter.error(init.wholeLoc, msg);
                 // 这里不 return，继续处理下面的检查与定义
             }
             SymbolTable.Entry previous = symbolTable.get(id.name);
@@ -657,9 +636,7 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             initialValue = getInitialValueFromInitializer(constInit, t);
         } else {
             // 其他类型的初始化表达式不合法
-            error();
-            String msg = "initializer element is not constant";
-            logErrorWithSourceLine(init.wholeLoc, msg);
+            reporter.error(init.wholeLoc, "initializer element is not constant");
             // 这里不 return，继续处理下面的定义，防止后续引用无定义
         }
         // static 块作用域变量为 No Linkage，不可能重复定义（在 Identifier Resolution 中已检查）
@@ -669,13 +646,12 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
 
     private void panicConflictType(
         IdentifierNode id, TypeNode type, SymbolTable.Entry previous, boolean alreadyDefined) {
-        error();
         String msg;
         if ((previous.type instanceof FunctionType) != (type instanceof FunctionTypeNode)) {
-            msg = "'" + getLogger().white(id.name) + "' redeclared as different kind of symbol";
+            msg = "'" + reporter.white(id.name) + "' redeclared as different kind of symbol";
         } else {
-            msg = "conflicting types for '" + getLogger().white(id.name) + "'; have '" +
-                  getLogger().white(type.getType().toString()) + "'";
+            msg = "conflicting types for '" + reporter.white(id.name) + "'; have '" +
+                  reporter.white(type.getType().toString()) + "'";
         }
         panicWithPreviousRef(msg, id, previous, alreadyDefined);
     }
@@ -699,10 +675,10 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         Type t = entry.type;
         if (!t.isComplete()) {
             // 不完整类型不能使用
-            error();
-            String msg = "storage size of '" + getLogger().white(getSourceFile().getByLocation(node.wholeLoc)) +
-                         "' isn't known; have type '" + getLogger().white(t.toString()) + "'";
-            logErrorWithSourceLine(node.wholeLoc, msg);
+            // 可能被重命名，通过 location 获取
+            String msg = "storage size of '" + reporter.white(reporter.byLocation(node.wholeLoc)) +
+                         "' isn't known; have type '" + reporter.white(t.toString()) + "'";
+            reporter.error(node.wholeLoc, msg);
             node.expType = ErrorType.INSTANCE;
             return null;
         }
@@ -761,10 +737,9 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         node.rhs.expType = node.rhs.expType.removeConst();
 
         if (!isModifiableLvalueExpression(node.lhs)) {
-            error();
             String msg = "modifiable lvalue required as left operand of assignment; has type '" +
-                         getLogger().white(node.lhs.expType.toString()) + "'";
-            logErrorWithSourceLine(node.op.wholeLoc, msg);
+                         reporter.white(node.lhs.expType.toString()) + "'";
+            reporter.error(node.op.wholeLoc, msg);
             node.expType = ErrorType.INSTANCE;
             return null;
         }
@@ -772,11 +747,10 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         if (node.op.op == AssignmentOperator.ASSIGN) {
             // 简单赋值
             if (!validConvertAsIfByAssignment(node.rhs, node.lhs.expType)) {
-                error();
                 String msg =
-                    "incompatible types when assigning type '" + getLogger().white(node.lhs.expType.toString()) +
-                    "' using type '" + getLogger().white(node.rhs.expType.toString()) + "'";
-                logErrorWithSourceLine(node.rhs.wholeLoc, msg);
+                    "incompatible types when assigning type '" + reporter.white(node.lhs.expType.toString()) +
+                    "' using type '" + reporter.white(node.rhs.expType.toString()) + "'";
+                reporter.error(node.rhs.wholeLoc, msg);
                 node.expType = ErrorType.INSTANCE;
                 return null;
             }
@@ -789,11 +763,10 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         // 复合赋值
         // lhs, rhs	- 拥有算术类型的表达式
         if (!node.lhs.expType.isArithmetic() || !node.rhs.expType.isArithmetic()) {
-            error();
             String msg = "operands of compound assignment operator " + node.op.op.getSymbol() +
-                         " must have arithmetic type; have '" + getLogger().white(node.lhs.expType.toString()) +
-                         "' and '" + getLogger().white(node.rhs.expType.toString()) + "'";
-            logErrorWithSourceLine(node.op.wholeLoc, msg);
+                         " must have arithmetic type; have '" + reporter.white(node.lhs.expType.toString()) +
+                         "' and '" + reporter.white(node.rhs.expType.toString()) + "'";
+            reporter.error(node.op.wholeLoc, msg);
             node.expType = ErrorType.INSTANCE;
             return null;
         }
@@ -818,22 +791,20 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             return null;
         }
         if (!isModifiableLvalueExpression(node.operand)) {
-            error();
             String msg = node.isIncrement ?
                 "modifiable lvalue required as increment operand" :
                 "modifiable lvalue required as decrement operand";
-            msg += "; has type '" + getLogger().white(node.operand.expType.toString()) + "'";
-            logErrorWithSourceLine(node.operatorLoc, msg);
+            msg += "; has type '" + reporter.white(node.operand.expType.toString()) + "'";
+            reporter.error(node.operatorLoc, msg);
             node.expType = ErrorType.INSTANCE;
             return null;
         }
         // 前缀和后缀自增或自减的操作数表达式 必须为整数类型、实浮点数类型或指针类型的可修改左值
         if (!node.operand.expType.isArithmetic()) {
-            error();
             String msg = "operand of " + (node.isIncrement ? "increment" : "decrement") +
                          " operator must have arithmetic type; have '" +
-                         getLogger().white(node.operand.expType.toString()) + "'";
-            logErrorWithSourceLine(node.operatorLoc, msg);
+                         reporter.white(node.operand.expType.toString()) + "'";
+            reporter.error(node.operatorLoc, msg);
             node.expType = ErrorType.INSTANCE;
             return null;
         }
@@ -847,10 +818,9 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         node.cond.accept(this);
         node.cond.expType = node.cond.expType.removeConst();
         if (!(node.cond.expType instanceof ErrorType) && !node.cond.expType.isScalar()) {
-            error();
             String msg = "condition of if statement must have scalar type; have '" +
-                         getLogger().white(node.cond.expType.toString()) + "'";
-            logErrorWithSourceLine(node.cond.wholeLoc, msg);
+                         reporter.white(node.cond.expType.toString()) + "'";
+            reporter.error(node.cond.wholeLoc, msg);
         }
         node.thenStmt.accept(this);
         if (node.elseStmt != null) {
@@ -875,10 +845,9 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         if (node.cond.expType instanceof ErrorType) {
             node.expType = ErrorType.INSTANCE;
         } else if (!node.cond.expType.isScalar()) {
-            error();
             String msg = "condition of conditional operator must have scalar type; have '" +
-                         getLogger().white(node.cond.expType.toString()) + "'";
-            logErrorWithSourceLine(node.cond.wholeLoc, msg);
+                         reporter.white(node.cond.expType.toString()) + "'";
+            reporter.error(node.cond.wholeLoc, msg);
             node.expType = ErrorType.INSTANCE;
             return null;
         }
@@ -930,11 +899,10 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         }
 
         // 其他情况非法
-        error();
         String msg =
-            "invalid operands to conditional operator; have '" + getLogger().white(thenExpType.toString()) +
-            "' and '" + getLogger().white(elseExpType.toString()) + "'";
-        logErrorWithSourceLine(SourceLocation.concat(node.thenExp.wholeLoc, node.elseExp.wholeLoc), msg);
+            "invalid operands to conditional operator; have '" + reporter.white(thenExpType.toString()) +
+            "' and '" + reporter.white(elseExpType.toString()) + "'";
+        reporter.error(SourceLocation.concat(node.thenExp.wholeLoc, node.elseExp.wholeLoc), msg);
         node.expType = ErrorType.INSTANCE;
         return null;
     }
@@ -974,11 +942,10 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             node.body.accept(this);
         }
         if (!(node.cond.expType instanceof ErrorType) && !node.cond.expType.isScalar()) {
-            error();
             String msg = "condition of " + (node.isDoWhile ? "'do-while'" : "'while'") +
                          " statement must have scalar type; have '" +
-                         getLogger().white(node.cond.expType.toString()) + "'";
-            logErrorWithSourceLine(node.cond.wholeLoc, msg);
+                         reporter.white(node.cond.expType.toString()) + "'";
+            reporter.error(node.cond.wholeLoc, msg);
         }
         return null;
     }
@@ -991,18 +958,17 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
                 for (InitDeclaratorNode initDecl : decl.initDeclarators) {
                     if (initDecl.finalType instanceof FunctionTypeNode) {
                         // for 初始化语句中不允许声明函数类型
-                        error();
-                        String msg = "declaration of non-variable '" + getLogger().white(initDecl.id.name) +
+                        String msg = "declaration of non-variable '" + reporter.white(initDecl.id.name) +
                                      "' in for loop initial declaration";
-                        logErrorWithSourceLine(decl.wholeLoc, msg);
+                        reporter.error(decl.wholeLoc, msg);
                     }
                     if (decl.storageClass != null) {
                         // for 初始化语句中不允许有存储类说明符
-                        error();
+                        // 可能被重命名，通过 location 获取
                         String msg = "declaration of " + decl.storageClass.storageClass + " variable '" +
-                                     getLogger().white(getSourceFile().getByLocation(initDecl.id.wholeLoc)) +
+                                     reporter.white(reporter.byLocation(initDecl.id.wholeLoc)) +
                                      "' in for loop initial declaration";
-                        logErrorWithSourceLine(initDecl.id.wholeLoc, msg);
+                        reporter.error(initDecl.id.wholeLoc, msg);
                     }
                 }
             }
@@ -1015,10 +981,9 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             node.cond.accept(this);
             node.cond.expType = node.cond.expType.removeConst();
             if (!(node.cond.expType instanceof ErrorType) && !node.cond.expType.isScalar()) {
-                error();
                 String msg = "condition of for statement must have scalar type; have '" +
-                             getLogger().white(node.cond.expType.toString()) + "'";
-                logErrorWithSourceLine(node.cond.wholeLoc, msg);
+                             reporter.white(node.cond.expType.toString()) + "'";
+                reporter.error(node.cond.wholeLoc, msg);
             }
         }
         if (node.step != null) {
@@ -1033,10 +998,9 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
     public Void visit(SwitchStatementNode node) {
         node.exp.accept(this);
         if (!(node.exp.expType instanceof ErrorType) && !node.exp.expType.isInteger()) {
-            error();
             String msg = "condition of switch statement must have integer type; have '" +
-                         getLogger().white(node.exp.expType.toString()) + "'";
-            logErrorWithSourceLine(node.exp.wholeLoc, msg);
+                         reporter.white(node.exp.expType.toString()) + "'";
+            reporter.error(node.exp.wholeLoc, msg);
         }
         node.exp.expType = node.exp.expType.removeConst();
         node.body.accept(this);
@@ -1047,9 +1011,8 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
     public Void visit(FunctionCallNode node) {
         if (!(node.func instanceof VariableNode variable)) {
             // 目前不允许调用函数指针
-            error();
             String msg = "function call expression shall have name as function designator";
-            logErrorWithSourceLine(node.func.wholeLoc, msg);
+            reporter.error(node.func.wholeLoc, msg);
             node.expType = ErrorType.INSTANCE;
             // 检查参数
             node.args.forEach(arg -> arg.accept(this));
@@ -1060,13 +1023,13 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         Type type = entry.type;
         if (!(type instanceof FunctionType funcType)) {
             // 不是函数类型
-            error();
-            String msg = "called object '" + getLogger().white(getSourceFile().getByLocation(variable.wholeLoc)) +
+            // 可能被重命名，通过 location 获取
+            String msg = "called object '" + reporter.white(reporter.byLocation(variable.wholeLoc)) +
                          "' is not a function or function pointer; have type '" +
-                         getLogger().white(type.toString()) + "'";
-            logErrorWithSourceLine(variable.wholeLoc, msg);
+                         reporter.white(type.toString()) + "'";
+            reporter.error(variable.wholeLoc, msg);
             msg = "declared here";
-            logNoteWithSourceLine(entry.id.wholeLoc, msg);
+            reporter.note(entry.id.wholeLoc, msg);
             node.expType = ErrorType.INSTANCE;
             // 检查参数
             node.args.forEach(arg -> arg.accept(this));
@@ -1076,11 +1039,10 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         // 检查调用是否合法
         if (node.args.size() > funcType.parameterCount()) {
             // 参数过多
-            error();
-            String msg = "too many arguments to function '" + getLogger().white(variable.id.name) + "'";
-            logErrorWithSourceLine(node.func.wholeLoc, msg);
+            String msg = "too many arguments to function '" + reporter.white(variable.id.name) + "'";
+            reporter.error(node.func.wholeLoc, msg);
             msg = "declared here";
-            logNoteWithSourceLine(entry.id.wholeLoc, msg);
+            reporter.note(entry.id.wholeLoc, msg);
             node.expType = ErrorType.INSTANCE;
             // 检查参数
             node.args.forEach(arg -> arg.accept(this));
@@ -1088,11 +1050,10 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         }
         if (node.args.size() < funcType.parameterCount()) {
             // 参数不足
-            error();
-            String msg = "too few arguments to function '" + getLogger().white(variable.id.name) + "'";
-            logErrorWithSourceLine(node.func.wholeLoc, msg);
+            String msg = "too few arguments to function '" + reporter.white(variable.id.name) + "'";
+            reporter.error(node.func.wholeLoc, msg);
             msg = "declared here";
-            logNoteWithSourceLine(entry.id.wholeLoc, msg);
+            reporter.note(entry.id.wholeLoc, msg);
             node.expType = ErrorType.INSTANCE;
             // 检查参数
             node.args.forEach(arg -> arg.accept(this));
@@ -1116,19 +1077,18 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             Type paramType = funcType.parameterTypes().get(i);
             if (!validConvertAsIfByAssignment(arg, paramType)) {
                 // 参数类型不兼容
-                error();
                 noError = false;
                 String msg =
-                    "incompatible type for argument " + (i + 1) + " of '" + getLogger().white(variable.id.name) + "'";
-                logErrorWithSourceLine(node.args.get(i).wholeLoc, msg);
-                msg = "expected '" + getLogger().white(paramType.toString()) +
-                      "' but argument is of type '" + getLogger().white(arg.expType.toString()) + "'";
+                    "incompatible type for argument " + (i + 1) + " of '" + reporter.white(variable.id.name) + "'";
+                reporter.error(node.args.get(i).wholeLoc, msg);
+                msg = "expected '" + reporter.white(paramType.toString()) +
+                      "' but argument is of type '" + reporter.white(arg.expType.toString()) + "'";
                 TypeNode paramTypeNode = ((FunctionTypeNode) entry.typeNode).paramTypes.get(i);
                 IdentifierNode idNode = ((FunctionTypeNode) entry.typeNode).params.get(i);
                 // 匿名参数中参数名可能为 null，特殊处理
                 SourceLocation loc = idNode == null ? paramTypeNode.getWholeLocation() :
                     SourceLocation.concat(paramTypeNode.getWholeLocation(), idNode.getWholeLocation());
-                logNoteWithSourceLine(loc, msg);
+                reporter.note(loc, msg);
             } else {
                 node.args.set(i, convertTo(arg, paramType));
             }
@@ -1157,9 +1117,8 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             return null;
         }
         if (!targetType.isScalar()) {
-            error();
             String msg = "cast to non-scalar type other than void is not allowed";
-            logErrorWithSourceLine(node.targetType.getWholeLocation(), msg);
+            reporter.error(node.targetType.getWholeLocation(), msg);
             node.expType = ErrorType.INSTANCE;
             return null;
         }
@@ -1170,10 +1129,9 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         node.exp.expType = node.exp.expType.removeConst();
 
         if (!node.exp.expType.isScalar()) {
-            error();
-            String msg = "cast from non-scalar '" + getLogger().white(node.exp.expType.toString()) +
+            String msg = "cast from non-scalar '" + reporter.white(node.exp.expType.toString()) +
                          "' type to scalar type is not allowed";
-            logErrorWithSourceLine(node.exp.wholeLoc, msg);
+            reporter.error(node.exp.wholeLoc, msg);
             node.expType = ErrorType.INSTANCE;
             return null;
         }
@@ -1207,10 +1165,9 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         }
 
         if (error) {
-            error();
-            String msg = "invalid cast from type '" + getLogger().white(node.exp.expType.toString()) + "' to '" +
-                         getLogger().white(targetType.toString()) + "'";
-            logErrorWithSourceLine(node.exp.wholeLoc, msg);
+            String msg = "invalid cast from type '" + reporter.white(node.exp.expType.toString()) + "' to '" +
+                         reporter.white(targetType.toString()) + "'";
+            reporter.error(node.exp.wholeLoc, msg);
             node.expType = ErrorType.INSTANCE;
         } else {
             node.exp = convertTo(node.exp, targetType);
@@ -1227,10 +1184,9 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
             return null;
         }
         if (!isLvalueExpression(node.exp)) {
-            error();
             String msg = "lvalue required as address-of operand; has type '" +
-                         getLogger().white(node.exp.expType.toString()) + "'";
-            logErrorWithSourceLine(node.operatorLoc, msg);
+                         reporter.white(node.exp.expType.toString()) + "'";
+            reporter.error(node.operatorLoc, msg);
             node.expType = ErrorType.INSTANCE;
             return null;
         }
@@ -1248,10 +1204,9 @@ public final class TypeCheckingPass extends SemanticAnalysePass implements AstVi
         node.exp.expType = node.exp.expType.removeConst();
 
         if (!(node.exp.expType instanceof PointerType pointerType)) {
-            error();
             String msg = "operand of dereference must have pointer type; have '" +
-                         getLogger().white(node.exp.expType.toString()) + "'";
-            logErrorWithSourceLine(node.wholeLoc, msg);
+                         reporter.white(node.exp.expType.toString()) + "'";
+            reporter.error(node.wholeLoc, msg);
             node.expType = ErrorType.INSTANCE;
             return null;
         }

@@ -1,8 +1,8 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99;
 
-import net.flymachine.minecraftclanguage.content.logger.ConsoleLogger;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.*;
+import net.flymachine.minecraftclanguage.content.logic.errorHandle.DiagnosticReporter;
 
 import java.util.Stack;
 
@@ -11,13 +11,14 @@ import java.util.Stack;
  * <p>
  * 要求先进行 {@link LabelResolutionPass}
  */
-public final class LoopLabelingPass extends SemanticAnalysePass implements AstVisitor<Void> {
+public final class LoopLabelingPass implements AstVisitor<Void> {
 
-    public LoopLabelingPass() {
-        super(new ConsoleLogger());
+    private final DiagnosticReporter reporter;
+
+    public LoopLabelingPass(DiagnosticReporter reporter) {
+        this.reporter = reporter;
     }
 
-    // private final Stack<String> loopLabelStack = new Stack<>();
     private final Stack<String> breakContextStack = new Stack<>();
     private final Stack<String> continueContextStack = new Stack<>();
     private int forLoopCounter = 0;
@@ -166,9 +167,7 @@ public final class LoopLabelingPass extends SemanticAnalysePass implements AstVi
         if (currentLoopLabel != null) {
             node.loopOrSwitchLabel = currentLoopLabel;
         } else {
-            error();
-            String msg = "break statement not within loop or switch";
-            logErrorWithSourceLine(node.wholeLoc, msg);
+            reporter.error(node.wholeLoc, "break statement not within loop or switch");
         }
         return null;
     }
@@ -179,9 +178,7 @@ public final class LoopLabelingPass extends SemanticAnalysePass implements AstVi
         if (currentLoopLabel != null) {
             node.loopLabel = currentLoopLabel;
         } else {
-            error();
-            String msg = "continue statement not within a loop";
-            logErrorWithSourceLine(node.wholeLoc, msg);
+            reporter.error(node.wholeLoc, "continue statement not within a loop");
         }
         return null;
     }

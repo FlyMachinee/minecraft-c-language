@@ -1,9 +1,9 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99;
 
-import net.flymachine.minecraftclanguage.content.logger.ConsoleLogger;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.StorageClassSpecifier;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.*;
+import net.flymachine.minecraftclanguage.content.logic.errorHandle.DiagnosticReporter;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
@@ -13,10 +13,12 @@ import java.util.Stack;
 /**
  * 将变量的名字替换为唯一的名字，并检查变量的重复定义和未定义使用
  */
-public final class IdentifierResolutionPass extends SemanticAnalysePass implements AstVisitor<Void> {
+public final class IdentifierResolutionPass implements AstVisitor<Void> {
 
-    public IdentifierResolutionPass() {
-        super(new ConsoleLogger());
+    private final DiagnosticReporter reporter;
+
+    public IdentifierResolutionPass(DiagnosticReporter reporter) {
+        this.reporter = reporter;
     }
 
     private int renameCounter = 0;
@@ -98,11 +100,11 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
     }
 
     private void panicWithPreviousRef(String msg, IdentifierNode id, IdentifierEntry previous) {
-        logErrorWithSourceLine(id.wholeLoc, msg);
+        reporter.error(id.wholeLoc, msg);
         msg = "previous " + (previous.defined ? "definition" : "declaration") + " of '" +
-              getLogger().white(id.name) + "' with type '" +
-              getLogger().white(previous.t.getType().toString()) + "'";
-        logNoteWithSourceLine(previous.id.wholeLoc, msg);
+              reporter.white(id.name) + "' with type '" +
+              reporter.white(previous.t.getType().toString()) + "'";
+        reporter.note(previous.id.wholeLoc, msg);
     }
 
     private void visitFunctionTypeNode(FunctionTypeNode funcType, boolean isDefinition) {
@@ -129,9 +131,8 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
             IdentifierNode identifier = funcType.params.get(i);
             if (identifier == null) {
                 if (isDefinition) {
-                    error();
                     String msg = "ISO C99 does not support omitting parameter names in function definitions";
-                    logErrorWithSourceLine(type.getWholeLocation(), msg);
+                    reporter.error(type.getWholeLocation(), msg);
                 }
                 // 函数声明中允许参数不具名
                 continue;
@@ -206,8 +207,7 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
             // 函数声明，始终有链接
             if (previous != null && definedInCurrentScope(name) && !previous.hasLinkage) {
                 // 当前作用域先前的声明无链接，肯定是变量，当前声明是函数声明，有链接，冲突
-                error();
-                String msg = "'" + getLogger().white(name) + "' redeclared as different kind of symbol";
+                String msg = "'" + reporter.white(name) + "' redeclared as different kind of symbol";
                 panicWithPreviousRef(msg, id, previous);
                 return;
             }
@@ -215,9 +215,8 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
             if (!inGlobalScope() && storageClass != null &&
                 storageClass.storageClass.equals(StorageClassSpecifier.STATIC)) {
                 // 块作用域函数声明为 static 非法
-                error();
-                String msg = "invalid storage class for function '" + getLogger().white(name) + "'";
-                logErrorWithSourceLine(id.wholeLoc, msg);
+                String msg = "invalid storage class for function '" + reporter.white(name) + "'";
+                reporter.error(id.wholeLoc, msg);
             }
             // 函数声明不需要重命名
             if (previous != null && previous.defined && previous.hasLinkage) {
@@ -247,7 +246,6 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
                           storageClass.storageClass.equals(StorageClassSpecifier.EXTERN))) {
                         // 当前作用域之前的声明有链接，并且当前声明是 extern，则允许重定义
                         // 除此之外，声明冲突
-                        error();
                         String msg;
                         if (!previous.hasLinkage) {
                             // 先前的声明无链接
@@ -255,20 +253,20 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
                                 !storageClass.storageClass.equals(StorageClassSpecifier.EXTERN)) {
                                 // 当前的声明无链接
                                 msg =
-                                    (defined ? "redefinition" : "redeclaration") + " of '" + getLogger().white(name) +
+                                    (defined ? "redefinition" : "redeclaration") + " of '" + reporter.white(name) +
                                     "' with no linkage";
                             } else {
                                 // 当前的声明是 extern，有链接
                                 if (defined) {
-                                    msg = "redefinition of '" + getLogger().white(name) + "'";
+                                    msg = "redefinition of '" + reporter.white(name) + "'";
                                 } else {
-                                    msg = "extern declaration of '" + getLogger().white(name) +
+                                    msg = "extern declaration of '" + reporter.white(name) +
                                           "' follows declaration with no linkage";
                                 }
                             }
                         } else {
                             // 先前的声明有链接，则当前声明无链接
-                            msg = (defined ? "redefinition" : "redeclaration") + " of '" + getLogger().white(name) +
+                            msg = (defined ? "redefinition" : "redeclaration") + " of '" + reporter.white(name) +
                                   "' with no linkage";
                         }
                         panicWithPreviousRef(msg, id, previous);
@@ -311,9 +309,7 @@ public final class IdentifierResolutionPass extends SemanticAnalysePass implemen
         String name = node.id.name;
         IdentifierEntry renamed = definitionOf(name);
         if (renamed == null) {
-            error();
-            String msg = "'" + getLogger().white(name) + "' undeclared";
-            logErrorWithSourceLine(node.wholeLoc, msg);
+            reporter.error(node.wholeLoc, "'" + reporter.white(name) + "' undeclared");
         } else {
             node.id.name = renamed.id.name;
         }
