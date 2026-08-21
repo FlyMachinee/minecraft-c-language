@@ -18,7 +18,8 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.ir.*;
 import java.util.ArrayList;
 import java.util.List;
 
-public final class AstToTacLowerer implements StatementVisitor, ExpressionVisitor, ExpressionBoolVisitor {
+public final class AstToTacLowerer implements
+    StatementVisitor, ExpressionVisitor<AstToTacLowerer.ExpEvalResult>, ExpressionBoolVisitor {
 
     public AstToTacLowerer(SymbolTable symbolTable) {
         this.symbolTable = symbolTable;
@@ -410,6 +411,16 @@ public final class AstToTacLowerer implements StatementVisitor, ExpressionVisito
     @Override
     public void visit(NullStatementNode nullStmt) {
     }
+
+    public sealed interface ExpEvalResult { }
+
+    record PlainOperand(TacValue object) implements ExpEvalResult {
+        public PlainOperand(Constant constant) {
+            this(new TacConstant(constant));
+        }
+    }
+
+    record DereferencedPointer(TacValue pointer) implements ExpEvalResult { }
 
     private ExpEvalResult eval(ExpressionNode exp) {
         return exp.accept(this);

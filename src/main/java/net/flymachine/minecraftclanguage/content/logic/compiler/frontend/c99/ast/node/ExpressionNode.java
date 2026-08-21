@@ -14,7 +14,7 @@ public abstract class ExpressionNode extends AstNode {
         super(wholeLocation);
     }
 
-    public abstract ExpressionVisitor.ExpEvalResult accept(ExpressionVisitor visitor);
+    public abstract <T> T accept(ExpressionVisitor<T> visitor);
 
     public abstract ExpressionBoolVisitor.BoolGenResult accept(
         ExpressionBoolVisitor visitor, String jumpTarget, boolean inverse);

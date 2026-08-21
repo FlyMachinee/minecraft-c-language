@@ -18,7 +18,7 @@ public final class AddressOfNode extends ExpressionNode {
     }
 
     @Override
-    public ExpressionVisitor.ExpEvalResult accept(ExpressionVisitor visitor) {
+    public <T> T accept(ExpressionVisitor<T> visitor) {
         return visitor.visit(this);
     }
 
