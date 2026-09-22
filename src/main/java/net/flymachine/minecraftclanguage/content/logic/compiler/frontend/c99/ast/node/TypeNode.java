@@ -37,4 +37,14 @@ public abstract class TypeNode extends AstNode {
         }
         throw new IllegalArgumentException("Unknown Type " + type);
     }
+
+    public boolean isConst() {
+        return constQualifier != null;
+    }
+
+    protected abstract String format(String declarator);
+
+    protected String typename() {
+        return format("");
+    }
 }

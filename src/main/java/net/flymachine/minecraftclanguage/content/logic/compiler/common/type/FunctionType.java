@@ -4,6 +4,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.hig
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 public final class FunctionType extends Type {
     private final @NotNull Type returnType;
@@ -13,6 +14,15 @@ public final class FunctionType extends Type {
         super(false);
         this.returnType = returnType;
         this.parameterTypes = parameterTypes;
+    }
+
+    @Override
+    public String format(String declarator) {
+        String params = parameterTypes.stream()
+                                      .map(t -> t.format(""))
+                                      .collect(Collectors.joining(", "));
+        String newDecl = wrapIfPointer(declarator) + "(" + params + ")";
+        return returnType.format(newDecl);
     }
 
     @Override
@@ -38,15 +48,18 @@ public final class FunctionType extends Type {
         if (!(other instanceof FunctionType o)) {
             return false;
         }
+        // 其返回类型兼容
         if (!returnType.isCompatible(o.returnType)) {
             return false;
         }
+        // 它们都使用形参列表，形参数量（包括省略号的使用）相同
         if (hasNoParameters() && o.hasNoParameters()) {
             return true;
         }
         if (parameterTypes.size() != o.parameterTypes.size()) {
             return false;
         }
+        // 且其对应形参，在应用数组到指针和函数到指针类型调整，及剥除顶层限定符后，拥有相同类型
         for (int i = 0; i < parameterTypes.size(); i++) {
             if (!parameterTypes.get(i).removeQualifiers().isCompatible(o.parameterTypes.get(i).removeQualifiers())) {
                 return false;
@@ -85,6 +98,11 @@ public final class FunctionType extends Type {
     }
 
     @Override
+    public boolean isAggregate() {
+        return false;
+    }
+
+    @Override
     public long sizeof() {
         return -1;
     }
@@ -97,20 +115,6 @@ public final class FunctionType extends Type {
     @Override
     public <R> R accept(TypeVisitor<R> visitor) {
         return visitor.visit(this);
-    }
-
-    @Override
-    public @NotNull String toString() {
-        StringBuilder sb = new StringBuilder();
-        sb.append(returnType.toString()).append("(");
-        for (int i = 0; i < parameterTypes.size(); i++) {
-            if (i > 0) {
-                sb.append(", ");
-            }
-            sb.append(parameterTypes.get(i).toString());
-        }
-        sb.append(")");
-        return sb.toString();
     }
 
     public boolean hasNoParameters() {

@@ -1,11 +1,13 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node;
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.FunctionType;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
 import java.io.PrintStream;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public final class FunctionTypeNode extends TypeNode {
     public TypeNode retType;
@@ -29,12 +31,21 @@ public final class FunctionTypeNode extends TypeNode {
 
     @Override
     public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
-        stream.print(getType());
+        stream.print(typename());
     }
 
     @Override
     public FunctionType getType() {
         return new FunctionType(retType.getType(), paramTypes.stream().map(TypeNode::getType).toList());
+    }
+
+    @Override
+    protected String format(String declarator) {
+        String params = paramTypes.stream()
+                                  .map(t -> t.format(""))
+                                  .collect(Collectors.joining(", "));
+        String newDecl = Type.wrapIfPointer(declarator) + "(" + params + ")";
+        return retType.format(newDecl);
     }
 
     public boolean hasNoParameters() {

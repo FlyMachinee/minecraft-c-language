@@ -312,12 +312,32 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
 
         // directDeclarator -> directDeclarator LeftParen parameterTypeList RightParen
         if (ctx.parameterTypeList() != null) {
-            // directDeclarator -> directDeclarator LeftParen parameterTypeList RightParen
             // 构造函数类型
             baseType = parseFromParameterTypeList(baseType, ctx.parameterTypeList(), ctx.RightParen());
             // 递归处理左侧
             return parseFromDirectDeclarator(baseType, ctx.directDeclarator());
         }
+
+        // directDeclarator -> directDeclarator LeftBracket typeQualifier* IntegerConstant? RightBracket
+        if (ctx.LeftBracket() != null) {
+            // 构造数组类型
+            ConstantNode size = null;
+            if (ctx.IntegerConstant() != null) {
+                size = parseIntegerConstant(ctx.IntegerConstant());
+            }
+            SourceLocation constLoc = null;
+            if (!ctx.typeQualifier().isEmpty()) {
+                constLoc = getSourceLocation(ctx.typeQualifier().get(0));
+            }
+
+            baseType = new ArrayTypeNode(
+                SourceLocation.concat(baseType.wholeLoc, getSourceLocation(ctx.RightBracket())),
+                baseType, size, constLoc);
+
+            // 递归处理左侧
+            return parseFromDirectDeclarator(baseType, ctx.directDeclarator());
+        }
+
         throw new RuntimeException("Unknown direct declarator: " + ctx.getText());
     }
 
@@ -345,6 +365,20 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
 
             // 构造函数类型
             baseType = parseFromParameterTypeList(baseType, ctx.parameterTypeList(), ctx.RightParen());
+        }
+
+        if (ctx.LeftBracket() != null) {
+            // directAbstractDeclarator -> LeftBracket IntegerConstant? RightBracket
+            // directAbstractDeclarator -> directAbstractDeclarator LeftBracket IntegerConstant? RightBracket
+
+            ConstantNode size = null;
+            if (ctx.IntegerConstant() != null) {
+                size = parseIntegerConstant(ctx.IntegerConstant());
+            }
+
+            // 构造数组类型
+            baseType = new ArrayTypeNode(
+                SourceLocation.concat(baseType.wholeLoc, getSourceLocation(ctx.RightBracket())), baseType, size);
         }
 
         if (ctx.directAbstractDeclarator() != null) {
@@ -467,9 +501,8 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
                 IdentifierNode id = res.id;
                 TypeNode t = res.t;
                 if (initDeclarator.initializer() != null) {
-                    ExpressionNode init = (ExpressionNode) visit(initDeclarator.initializer());
-                    initDeclarators.add(new InitDeclaratorNode(
-                        getSourceLocation(initDeclarator), t, id, init));
+                    InitializerNode init = (InitializerNode) visitInitializer(initDeclarator.initializer());
+                    initDeclarators.add(new InitDeclaratorNode(getSourceLocation(initDeclarator), t, id, init));
                 } else {
                     initDeclarators.add(new InitDeclaratorNode(getSourceLocation(initDeclarator), t, id));
                 }
@@ -480,6 +513,42 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
             return new DeclarationNode(
                 getSourceLocation(ctx), typeAndSpecifiers.storageClass, typeAndSpecifiers.t, List.of());
         }
+    }
+
+    @Override
+    public AstNode visitInitializer(C99Parser.InitializerContext ctx) {
+        // -> assignmentExpression
+        if (ctx.assignmentExpression() != null) {
+            return new SingleInitializerNode(visitAssignmentExpression(ctx.assignmentExpression()));
+        }
+
+        // -> LeftBrace initializerList Comma? RightBrace
+
+        // initializerList
+        // -> designationInitializer (Comma designationInitializer)*
+
+        // designationInitializer
+        // -> (designator+ Assign)? initializer
+        List<DesignationInitializerNode> inits =
+            ctx.initializerList().designationInitializer().stream()
+               .map(initCtx -> {
+                   List<DesignatorNode> designators = new ArrayList<>();
+                   if (initCtx.designator() != null) {
+                       for (C99Parser.DesignatorContext designatorCtx : initCtx.designator()) {
+                           designators.add((DesignatorNode) visitDesignator(designatorCtx));
+                       }
+                   }
+                   InitializerNode initializer = (InitializerNode) visitInitializer(initCtx.initializer());
+                   return new DesignationInitializerNode(getSourceLocation(initCtx), designators, initializer);
+               })
+               .toList();
+        return new CompoundInitializerNode(getSourceLocation(ctx), inits);
+    }
+
+    @Override
+    public AstNode visitDesignator(C99Parser.DesignatorContext ctx) {
+        // -> LeftBracket IntegerConstant RightBracket
+        return new ArrayDesignatorNode(getSourceLocation(ctx), parseIntegerConstant(ctx.IntegerConstant()));
     }
 
     @Override
@@ -605,7 +674,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
     }
 
     @Override
-    public ExpressionNode visitConstant(C99Parser.ConstantContext ctx) {
+    public ConstantNode visitConstant(C99Parser.ConstantContext ctx) {
         if (ctx.IntegerConstant() != null) {
             return parseIntegerConstant(ctx.IntegerConstant());
         } else if (ctx.FloatingConstant() != null) {
@@ -615,7 +684,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         }
     }
 
-    private ExpressionNode parseIntegerConstant(TerminalNode integerConstant) {
+    private ConstantNode parseIntegerConstant(TerminalNode integerConstant) {
         String fullText = integerConstant.getText();
         int pos = fullText.length();
 
@@ -695,7 +764,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         return new ConstantNode(loc, new ConstantInt(0));
     }
 
-    private ExpressionNode parseFloatingConstant(TerminalNode floatingConstant) {
+    private ConstantNode parseFloatingConstant(TerminalNode floatingConstant) {
         String fullText = floatingConstant.getText();
         SourceLocation loc = getSourceLocation(floatingConstant);
         try {
@@ -749,6 +818,12 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
                 }
             }
             return new FunctionCallNode(getSourceLocation(ctx), function, arguments);
+        }
+
+        if (ctx.LeftBracket() != null) {
+            ExpressionNode array = (ExpressionNode) visit(ctx.postfixExpression());
+            ExpressionNode index = (ExpressionNode) visit(ctx.expression());
+            return new SubscriptNode(getSourceLocation(ctx), array, index, getSourceLocation(ctx.LeftBracket()));
         }
 
         throw new IllegalStateException("Unknown postfix expression");

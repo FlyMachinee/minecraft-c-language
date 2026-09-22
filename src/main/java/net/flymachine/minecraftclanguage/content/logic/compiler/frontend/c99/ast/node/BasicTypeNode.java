@@ -21,11 +21,16 @@ public final class BasicTypeNode extends TypeNode {
 
     @Override
     public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
-        stream.print(getType());
+        stream.print(typename());
     }
 
     @Override
     public BasicType getType() {
         return new BasicType(primitive, constQualifier != null);
+    }
+
+    @Override
+    protected String format(String declarator) {
+        return getType().format(declarator);
     }
 }

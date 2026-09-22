@@ -4,6 +4,11 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.hig
 
 public final class ErrorType extends Type {
 
+    @Override
+    public String format(String declarator) {
+        return "<error-type>";
+    }
+
     private ErrorType(boolean isConst) {
         super(isConst);
     }
@@ -22,37 +27,42 @@ public final class ErrorType extends Type {
 
     @Override
     public boolean isCompatible(Type other) {
-        return true;
+        return false;
     }
 
     @Override
     public boolean isComplete() {
-        return true;
+        return false;
     }
 
     @Override
     public boolean isArithmetic() {
-        return true;
+        return false;
     }
 
     @Override
     public boolean isScalar() {
-        return true;
+        return false;
     }
 
     @Override
     public boolean isInteger() {
-        return true;
+        return false;
     }
 
     @Override
     public boolean isReal() {
-        return true;
+        return false;
+    }
+
+    @Override
+    public boolean isAggregate() {
+        return false;
     }
 
     @Override
     public long sizeof() {
-        return -1;
+        throw new UnsupportedOperationException("sizeof(error) is not defined");
     }
 
     @Override

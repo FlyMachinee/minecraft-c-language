@@ -20,12 +20,18 @@ public final class PointerTypeNode extends TypeNode {
     }
 
     @Override
+    protected String format(String declarator) {
+        String newDeclarator = "*" + (isConst() ? " const" : "") + declarator;
+        return referencedType.format(newDeclarator);
+    }
+
+    @Override
     public <T> T accept(AstVisitor<T> visitor) {
         return null;
     }
 
     @Override
     public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
-        stream.print(getType());
+        stream.print(typename());
     }
 }

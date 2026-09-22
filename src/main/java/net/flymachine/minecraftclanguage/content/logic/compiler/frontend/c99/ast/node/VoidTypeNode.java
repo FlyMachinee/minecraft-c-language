@@ -19,6 +19,11 @@ public final class VoidTypeNode extends TypeNode {
     }
 
     @Override
+    protected String format(String declarator) {
+        return getType().format(declarator);
+    }
+
+    @Override
     public <T> T accept(AstVisitor<T> visitor) {
         return null;
     }

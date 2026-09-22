@@ -9,10 +9,10 @@ import java.io.PrintStream;
 public final class InitDeclaratorNode extends AstNode {
     public final TypeNode finalType;
     public IdentifierNode id;
-    public @Nullable ExpressionNode init;
+    public @Nullable InitializerNode init;
 
     public InitDeclaratorNode(
-        SourceLocation wholeLocation, TypeNode finalType, IdentifierNode id, @Nullable ExpressionNode init) {
+        SourceLocation wholeLocation, TypeNode finalType, IdentifierNode id, @Nullable InitializerNode init) {
         super(wholeLocation);
         this.finalType = finalType;
         this.id = id;

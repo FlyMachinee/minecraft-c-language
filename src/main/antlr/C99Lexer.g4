@@ -119,6 +119,8 @@ NotEqual: '!=';
 
 LeftParen: '(';
 RightParen: ')';
+LeftBracket: '[';
+RightBracket: ']';
 LeftBrace: '{';
 RightBrace: '}';
 

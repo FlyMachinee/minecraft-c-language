@@ -1,10 +1,22 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.common.type;
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.AsmType;
+import org.jetbrains.annotations.NotNull;
 
 public final class VoidType extends Type {
     public static final VoidType INSTANCE = new VoidType(false);
     private static final VoidType CONST_VOID = new VoidType(true);
+
+    @Override
+    public String format(String declarator) {
+        if (declarator.isEmpty()) {
+            return "void";
+        }
+        if (declarator.startsWith("[")) {
+            return "void" + declarator;
+        }
+        return "void " + declarator;
+    }
 
     private VoidType(boolean isConst) {
         super(isConst);
@@ -46,6 +58,11 @@ public final class VoidType extends Type {
     }
 
     @Override
+    public boolean isAggregate() {
+        return false;
+    }
+
+    @Override
     public long sizeof() {
         throw new UnsupportedOperationException("void size is unknown");
     }
@@ -58,5 +75,10 @@ public final class VoidType extends Type {
     @Override
     public <R> R accept(TypeVisitor<R> visitor) {
         return visitor.visit(this);
+    }
+
+    @Override
+    public @NotNull String toString() {
+        return "void";
     }
 }

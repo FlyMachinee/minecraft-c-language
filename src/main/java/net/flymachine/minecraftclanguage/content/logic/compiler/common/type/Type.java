@@ -4,6 +4,12 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.hig
 
 public abstract class Type {
 
+    public abstract String format(String declarator);
+
+    public String typename() {
+        return this.format("");
+    }
+
     protected final boolean isConst;
 
     protected Type(boolean isConst) {
@@ -56,6 +62,11 @@ public abstract class Type {
      * 实数类型：整数类型和实浮点数类型
      */
     public abstract boolean isReal();
+
+    /**
+     * 聚合类型：数组类型、结构体类型
+     */
+    public abstract boolean isAggregate();
 
     public final boolean isVoid() {
         return this instanceof VoidType;
@@ -132,5 +143,14 @@ public abstract class Type {
             // 若有符号类型可以表达无符号类型的所有值，则无无符号类型的操作数被隐式转换成有符号操作数的类型
             return t1;
         }
+    }
+
+    public static String wrapIfPointer(String declarator) {
+        String trimmed = declarator.trim();
+        if (trimmed.isEmpty()) { return declarator; }
+        if (trimmed.startsWith("*")) {
+            return "(" + declarator + ")";
+        }
+        return declarator;
     }
 }

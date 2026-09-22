@@ -22,6 +22,12 @@ public final class PointerType extends Type {
     }
 
     @Override
+    public String format(String declarator) {
+        String newDeclarator = "*" + (isConst() ? " const" : "") + declarator;
+        return referencedType.format(newDeclarator);
+    }
+
+    @Override
     public PointerType setConst(boolean isConst) {
         if (this.isConst == isConst) {
             return this;
@@ -67,6 +73,11 @@ public final class PointerType extends Type {
     }
 
     @Override
+    public boolean isAggregate() {
+        return false;
+    }
+
+    @Override
     public long sizeof() {
         return 8;
     }
@@ -79,10 +90,5 @@ public final class PointerType extends Type {
     @Override
     public <R> R accept(TypeVisitor<R> visitor) {
         return visitor.visit(this);
-    }
-
-    @Override
-    public @NotNull String toString() {
-        return referencedType + " *" + (isConst ? " const" : "");
     }
 }

@@ -137,7 +137,7 @@ public record ConstantUnsignedLong(long value) implements Constant {
 
     @Override
     public boolean isZero() {
-        return false;
+        return value == 0;
     }
 
     @Override

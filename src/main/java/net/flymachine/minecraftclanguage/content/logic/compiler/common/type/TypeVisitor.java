@@ -8,4 +8,6 @@ public interface TypeVisitor<R> {
     R visit(FunctionType t);
 
     R visit(PointerType t);
+
+    R visit(ArrayType t);
 }

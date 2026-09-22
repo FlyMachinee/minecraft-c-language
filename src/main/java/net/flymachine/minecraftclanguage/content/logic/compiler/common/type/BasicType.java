@@ -41,6 +41,17 @@ public final class BasicType extends Type {
     }
 
     @Override
+    public String format(String declarator) {
+        if (declarator.isEmpty()) {
+            return toString();
+        }
+        if (declarator.startsWith("[")) {
+            return this + declarator;
+        }
+        return this + " " + declarator;
+    }
+
+    @Override
     public BasicType setConst(boolean isConst) {
         if (this.isConst == isConst) {
             return this;
@@ -83,6 +94,11 @@ public final class BasicType extends Type {
     @Override
     public boolean isReal() {
         return true;
+    }
+
+    @Override
+    public boolean isAggregate() {
+        return false;
     }
 
     @Override

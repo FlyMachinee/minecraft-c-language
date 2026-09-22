@@ -27,6 +27,7 @@ primaryExpression
 // ISO 6.5.2, Postfix Operators
 postfixExpression
     : primaryExpression
+    | postfixExpression LeftBracket expression RightBracket
     | postfixExpression LeftParen argumentExpressionList? RightParen
     | postfixExpression PlusPlus
     | postfixExpression MinusMinus
@@ -232,6 +233,7 @@ directDeclarator
     : Identifier
     | LeftParen declarator RightParen
     | directDeclarator LeftParen parameterTypeList RightParen
+    | directDeclarator LeftBracket typeQualifier* IntegerConstant? RightBracket
     ;
 pointer
     : Star typeQualifier* pointer?
@@ -259,11 +261,23 @@ directAbstractDeclarator
     : LeftParen abstractDeclarator RightParen
     | LeftParen parameterTypeList RightParen
     | directAbstractDeclarator LeftParen parameterTypeList RightParen
+    | LeftBracket IntegerConstant? RightBracket
+    | directAbstractDeclarator LeftBracket IntegerConstant? RightBracket
     ;
 
 // ISO 6.7.8, Initialization
 initializer
     : assignmentExpression
+    | LeftBrace initializerList Comma? RightBrace
+    ;
+initializerList
+    : designationInitializer (Comma designationInitializer)*
+    ;
+designationInitializer // rewrote
+    : (designator+ Assign)? initializer
+    ;
+designator
+    : LeftBracket IntegerConstant RightBracket
     ;
 
 // ISO 6.8, Statements and Blocks
