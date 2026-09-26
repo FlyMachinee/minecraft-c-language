@@ -40,4 +40,8 @@ public interface TacVisitor<T> {
     T visit(TacLoad inst);
 
     T visit(TacStore inst);
+
+    T visit(TacAddPointer inst);
+
+    T visit(TacCopyToOffset inst);
 }

@@ -4,14 +4,15 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticIni
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
 
 import java.io.PrintStream;
+import java.util.List;
 
 public class TacStaticVariable implements TacTopLevel {
     public String name;
     public boolean global;
     public Type type;
-    public StaticInit init;
+    public List<StaticInit> init;
 
-    public TacStaticVariable(String name, boolean global, Type type, StaticInit initValue) {
+    public TacStaticVariable(String name, boolean global, Type type, List<StaticInit> initValue) {
         this.name = name;
         this.global = global;
         this.type = type;
@@ -28,7 +29,7 @@ public class TacStaticVariable implements TacTopLevel {
               .append(", global=")
               .append(String.valueOf(global))
               .append(", type=")
-              .append(String.valueOf(type))
+              .append(type.typename())
               .append(", initValue=")
               .append(String.valueOf(init))
               .append(")");

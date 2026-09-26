@@ -4,11 +4,11 @@ import java.io.PrintStream;
 
 public class TacStore implements TacInstruction {
     public TacValue src;
-    public TacValue dstPtr;
+    public TacAddressDescriptor dstAddr;
 
-    public TacStore(TacValue src, TacValue dstPtr) {
+    public TacStore(TacValue src, TacAddressDescriptor dstAddr) {
         this.src = src;
-        this.dstPtr = dstPtr;
+        this.dstAddr = dstAddr;
     }
 
     @Override
@@ -23,8 +23,8 @@ public class TacStore implements TacInstruction {
         }
         stream.print("Store(src=");
         src.dump(stream);
-        stream.print(", dstPtr=");
-        dstPtr.dump(stream);
+        stream.print(", dstAddr=");
+        dstAddr.dump(stream);
         stream.print(")");
     }
 }

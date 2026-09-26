@@ -48,8 +48,8 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
             if (topLevel instanceof TacFunction func) {
                 topLevels.add(lowerFunction(func));
             } else if (topLevel instanceof TacStaticVariable staticVar) {
-                topLevels.add(
-                    new HighLevelStaticVar(staticVar.name, staticVar.global, staticVar.type.sizeof(), staticVar.init));
+                // topLevels.add(
+                //     new HighLevelStaticVar(staticVar.name, staticVar.global, staticVar.type.sizeof(), staticVar.init));
             }
         }
         // 建立后端符号表
@@ -609,17 +609,27 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
 
     @Override
     public Void visit(TacLoad inst) {
-        HighLevelOperand src = lowerValue(inst.srcPtr);
-        HighLevelOperand dst = lowerValue(inst.dst);
-        target.add(new Load(getType(inst.dst).toAsmType(), src, dst));
+        // HighLevelOperand src = lowerValue(inst.srcAddr);
+        // HighLevelOperand dst = lowerValue(inst.dst);
+        // target.add(new Load(getType(inst.dst).toAsmType(), src, dst));
         return null;
     }
 
     @Override
     public Void visit(TacStore inst) {
-        HighLevelOperand src = lowerValue(inst.src);
-        HighLevelOperand dst = lowerValue(inst.dstPtr);
-        target.add(new Store(getType(inst.src).toAsmType(), src, dst));
+        // HighLevelOperand src = lowerValue(inst.src);
+        // HighLevelOperand dst = lowerValue(inst.dstAddr);
+        // target.add(new Store(getType(inst.src).toAsmType(), src, dst));
+        return null;
+    }
+
+    @Override
+    public Void visit(TacAddPointer inst) {
+        return null;
+    }
+
+    @Override
+    public Void visit(TacCopyToOffset inst) {
         return null;
     }
 

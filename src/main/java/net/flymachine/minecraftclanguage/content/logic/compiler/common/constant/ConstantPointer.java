@@ -14,7 +14,7 @@ public record ConstantPointer(long value, Type referencedType) implements Consta
 
     @Override
     public @NotNull String toString() {
-        return "(" + (new PointerType(referencedType)) + ")" + value + "ULL";
+        return "(" + new PointerType(referencedType).typename() + ")" + value + "ULL";
     }
 
     @Override
