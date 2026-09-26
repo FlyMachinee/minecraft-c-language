@@ -4,6 +4,32 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.hig
 
 public abstract class Type {
 
+    abstract TypeKind kind();
+
+    public final boolean isBasic() {
+        return kind() == TypeKind.BASIC;
+    }
+
+    public final boolean isVoid() {
+        return kind() == TypeKind.VOID;
+    }
+
+    public final boolean isFunction() {
+        return kind() == TypeKind.FUNCTION;
+    }
+
+    public final boolean isPointer() {
+        return kind() == TypeKind.POINTER;
+    }
+
+    public final boolean isArray() {
+        return kind() == TypeKind.ARRAY;
+    }
+
+    public final boolean isError() {
+        return kind() == TypeKind.ERROR;
+    }
+
     public abstract String format(String declarator);
 
     public String typename() {
@@ -36,6 +62,8 @@ public abstract class Type {
 
     public abstract boolean isCompatible(Type other);
 
+    public abstract Type merge(Type other);
+
     /**
      * 完整类型：在编译期内可确定大小的类型
      * <p>
@@ -46,57 +74,69 @@ public abstract class Type {
     /**
      * 算术类型：整数类型和浮点数类型
      */
-    public abstract boolean isArithmetic();
+    public final boolean isArithmetic() {
+        return isBasic();
+    }
 
     /**
      * 标量类型：算术类型和指针类型
      */
-    public abstract boolean isScalar();
+    public final boolean isScalar() {
+        return isBasic() || isPointer();
+    }
 
     /**
      * 整数类型：char、有符号整数类型、无符号整数类型、枚举类型
      */
-    public abstract boolean isInteger();
+    public final boolean isInteger() {
+        return isBasic() && ((BasicType) this).primitive() != BasicType.Primitive.DOUBLE;
+    }
 
     /**
      * 实数类型：整数类型和实浮点数类型
      */
-    public abstract boolean isReal();
+    public final boolean isReal() {
+        return isBasic();
+    }
+
+    /**
+     * 对象类型：不是函数类型、且要求完整
+     */
+    public final boolean isObject() {
+        return !isFunction() && isComplete();
+    }
 
     /**
      * 聚合类型：数组类型、结构体类型
      */
-    public abstract boolean isAggregate();
-
-    public final boolean isVoid() {
-        return this instanceof VoidType;
+    public final boolean isAggregate() {
+        return isArray();
     }
 
+
     public final boolean isInt() {
-        return this instanceof BasicType bt && bt.primitive() == BasicType.Primitive.INT;
+        return isBasic() && ((BasicType) this).primitive() == BasicType.Primitive.INT;
     }
 
     public final boolean isLong() {
-        return this instanceof BasicType bt && bt.primitive() == BasicType.Primitive.LONG;
+        return isBasic() && ((BasicType) this).primitive() == BasicType.Primitive.LONG;
     }
 
     public final boolean isUnsignedInt() {
-        return this instanceof BasicType bt && bt.primitive() == BasicType.Primitive.UNSIGNED_INT;
+        return isBasic() && ((BasicType) this).primitive() == BasicType.Primitive.UNSIGNED_INT;
     }
 
     public final boolean isUnsignedLong() {
-        return this instanceof BasicType bt && bt.primitive() == BasicType.Primitive.UNSIGNED_LONG;
+        return isBasic() && ((BasicType) this).primitive() == BasicType.Primitive.UNSIGNED_LONG;
     }
 
     public final boolean isDouble() {
-        return this instanceof BasicType bt && bt.primitive() == BasicType.Primitive.DOUBLE;
+        return isBasic() && ((BasicType) this).primitive() == BasicType.Primitive.DOUBLE;
     }
 
     public abstract long sizeof();
 
     public abstract AsmType toAsmType();
-
-    public abstract <R> R accept(TypeVisitor<R> visitor);
 
     public static BasicType commonRealType(BasicType t1, BasicType t2) {
         if (!t1.isArithmetic() || !t2.isArithmetic()) {

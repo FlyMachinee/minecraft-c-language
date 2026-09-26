@@ -5,6 +5,11 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.hig
 public final class ErrorType extends Type {
 
     @Override
+    TypeKind kind() {
+        return TypeKind.ERROR;
+    }
+
+    @Override
     public String format(String declarator) {
         return "<error-type>";
     }
@@ -31,32 +36,12 @@ public final class ErrorType extends Type {
     }
 
     @Override
+    public Type merge(Type other) {
+        return INSTANCE;
+    }
+
+    @Override
     public boolean isComplete() {
-        return false;
-    }
-
-    @Override
-    public boolean isArithmetic() {
-        return false;
-    }
-
-    @Override
-    public boolean isScalar() {
-        return false;
-    }
-
-    @Override
-    public boolean isInteger() {
-        return false;
-    }
-
-    @Override
-    public boolean isReal() {
-        return false;
-    }
-
-    @Override
-    public boolean isAggregate() {
         return false;
     }
 
@@ -68,10 +53,5 @@ public final class ErrorType extends Type {
     @Override
     public AsmType toAsmType() {
         throw new UnsupportedOperationException("toAsmType(error) is not defined");
-    }
-
-    @Override
-    public <R> R accept(TypeVisitor<R> visitor) {
-        return null;
     }
 }

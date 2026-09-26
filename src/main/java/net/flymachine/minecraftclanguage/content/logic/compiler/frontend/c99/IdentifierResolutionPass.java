@@ -455,4 +455,11 @@ public final class IdentifierResolutionPass implements AstVisitor<Void> {
         node.exp.accept(this);
         return null;
     }
+
+    @Override
+    public Void visit(SubscriptNode node) {
+        node.lhs.accept(this);
+        node.rhs.accept(this);
+        return null;
+    }
 }

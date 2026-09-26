@@ -41,6 +41,11 @@ public final class BasicType extends Type {
     }
 
     @Override
+    TypeKind kind() {
+        return TypeKind.BASIC;
+    }
+
+    @Override
     public String format(String declarator) {
         if (declarator.isEmpty()) {
             return toString();
@@ -72,33 +77,16 @@ public final class BasicType extends Type {
     }
 
     @Override
+    public Type merge(Type other) {
+        if (this.isCompatible(other)) {
+            return this;
+        }
+        return ErrorType.INSTANCE;
+    }
+
+    @Override
     public boolean isComplete() {
         return true;
-    }
-
-    @Override
-    public boolean isArithmetic() {
-        return true;
-    }
-
-    @Override
-    public boolean isScalar() {
-        return true;
-    }
-
-    @Override
-    public boolean isInteger() {
-        return this != DOUBLE;
-    }
-
-    @Override
-    public boolean isReal() {
-        return true;
-    }
-
-    @Override
-    public boolean isAggregate() {
-        return false;
     }
 
     @Override
@@ -116,11 +104,6 @@ public final class BasicType extends Type {
             case LONG, UNSIGNED_LONG -> AsmType.DWORD;
             case DOUBLE -> AsmType.DOUBLE;
         };
-    }
-
-    @Override
-    public <R> R accept(TypeVisitor<R> visitor) {
-        return visitor.visit(this);
     }
 
     @Override

@@ -1,6 +1,6 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99;
 
-import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.StatementVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.*;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.DiagnosticReporter;
 
@@ -13,7 +13,7 @@ import java.util.*;
  * <p>
  * 需要先进行 {@link TypeCheckingPass}
  */
-public final class LabelResolutionPass implements AstVisitor<Void> {
+public final class LabelResolutionPass implements StatementVisitor {
 
     private final DiagnosticReporter reporter;
 
@@ -46,16 +46,15 @@ public final class LabelResolutionPass implements AstVisitor<Void> {
         }
     }
 
-    @Override
-    public Void visit(ProgramNode node) {
+    public void visit(ProgramNode node) {
         for (ExternalDeclarationNode externalDeclaration : node.extDecls) {
-            externalDeclaration.accept(this);
+            if (externalDeclaration instanceof FunctionDefinitionNode funcDef) {
+                visit(funcDef);
+            }
         }
-        return null;
     }
 
-    @Override
-    public Void visit(FunctionDefinitionNode node) {
+    public void visit(FunctionDefinitionNode node) {
         currentFunction = node;
         labelDefinitionMap.clear();
         pendingGotoNodes.clear();
@@ -70,7 +69,6 @@ public final class LabelResolutionPass implements AstVisitor<Void> {
                 }
             }
         }
-        return null;
     }
 
     private void visit(StatementNode node) {
@@ -176,70 +174,31 @@ public final class LabelResolutionPass implements AstVisitor<Void> {
     }
 
     @Override
-    public Void visit(ReturnNode node) {
+    public void visit(ReturnNode node) {
         visit((StatementNode) node);
-        return null;
     }
 
     @Override
-    public Void visit(UnaryExpressionNode node) {
-        return null;
-    }
-
-    @Override
-    public Void visit(BinaryExpressionNode node) {
-        return null;
-    }
-
-    @Override
-    public Void visit(DeclarationNode node) {
-        return null;
-    }
-
-    @Override
-    public Void visit(ExpressionStatementNode node) {
+    public void visit(ExpressionStatementNode node) {
         visit((StatementNode) node);
-        return null;
     }
 
     @Override
-    public Void visit(NullStatementNode node) {
+    public void visit(NullStatementNode node) {
         visit((StatementNode) node);
-        return null;
     }
 
     @Override
-    public Void visit(VariableNode node) {
-        return null;
-    }
-
-    @Override
-    public Void visit(AssignmentNode node) {
-        return null;
-    }
-
-    @Override
-    public Void visit(IncrementDecrementNode node) {
-        return null;
-    }
-
-    @Override
-    public Void visit(IfStatementNode node) {
+    public void visit(IfStatementNode node) {
         visit((StatementNode) node);
         node.thenStmt.accept(this);
         if (node.elseStmt != null) {
             node.elseStmt.accept(this);
         }
-        return null;
     }
 
     @Override
-    public Void visit(ConditionalExpressionNode node) {
-        return null;
-    }
-
-    @Override
-    public Void visit(GotoNode node) {
+    public void visit(GotoNode node) {
         visit((StatementNode) node);
 
         String target = node.target.name;
@@ -249,7 +208,7 @@ public final class LabelResolutionPass implements AstVisitor<Void> {
             node.target.name = definition.label.name;
             // 设置标签为活跃
             definition.active = true;
-            return null;
+            return;
         }
 
         // 无定义，添加至 pending 列表
@@ -261,75 +220,45 @@ public final class LabelResolutionPass implements AstVisitor<Void> {
         } else {
             pendingList.add(node);
         }
-        return null;
     }
 
     @Override
-    public Void visit(CompoundStatementNode node) {
+    public void visit(CompoundStatementNode node) {
         visit((StatementNode) node);
         for (BlockItemNode blockItemNode : node.blockItems) {
-            blockItemNode.accept(this);
+            if (blockItemNode instanceof StatementNode statementNode) {
+                statementNode.accept(this);
+            }
         }
-        return null;
     }
 
     @Override
-    public Void visit(BreakNode node) {
+    public void visit(BreakNode node) {
         visit((StatementNode) node);
-        return null;
     }
 
     @Override
-    public Void visit(ContinueNode node) {
+    public void visit(ContinueNode node) {
         visit((StatementNode) node);
-        return null;
     }
 
     @Override
-    public Void visit(WhileLoopNode node) {
+    public void visit(WhileLoopNode node) {
         visit((StatementNode) node);
         node.body.accept(this);
-        return null;
     }
 
     @Override
-    public Void visit(ForLoopNode node) {
+    public void visit(ForLoopNode node) {
         visit((StatementNode) node);
         node.body.accept(this);
-        return null;
     }
 
     @Override
-    public Void visit(SwitchStatementNode node) {
+    public void visit(SwitchStatementNode node) {
         visit((StatementNode) node);
         enterSwitch(node);
         node.body.accept(this);
         exitSwitch();
-        return null;
-    }
-
-    @Override
-    public Void visit(FunctionCallNode node) {
-        return null;
-    }
-
-    @Override
-    public Void visit(ConstantNode node) {
-        return null;
-    }
-
-    @Override
-    public Void visit(CastExpressionNode node) {
-        return null;
-    }
-
-    @Override
-    public Void visit(AddressOfNode node) {
-        return null;
-    }
-
-    @Override
-    public Void visit(DereferenceNode node) {
-        return null;
     }
 }

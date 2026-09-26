@@ -1,6 +1,5 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit;
 
-import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.*;
 import org.jetbrains.annotations.NotNull;
 
 public record IntInit(int value) implements StaticInit {
@@ -13,32 +12,7 @@ public record IntInit(int value) implements StaticInit {
     }
 
     @Override
-    public Constant toConstant() {
-        return toConstantInt();
-    }
-
-    @Override
-    public ConstantInt toConstantInt() {
-        return new ConstantInt(value);
-    }
-
-    @Override
-    public ConstantLong toConstantLong() {
-        return toConstantInt().toLong();
-    }
-
-    @Override
-    public ConstantUnsignedInt toConstantUnsignedInt() {
-        return toConstantInt().toUnsignedInt();
-    }
-
-    @Override
-    public ConstantUnsignedLong toConstantUnsignedLong() {
-        return toConstantInt().toUnsignedLong();
-    }
-
-    @Override
-    public ConstantDouble toConstantDouble() {
-        return toConstantInt().toDouble();
+    public long toByteRepresentation() {
+        return value;
     }
 }

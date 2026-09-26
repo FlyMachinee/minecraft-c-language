@@ -5,6 +5,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.BinaryOpe
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.Comparison;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.UnaryOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.StaticInit;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.ZeroInit;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.BasicType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.PointerType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
@@ -41,6 +42,13 @@ public sealed interface Constant
     }
 
     StaticInit toStaticInit();
+
+    default StaticInit toStaticInitOrZero() {
+        if (isZero()) {
+            return new ZeroInit(getType().sizeof());
+        }
+        return toStaticInit();
+    }
 
     Constant apply(UnaryOperator op);
 

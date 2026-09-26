@@ -19,7 +19,7 @@ public final class VoidTypeNode extends TypeNode {
     }
 
     @Override
-    protected String format(String declarator) {
+    public String format(String declarator) {
         return getType().format(declarator);
     }
 

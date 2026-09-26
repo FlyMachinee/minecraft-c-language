@@ -81,34 +81,34 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
     }
 
     private void lowerStaticVariable(HighLevelStaticVar staticVar) {
-        if (staticVar.global) {
-            emitDir("global", new LA64DirectiveSymArg(staticVar.name));
-        }
-        BackendSymbolTable.ObjectEntry entry =
-            (BackendSymbolTable.ObjectEntry) backendSymbolTable.get(staticVar.name);
-        AsmType asmType = entry.asmType();
-        long initValue =
-            asmType == AsmType.DOUBLE ?
-                Double.doubleToLongBits(staticVar.init.toConstantDouble().value()) :
-                staticVar.init.toConstantLong().value();
-        if (asmType != AsmType.DOUBLE && initValue == 0) {
-            // 初始化为0，放在bss段
-            emitDir("bss");
-        } else {
-            // 初始化非0，放在data段
-            emitDir("data");
-        }
-        emitDir("balign", new LA64DirectiveNumArg(staticVar.alignment));
-        emitLabel(staticVar.name);
-        if (initValue != 0) {
-            if (asmType == AsmType.WORD) {
-                emitDir("word", new LA64DirectiveNumArg((int) initValue));
-            } else {
-                emitDir("dword", new LA64DirectiveNumArg(initValue));
-            }
-        } else {
-            emitDir("zero", new LA64DirectiveNumArg(staticVar.alignment));
-        }
+        // if (staticVar.global) {
+        //     emitDir("global", new LA64DirectiveSymArg(staticVar.name));
+        // }
+        // BackendSymbolTable.ObjectEntry entry =
+        //     (BackendSymbolTable.ObjectEntry) backendSymbolTable.get(staticVar.name);
+        // AsmType asmType = entry.asmType();
+        // long initValue =
+        //     asmType == AsmType.DOUBLE ?
+        //         Double.doubleToLongBits(staticVar.init.toConstantDouble().value()) :
+        //         staticVar.init.toConstantLong().value();
+        // if (asmType != AsmType.DOUBLE && initValue == 0) {
+        //     // 初始化为0，放在bss段
+        //     emitDir("bss");
+        // } else {
+        //     // 初始化非0，放在data段
+        //     emitDir("data");
+        // }
+        // emitDir("balign", new LA64DirectiveNumArg(staticVar.alignment));
+        // emitLabel(staticVar.name);
+        // if (initValue != 0) {
+        //     if (asmType == AsmType.WORD) {
+        //         emitDir("word", new LA64DirectiveNumArg((int) initValue));
+        //     } else {
+        //         emitDir("dword", new LA64DirectiveNumArg(initValue));
+        //     }
+        // } else {
+        //     emitDir("zero", new LA64DirectiveNumArg(staticVar.alignment));
+        // }
     }
 
     private void lowerStaticConst(HighLevelStaticConst staticConst) {

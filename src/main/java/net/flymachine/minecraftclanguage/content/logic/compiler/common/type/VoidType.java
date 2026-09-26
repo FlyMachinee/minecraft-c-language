@@ -8,6 +8,11 @@ public final class VoidType extends Type {
     private static final VoidType CONST_VOID = new VoidType(true);
 
     @Override
+    TypeKind kind() {
+        return TypeKind.VOID;
+    }
+
+    @Override
     public String format(String declarator) {
         if (declarator.isEmpty()) {
             return "void";
@@ -33,32 +38,15 @@ public final class VoidType extends Type {
     }
 
     @Override
+    public Type merge(Type other) {
+        if (!this.isCompatible(other)) {
+            return ErrorType.INSTANCE;
+        }
+        return this;
+    }
+
+    @Override
     public boolean isComplete() {
-        return false;
-    }
-
-    @Override
-    public boolean isArithmetic() {
-        return false;
-    }
-
-    @Override
-    public boolean isScalar() {
-        return false;
-    }
-
-    @Override
-    public boolean isInteger() {
-        return false;
-    }
-
-    @Override
-    public boolean isReal() {
-        return false;
-    }
-
-    @Override
-    public boolean isAggregate() {
         return false;
     }
 
@@ -70,11 +58,6 @@ public final class VoidType extends Type {
     @Override
     public AsmType toAsmType() {
         throw new UnsupportedOperationException("toAsmType(void) is not defined");
-    }
-
-    @Override
-    public <R> R accept(TypeVisitor<R> visitor) {
-        return visitor.visit(this);
     }
 
     @Override

@@ -4,7 +4,6 @@ import net.flymachine.minecraftclanguage.content.logger.ConsoleLogger;
 import net.flymachine.minecraftclanguage.content.logger.Logger;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.antlr.C99Lexer;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.antlr.C99Parser;
-import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.AstNode;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.ProgramNode;
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.TacProgram;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.DiagnosticReporter;
@@ -45,7 +44,7 @@ public final class C99Frontend {
         }
 
         AstBuilderVisitor astBuilderVisitor = new AstBuilderVisitor(reporter);
-        AstNode ast = astBuilderVisitor.visit(tree);
+        ProgramNode ast = (ProgramNode) astBuilderVisitor.visit(tree);
 
         if (ast == null || reporter.getErrorCount() > 0) {
             return null;
@@ -67,21 +66,21 @@ public final class C99Frontend {
         SymbolTable symbolTable = typeCheckingPass.getSymbolTable();
 
         LabelResolutionPass labelResolutionPass = new LabelResolutionPass(reporter);
-        ast.accept(labelResolutionPass);
+        labelResolutionPass.visit(ast);
 
         if (reporter.getErrorCount() > 0) {
             return null;
         }
 
         LoopLabelingPass loopLabelingPass = new LoopLabelingPass(reporter);
-        ast.accept(loopLabelingPass);
+        loopLabelingPass.visit(ast);
 
         if (reporter.getErrorCount() > 0) {
             return null;
         }
 
         AstToTacLowerer astToTacLowerer = new AstToTacLowerer(symbolTable, reporter);
-        TacProgram tacProgram = astToTacLowerer.lower((ProgramNode) ast);
+        TacProgram tacProgram = astToTacLowerer.lower(ast);
 
         if (reporter.getErrorCount() > 0) {
             return null;

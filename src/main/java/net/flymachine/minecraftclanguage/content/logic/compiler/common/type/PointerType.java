@@ -22,6 +22,11 @@ public final class PointerType extends Type {
     }
 
     @Override
+    TypeKind kind() {
+        return TypeKind.POINTER;
+    }
+
+    @Override
     public String format(String declarator) {
         String newDeclarator = "*" + (isConst() ? " const" : "") + declarator;
         return referencedType.format(newDeclarator);
@@ -48,33 +53,16 @@ public final class PointerType extends Type {
     }
 
     @Override
+    public Type merge(Type other) {
+        if (!this.isCompatible(other)) {
+            return ErrorType.INSTANCE;
+        }
+        return new PointerType(referencedType.merge(((PointerType) other).referencedType), this.isConst());
+    }
+
+    @Override
     public boolean isComplete() {
         return true;
-    }
-
-    @Override
-    public boolean isArithmetic() {
-        return false;
-    }
-
-    @Override
-    public boolean isScalar() {
-        return true;
-    }
-
-    @Override
-    public boolean isInteger() {
-        return false;
-    }
-
-    @Override
-    public boolean isReal() {
-        return false;
-    }
-
-    @Override
-    public boolean isAggregate() {
-        return false;
     }
 
     @Override
@@ -85,10 +73,5 @@ public final class PointerType extends Type {
     @Override
     public AsmType toAsmType() {
         return AsmType.DWORD;
-    }
-
-    @Override
-    public <R> R accept(TypeVisitor<R> visitor) {
-        return visitor.visit(this);
     }
 }

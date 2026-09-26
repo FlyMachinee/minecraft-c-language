@@ -31,6 +31,11 @@ public final class ArrayTypeNode extends TypeNode {
         this.constLoc = constLoc;
     }
 
+    /**
+     * 检查数组类型维度中是否包含 const 限定符，仅在函数形参类型衰减时使用
+     * <p>
+     * 注意与顶层 const 的区别
+     */
     public boolean containsConst() {
         return constLoc != null;
     }

@@ -3,6 +3,7 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.common.type;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.AsmType;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -14,6 +15,11 @@ public final class FunctionType extends Type {
         super(false);
         this.returnType = returnType;
         this.parameterTypes = parameterTypes;
+    }
+
+    @Override
+    TypeKind kind() {
+        return TypeKind.FUNCTION;
     }
 
     @Override
@@ -60,12 +66,37 @@ public final class FunctionType extends Type {
             return false;
         }
         // 且其对应形参，在应用数组到指针和函数到指针类型调整，及剥除顶层限定符后，拥有相同类型
+        // 类型衰减应在类型检查中完成
         for (int i = 0; i < parameterTypes.size(); i++) {
             if (!parameterTypes.get(i).removeQualifiers().isCompatible(o.parameterTypes.get(i).removeQualifiers())) {
                 return false;
             }
         }
         return true;
+    }
+
+    @Override
+    public Type merge(Type other) {
+        if (!this.isCompatible(other)) {
+            return ErrorType.INSTANCE;
+        }
+
+        FunctionType o = (FunctionType) other;
+
+        Type mergedReturnType = returnType.merge(o.returnType);
+
+        if (hasNoParameters() && o.hasNoParameters()) {
+            return new FunctionType(mergedReturnType, List.of());
+        }
+
+        List<Type> mergedParameterTypes = new ArrayList<>();
+        for (int i = 0; i < parameterTypes.size(); i++) {
+            mergedParameterTypes.add(
+                parameterTypes.get(i).removeQualifiers().merge(o.parameterTypes.get(i).removeQualifiers())
+                              .setConst(this.isConst()));
+        }
+
+        return new FunctionType(mergedReturnType, mergedParameterTypes);
     }
 
     public Type parameterType(int i) {
@@ -78,31 +109,6 @@ public final class FunctionType extends Type {
     }
 
     @Override
-    public boolean isArithmetic() {
-        return false;
-    }
-
-    @Override
-    public boolean isScalar() {
-        return false;
-    }
-
-    @Override
-    public boolean isInteger() {
-        return false;
-    }
-
-    @Override
-    public boolean isReal() {
-        return false;
-    }
-
-    @Override
-    public boolean isAggregate() {
-        return false;
-    }
-
-    @Override
     public long sizeof() {
         return -1;
     }
@@ -110,11 +116,6 @@ public final class FunctionType extends Type {
     @Override
     public AsmType toAsmType() {
         throw new UnsupportedOperationException("toAsmType(function) is not defined");
-    }
-
-    @Override
-    public <R> R accept(TypeVisitor<R> visitor) {
-        return visitor.visit(this);
     }
 
     public boolean hasNoParameters() {

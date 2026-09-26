@@ -1,12 +1,13 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99;
 
-import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.*;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.StaticInit;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.IdentifierNode;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.TypeNode;
 
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public final class SymbolTable {
@@ -117,13 +118,7 @@ public final class SymbolTable {
                 public static final NoDefinition INSTANCE = new NoDefinition();
             }
 
-            public record Defined(StaticInit init) implements DefinitionType {
-                public static final Defined INT_ZERO = new Defined(IntInit.ZERO);
-                public static final Defined LONG_ZERO = new Defined(LongInit.ZERO);
-                public static final Defined UNSIGNED_INT_ZERO = new Defined(UnsignedIntInit.ZERO);
-                public static final Defined UNSIGNED_LONG_ZERO = new Defined(UnsignedLongInit.ZERO);
-                public static final Defined DOUBLE_ZERO = new Defined(DoubleInit.ZERO);
-            }
+            public record Defined(List<StaticInit> init) implements DefinitionType { }
         }
 
         public static final class AutoAttr implements IdentifierAttr {

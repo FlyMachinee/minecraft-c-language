@@ -5,13 +5,30 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.
 import org.jetbrains.annotations.NotNull;
 
 public final class ArrayType extends Type {
-    public final @NotNull Type elementType;
-    public final @NotNull ConstantUnsignedLong size;
+    private final @NotNull Type elementType;
+    private final @NotNull ConstantUnsignedLong size;
 
     public ArrayType(@NotNull Type elementType, @NotNull ConstantUnsignedLong size) {
         super(false);
         this.elementType = elementType;
         this.size = size;
+    }
+
+    public Type elementType() {
+        return this.elementType;
+    }
+
+    public ConstantUnsignedLong size() {
+        return this.size;
+    }
+
+    public ArrayType withSize(ConstantUnsignedLong newSize) {
+        return new ArrayType(elementType, newSize);
+    }
+
+    @Override
+    TypeKind kind() {
+        return TypeKind.ARRAY;
     }
 
     @Override
@@ -44,33 +61,21 @@ public final class ArrayType extends Type {
     }
 
     @Override
+    public Type merge(Type other) {
+        if (!this.isCompatible(other)) {
+            return ErrorType.INSTANCE;
+        }
+
+        ArrayType o = (ArrayType) other;
+
+        Type mergedElementType = elementType.merge(o.elementType);
+        ConstantUnsignedLong mergedSize = new ConstantUnsignedLong(Math.max(size.value(), o.size.value()));
+        return new ArrayType(mergedElementType, mergedSize);
+    }
+
+    @Override
     public boolean isComplete() {
         return size.value() != 0;
-    }
-
-    @Override
-    public boolean isArithmetic() {
-        return false;
-    }
-
-    @Override
-    public boolean isScalar() {
-        return false;
-    }
-
-    @Override
-    public boolean isInteger() {
-        return false;
-    }
-
-    @Override
-    public boolean isReal() {
-        return false;
-    }
-
-    @Override
-    public boolean isAggregate() {
-        return true;
     }
 
     @Override
@@ -84,10 +89,5 @@ public final class ArrayType extends Type {
     @Override
     public AsmType toAsmType() {
         return null;
-    }
-
-    @Override
-    public <R> R accept(TypeVisitor<R> visitor) {
-        return visitor.visit(this);
     }
 }

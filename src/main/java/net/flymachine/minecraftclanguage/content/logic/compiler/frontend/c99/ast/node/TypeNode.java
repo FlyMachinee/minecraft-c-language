@@ -1,5 +1,6 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node;
 
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.ConstantLong;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.*;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
@@ -35,6 +36,9 @@ public abstract class TypeNode extends AstNode {
             }
             return node;
         }
+        if (type instanceof ArrayType at) {
+            return new ArrayTypeNode(null, fromType(at.elementType()), new ConstantNode(null, at.size()));
+        }
         throw new IllegalArgumentException("Unknown Type " + type);
     }
 
@@ -44,7 +48,7 @@ public abstract class TypeNode extends AstNode {
 
     protected abstract String format(String declarator);
 
-    protected String typename() {
+    public String typename() {
         return format("");
     }
 }
