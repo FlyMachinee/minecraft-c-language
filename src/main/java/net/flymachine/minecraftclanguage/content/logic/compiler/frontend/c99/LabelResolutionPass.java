@@ -226,8 +226,8 @@ public final class LabelResolutionPass implements StatementVisitor {
     public void visit(CompoundStatementNode node) {
         visit((StatementNode) node);
         for (BlockItemNode blockItemNode : node.blockItems) {
-            if (blockItemNode instanceof StatementNode statementNode) {
-                statementNode.accept(this);
+            if (blockItemNode instanceof StatementBlockItemNode statementBlockItem) {
+                statementBlockItem.stmt.accept(this);
             }
         }
     }

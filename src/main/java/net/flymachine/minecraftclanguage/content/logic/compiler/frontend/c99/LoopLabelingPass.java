@@ -106,8 +106,8 @@ public final class LoopLabelingPass implements StatementVisitor {
     @Override
     public void visit(CompoundStatementNode node) {
         for (BlockItemNode item : node.blockItems) {
-            if (item instanceof StatementNode statementNode) {
-                statementNode.accept(this);
+            if (item instanceof StatementBlockItemNode stmtBlockItem) {
+                stmtBlockItem.stmt.accept(this);
             }
         }
     }
