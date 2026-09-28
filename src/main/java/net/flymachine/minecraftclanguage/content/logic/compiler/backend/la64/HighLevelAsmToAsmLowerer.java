@@ -770,7 +770,7 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
         if (offset instanceof Immediate imm && BitMath.isSi12(imm.value())) {
             storeMem(srcAsmType, srcReg, ptrReg, (int) imm.value());
         } else {
-            GeneralPurposeRegister idxReg = (GeneralPurposeRegister) loadOperand(AsmType.DWORD, offset, T1, T1);
+            GeneralPurposeRegister idxReg = (GeneralPurposeRegister) loadOperand(AsmType.DWORD, offset, T2, T2);
             storeMem(srcAsmType, srcReg, ptrReg, idxReg);
         }
     }
