@@ -25,7 +25,7 @@ graph TD
         subgraph AsmGen [汇编代码生成]
             direction TD
             TacToHighLevelAsm(中间代码至抽象汇编)
-            ReplacePseudoRegister(替换伪寄存器)
+            ReplacePseudoOperand(替换伪操作数)
             HighLevelAsmToAsm(抽象汇编至汇编)
         end
     end
@@ -51,7 +51,7 @@ graph TD
     --> |Annotated AST| LoopLabeling
     --> |Annotated AST| TacGen
     --> |TAC| TacToHighLevelAsm
-    --> |HL Asm| ReplacePseudoRegister
+    --> |HL Asm| ReplacePseudoOperand
     --> |HL Asm| HighLevelAsmToAsm
     --> |Asm / program.s| CollectSymbols
     --> |Asm| ReplacePseudoAsm
