@@ -10,6 +10,8 @@ public class DiagnosticReporter {
     private int errorCount = 0;
     private int warningCount = 0;
 
+    private SourceLocation lastLocation = null;
+
     public DiagnosticReporter(Logger logger, SourceFile sourceFile) {
         this.logger = logger;
         this.sourceFile = sourceFile;
@@ -22,6 +24,7 @@ public class DiagnosticReporter {
     public void error(SourceLocation loc, String msg) {
         ++errorCount;
         ErrorHandleUtil.logErrorWithSourceLine(logger, sourceFile, loc, msg);
+        lastLocation = loc;
     }
 
     public void error(int line, int charPosition, int len, String msg) {
@@ -32,10 +35,18 @@ public class DiagnosticReporter {
     public void warning(SourceLocation loc, String msg) {
         ++warningCount;
         ErrorHandleUtil.logWarningWithSourceLine(logger, sourceFile, loc, msg);
+        lastLocation = loc;
     }
 
     public void note(SourceLocation loc, String msg) {
         ErrorHandleUtil.logNoteWithSourceLine(logger, sourceFile, loc, msg);
+        lastLocation = loc;
+    }
+
+    public void note(String msg) {
+        if (lastLocation != null) {
+            ErrorHandleUtil.logNote(logger, sourceFile, lastLocation, msg);
+        }
     }
 
     public int getErrorCount() {
@@ -48,6 +59,10 @@ public class DiagnosticReporter {
 
     public String white(String msg) {
         return logger.white(msg);
+    }
+
+    public String white(SourceLocation loc) {
+        return logger.white(byLocation(loc));
     }
 
     public String byLocation(SourceLocation loc) {

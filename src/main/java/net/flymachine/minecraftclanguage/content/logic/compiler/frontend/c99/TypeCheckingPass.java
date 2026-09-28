@@ -12,6 +12,8 @@ import net.flymachine.minecraftclanguage.content.logic.errorHandle.DiagnosticRep
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.function.Function;
+
 /**
  * 进行类型检查等工作
  * <p>
@@ -102,7 +104,7 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
     }
 
     public ExpressionNode convertTo(ExpressionNode exp, Type type) {
-        if (exp.expType.equals(type)) {
+        if (exp.expType.isCompatible(type)) {
             return exp;
         }
         if (exp.expType.isError() || type.isError()) {
@@ -124,12 +126,48 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
         exp.accept(this);
     }
 
+    /**
+     * 检查表达式，并进行数组到指针、函数到指针的衰减
+     * <p>
+     * 数组到指针转换：
+     * <p>
+     * 任何数组类型的表达式(C99 起)，在用于下列语境之外时
+     * <p>
+     * - 作为取址运算符的操作数
+     * <p>
+     * - 作为 sizeof 的操作数
+     * <p>
+     * - 作为用于数组初始化的字符串字面量
+     * <p>
+     * 会经历到指向其首元素的非左值指针的转换
+     * <p>
+     * 函数到指针转换
+     * <p>
+     * 任何函数指代器表达式，在用于异于下列语境时
+     * <p>
+     * - 作为取址运算符的操作
+     * <p>
+     * - 作为 sizeof 的操作数
+     * <p>
+     * 会经历到指向表达式所指代函数的指针的转换
+     *
+     * @param exp 表达式
+     * @return 衰减后的表达式
+     */
     public ExpressionNode checkExpressionAndDecay(ExpressionNode exp) {
         checkExpression(exp);
+
         if (exp.expType instanceof ArrayType at) {
             // 数组类型衰减为指针类型
             AddressOfNode addrExp = new AddressOfNode(null, exp);
             addrExp.expType = new PointerType(at.elementType());
+            return addrExp;
+        }
+
+        if (exp.expType instanceof FunctionType ft) {
+            // 函数类型衰减为指针类型
+            AddressOfNode addrExp = new AddressOfNode(null, exp);
+            addrExp.expType = new PointerType(ft);
             return addrExp;
         }
         return exp;
@@ -214,9 +252,6 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
         Type lhsType = node.lhs.expType = node.lhs.expType.removeConst();
         Type rhsType = node.rhs.expType = node.rhs.expType.removeConst();
 
-        // Function<Type, Boolean> isPointerToObject = (Type t) ->
-        //     t instanceof PointerType pt && pt.referencedType().isObject();
-
         node.expType = switch (node.op.op) {
             case ADD -> {
                 // lhs 与 rhs 必须为下列之一
@@ -250,6 +285,12 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
                     reporter.error(node.op.wholeLoc, msg);
                     yield ErrorType.INSTANCE;
                 }
+                if (referencedType.isFunction()) {
+                    String msg = "pointer to function type '" + reporter.white(referencedType.typename()) +
+                                 "' used in addition";
+                    reporter.error(node.op.wholeLoc, msg);
+                    yield ErrorType.INSTANCE;
+                }
 
                 yield ptr;
             }
@@ -262,37 +303,34 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
                     node.rhs = convertTo(node.rhs, commonType);
                     yield commonType;
                 }
+
+                Function<PointerType, Boolean> check = (pt) -> {
+                    Type referencedType = pt.referencedType();
+                    if (!referencedType.isComplete()) {
+                        String msg = "pointer to incomplete type '" + reporter.white(referencedType.typename()) +
+                                     "' used in subtraction";
+                        reporter.error(node.op.wholeLoc, msg);
+                        return false;
+                    }
+                    if (referencedType.isFunction()) {
+                        String msg = "pointer to function type '" + reporter.white(referencedType.typename()) +
+                                     "' used in subtraction";
+                        reporter.error(node.op.wholeLoc, msg);
+                        return false;
+                    }
+                    return true;
+                };
+
                 // lhs 拥有指向完整对象的指针类型，rhs 拥有整数类型
                 if (lhsType instanceof PointerType lhsPt && rhsType.isInteger()) {
                     node.rhs = convertTo(node.rhs, BasicType.LONG);
-                    if (!lhsPt.referencedType().isComplete()) {
-                        String msg = "pointer to incomplete type '" +
-                                     reporter.white(lhsPt.referencedType().typename()) +
-                                     "' used in subtraction";
-                        reporter.error(node.op.wholeLoc, msg);
-                        yield ErrorType.INSTANCE;
-                    }
-                    yield lhsPt;
+                    yield check.apply(lhsPt) ? lhsPt : ErrorType.INSTANCE;
                 }
                 // 都是指向拥有兼容类型的完整对象指针，忽略限定符
                 if (lhsType instanceof PointerType lhsPt && rhsType instanceof PointerType rhsPt) {
                     if (lhsPt.referencedType().removeQualifiers()
                              .isCompatible(rhsPt.referencedType().removeQualifiers())) {
-                        if (!lhsPt.referencedType().isComplete()) {
-                            String msg = "pointer to incomplete type '" +
-                                         reporter.white(lhsPt.referencedType().typename()) +
-                                         "' used in subtraction";
-                            reporter.error(node.op.wholeLoc, msg);
-                            yield ErrorType.INSTANCE;
-                        }
-                        if (!rhsPt.referencedType().isComplete()) {
-                            String msg = "pointer to incomplete type '" +
-                                         reporter.white(rhsPt.referencedType().typename()) +
-                                         "' used in subtraction";
-                            reporter.error(node.op.wholeLoc, msg);
-                            yield ErrorType.INSTANCE;
-                        }
-                        yield BasicType.LONG;
+                        yield check.apply(lhsPt) && check.apply(rhsPt) ? BasicType.LONG : ErrorType.INSTANCE;
                     }
                 }
 
@@ -659,8 +697,8 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
             IdentifierNode param = funcType.params.get(i);
 
             // 形参类型衰减
-            // 任何数组类型的形参都被调整到对应的指针类型，若数组声明符的方括号内有限定符，则它具有限定
             if (paramType instanceof ArrayTypeNode at) {
+                // 任何数组类型的形参都被调整到对应的指针类型，若数组声明符的方括号内有限定符，则它具有限定
                 paramType = new PointerTypeNode(at.wholeLoc, at.elementType);
                 if (at.containsConst()) {
                     paramType.constQualifier = new ConstQualifierNode(at.constLoc);
@@ -668,10 +706,12 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
                 }
                 funcType.paramTypes.set(i, paramType);
                 checkType(at, param, false);
-            } else {
+            } else if (paramType instanceof FunctionTypeNode ft) {
                 // 任何函数类型的形参都被调整到对应的指针类型
-                // TODO: 函数指针实现
-
+                paramType = new PointerTypeNode(ft.wholeLoc, ft);
+                funcType.paramTypes.set(i, paramType);
+                checkFunctionType(ft, param, false);
+            } else {
                 // 函数定义中，要求类型为完整类型
                 if (paramType instanceof VoidTypeNode || isDefinition && !paramType.getType().isComplete()) {
                     // 不完整类型
@@ -1317,27 +1357,25 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
 
     @Override
     public Void visit(FunctionCallNode node) {
-        if (!(node.func instanceof VariableNode variable)) {
-            // 目前不允许调用函数指针
-            String msg = "function call expression shall have name as function designator";
-            reporter.error(node.func.wholeLoc, msg);
+        node.func = checkExpressionAndDecay(node.func);
+        if (node.func.expType.isError()) {
             node.expType = ErrorType.INSTANCE;
             // 检查参数
             node.args = node.args.stream().map(this::checkExpressionAndDecay).toList();
             return null;
         }
 
-        SymbolTable.Entry entry = symbolTable.get(variable.id.name);
-        Type type = entry.type;
-        if (!(type instanceof FunctionType funcType)) {
+        if (!(node.func.expType instanceof PointerType pt && pt.referencedType() instanceof FunctionType funcType)) {
             // 不是函数类型
-            // 可能被重命名，通过 location 获取
-            String msg = "called object '" + reporter.white(reporter.byLocation(variable.wholeLoc)) +
+            String msg = "called object '" + reporter.white(reporter.byLocation(node.func.wholeLoc)) +
                          "' is not a function or function pointer; have type '" +
-                         reporter.white(type.typename()) + "'";
-            reporter.error(variable.wholeLoc, msg);
-            msg = "declared here";
-            reporter.note(entry.id.wholeLoc, msg);
+                         reporter.white(node.func.expType.typename()) + "'";
+            reporter.error(node.func.wholeLoc, msg);
+            if (node.func instanceof VariableNode variable) {
+                SymbolTable.Entry entry = symbolTable.get(variable.id.name);
+                msg = "declared here";
+                reporter.note(entry.id.wholeLoc, msg);
+            }
             node.expType = ErrorType.INSTANCE;
             // 检查参数
             node.args = node.args.stream().map(this::checkExpressionAndDecay).toList();
@@ -1347,10 +1385,14 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
         // 检查调用是否合法
         if (node.args.size() > funcType.parameterCount()) {
             // 参数过多
-            String msg = "too many arguments to function '" + reporter.white(variable.id.name) + "'";
+            String msg = "too many arguments to function '" + reporter.white(node.func.wholeLoc) +
+                         "' (" + funcType.parameterCount() + " expected)";
             reporter.error(node.func.wholeLoc, msg);
-            msg = "declared here";
-            reporter.note(entry.id.wholeLoc, msg);
+            if (node.func instanceof VariableNode variable) {
+                SymbolTable.Entry entry = symbolTable.get(variable.id.name);
+                msg = "declared here";
+                reporter.note(entry.id.wholeLoc, msg);
+            }
             node.expType = ErrorType.INSTANCE;
             // 检查参数
             node.args = node.args.stream().map(this::checkExpressionAndDecay).toList();
@@ -1358,10 +1400,14 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
         }
         if (node.args.size() < funcType.parameterCount()) {
             // 参数不足
-            String msg = "too few arguments to function '" + reporter.white(variable.id.name) + "'";
+            String msg = "too few arguments to function '" + reporter.white(node.func.wholeLoc) +
+                         "' (" + funcType.parameterCount() + " expected)";
             reporter.error(node.func.wholeLoc, msg);
-            msg = "declared here";
-            reporter.note(entry.id.wholeLoc, msg);
+            if (node.func instanceof VariableNode variable) {
+                SymbolTable.Entry entry = symbolTable.get(variable.id.name);
+                msg = "declared here";
+                reporter.note(entry.id.wholeLoc, msg);
+            }
             node.expType = ErrorType.INSTANCE;
             // 检查参数
             node.args = node.args.stream().map(this::checkExpressionAndDecay).toList();
@@ -1396,19 +1442,24 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
                 // 参数类型不兼容
                 noError = false;
                 String msg =
-                    "incompatible type for argument " + (i + 1) + " of '" + reporter.white(variable.id.name) + "'";
+                    "incompatible type for argument " + (i + 1) + " of '" + reporter.white(node.func.wholeLoc) + "'";
                 reporter.error(arg.wholeLoc, msg);
 
                 msg = "expected '" + reporter.white(paramType.typename()) +
                       "' but argument is of type '" + reporter.white(arg.expType.typename()) + "'";
 
                 // 仅信息打印
-                TypeNode paramTypeNode = ((FunctionTypeNode) entry.typeNode).paramTypes.get(i);
-                IdentifierNode idNode = ((FunctionTypeNode) entry.typeNode).params.get(i);
-                // 匿名参数中参数名可能为 null，特殊处理
-                SourceLocation loc = idNode == null ? paramTypeNode.getWholeLocation() :
-                    SourceLocation.concat(paramTypeNode.getWholeLocation(), idNode.getWholeLocation());
-                reporter.note(loc, msg);
+                if (node.func instanceof VariableNode variable) {
+                    SymbolTable.Entry entry = symbolTable.get(variable.id.name);
+                    TypeNode paramTypeNode = ((FunctionTypeNode) entry.typeNode).paramTypes.get(i);
+                    IdentifierNode idNode = ((FunctionTypeNode) entry.typeNode).params.get(i);
+                    // 匿名参数中参数名可能为 null，特殊处理
+                    SourceLocation loc = idNode == null ? paramTypeNode.getWholeLocation() :
+                        SourceLocation.concat(paramTypeNode.getWholeLocation(), idNode.getWholeLocation());
+                    reporter.note(loc, msg);
+                } else {
+                    reporter.note(msg);
+                }
             } else {
                 node.args.set(i, convertTo(arg, paramType));
             }
@@ -1500,8 +1551,8 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
             node.expType = ErrorType.INSTANCE;
             return null;
         }
-        if (!isLvalueExpression(node.exp)) {
-            String msg = "lvalue required as address-of operand; has type '" +
+        if (!node.exp.expType.isFunction() && !isLvalueExpression(node.exp)) {
+            String msg = "lvalue or function designator required as address-of operand; has type '" +
                          reporter.white(node.exp.expType.typename()) + "'";
             reporter.error(node.operatorLoc, msg);
             node.expType = ErrorType.INSTANCE;
@@ -1564,6 +1615,13 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
         Type referencedType = ptr.referencedType();
         if (!referencedType.isComplete()) {
             String msg = "invalid use of pointer to an incomplete type '" + reporter.white(referencedType.typename()) +
+                         "'";
+            reporter.error(node.operatorLoc, msg);
+            node.expType = ErrorType.INSTANCE;
+            return null;
+        }
+        if (referencedType.isFunction()) {
+            String msg = "invalid use of pointer to function type '" + reporter.white(referencedType.typename()) +
                          "'";
             reporter.error(node.operatorLoc, msg);
             node.expType = ErrorType.INSTANCE;

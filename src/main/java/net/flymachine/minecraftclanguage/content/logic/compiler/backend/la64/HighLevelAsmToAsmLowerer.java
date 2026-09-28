@@ -794,6 +794,16 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
         return null;
     }
 
+    @Override
+    public Void visit(CallIndirect inst) {
+        HighLevelOperand funcPtr = inst.funcPtr;
+        testUnaryHighLevelOperand(funcPtr, null);
+
+        GeneralPurposeRegister ptrReg = (GeneralPurposeRegister) loadOperand(AsmType.DWORD, funcPtr, T0, T0);
+        emitInst("jirl", RA, ptrReg, LA64AsmImmOperand.ZERO);
+        return null;
+    }
+
     private static void testUnaryHighLevelOperand(HighLevelOperand src, HighLevelOperand dst) {
         if (dst instanceof Immediate) {
             throw new UnsupportedOperationException("Cannot store result in an immediate");

@@ -25,7 +25,7 @@ public abstract class ExpressionNode extends AstNode {
     protected void dumpExpType(PrintStream stream, int indentLevel) {
         if (expType != null) {
             indent(stream, indentLevel);
-            stream.append("expType=").append(expType.toString()).append(',');
+            stream.append("expType=").append(expType.typename()).append(',');
             stream.println();
         }
     }

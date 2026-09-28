@@ -430,19 +430,17 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
         return null;
     }
 
-    @Override
-    public Void visit(TacFunctionCall inst) {
-        // 参数传递
+    private void passArguments(List<TacValue> args) {
+        // 参数传递逻辑
         // 不需要分配或回收栈空间，由函数序言和尾声进行处理，函数序言中会分配好足够使用的栈空间
-
-        List<AsmType> asmTypes = inst.args.stream()
-                                          .map(arg -> getType(arg).toAsmType())
-                                          .toList();
+        List<AsmType> asmTypes = args.stream()
+                                     .map(arg -> getType(arg).toAsmType())
+                                     .toList();
         ArgumentPassingInfo argPassingInfo = getArgumentPassingInfo(asmTypes);
 
         int gprIndex = 0;
         for (int argIndex : argPassingInfo.gprArgs) {
-            HighLevelOperand arg = lowerValue(inst.args.get(argIndex));
+            HighLevelOperand arg = lowerValue(args.get(argIndex));
             AsmType asmType = asmTypes.get(argIndex);
             target.add(new Move(asmType, arg, GPR_ARGS[gprIndex]));
             gprIndex++;
@@ -450,32 +448,37 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
 
         int fprIndex = 0;
         for (int argIndex : argPassingInfo.fprArgs) {
-            HighLevelOperand arg = lowerValue(inst.args.get(argIndex));
+            HighLevelOperand arg = lowerValue(args.get(argIndex));
             target.add(new Move(AsmType.DOUBLE, arg, FPR_ARGS[fprIndex]));
             fprIndex++;
         }
 
         int stackOffset = 0;
         for (int argIndex : argPassingInfo.stackArgs) {
-            HighLevelOperand arg = lowerValue(inst.args.get(argIndex));
+            HighLevelOperand arg = lowerValue(args.get(argIndex));
             AsmType asmType = asmTypes.get(argIndex);
             target.add(new Move(asmType, arg, new Memory(SP, stackOffset)));
             stackOffset += 8;
         }
 
         maxCallStackArgSize = Math.max(maxCallStackArgSize, stackOffset);
+    }
 
-        // 调用函数
-        target.add(new Call(inst.funcName));
-
-        // 获取返回值
-        HighLevelOperand dst = lowerValue(inst.dst);
-        AsmType asmType = getType(inst.dst).toAsmType();
+    private void getReturnValue(TacValue dst) {
+        HighLevelOperand dstOp = lowerValue(dst);
+        AsmType asmType = getType(dst).toAsmType();
         if (asmType == AsmType.DOUBLE) {
-            target.add(new Move(AsmType.DOUBLE, FA0, dst));
+            target.add(new Move(AsmType.DOUBLE, FA0, dstOp));
         } else {
-            target.add(new Move(asmType, A0, dst));
+            target.add(new Move(asmType, A0, dstOp));
         }
+    }
+
+    @Override
+    public Void visit(TacDirectCall inst) {
+        passArguments(inst.args);
+        target.add(new Call(inst.funcDesignator));
+        getReturnValue(inst.dst);
         return null;
     }
 
@@ -710,6 +713,14 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
     public Void visit(TacCopyToOffset inst) {
         AsmType asmType = getType(inst.src).toAsmType();
         target.add(new Move(asmType, lowerValue(inst.src), new PseudoMemory(inst.dst, inst.offset)));
+        return null;
+    }
+
+    @Override
+    public Void visit(TacIndirectCall inst) {
+        passArguments(inst.args);
+        target.add(new CallIndirect(lowerValue(inst.funcPtr)));
+        getReturnValue(inst.dst);
         return null;
     }
 

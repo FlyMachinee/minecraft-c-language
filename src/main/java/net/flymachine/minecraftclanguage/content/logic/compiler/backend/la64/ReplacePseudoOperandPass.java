@@ -223,6 +223,12 @@ public final class ReplacePseudoOperandPass implements HighLevelVisitor<Void> {
         return null;
     }
 
+    @Override
+    public Void visit(CallIndirect inst) {
+        inst.funcPtr = replacePseudo(inst.funcPtr);
+        return null;
+    }
+
     private HighLevelOperand replacePseudo(HighLevelOperand operand) {
         if (operand instanceof Pseudo pseudo) {
             String id = pseudo.name();
@@ -230,8 +236,11 @@ public final class ReplacePseudoOperandPass implements HighLevelVisitor<Void> {
                 return new Memory(GeneralPurposeRegister.FP, nameToOffset.get(id));
             } else {
                 BackendSymbolTable.Entry entry = backendSymbolTable.get(id);
-                if (entry == null || entry instanceof BackendSymbolTable.FuncEntry) {
+                if (entry == null) {
                     throw new IllegalStateException("Undefined symbol: " + id);
+                }
+                if (entry instanceof BackendSymbolTable.FuncEntry) {
+                    return new Data(id);
                 }
                 BackendSymbolTable.ObjectEntry objectEntry = (BackendSymbolTable.ObjectEntry) entry;
                 if (objectEntry.isStatic()) {

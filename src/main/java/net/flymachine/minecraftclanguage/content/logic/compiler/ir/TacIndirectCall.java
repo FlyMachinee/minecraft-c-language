@@ -3,13 +3,13 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.ir;
 import java.io.PrintStream;
 import java.util.List;
 
-public class TacFunctionCall implements TacInstruction {
-    public String funcName;
+public class TacIndirectCall implements TacInstruction {
+    public TacValue funcPtr;
     public List<TacValue> args;
     public TacValue dst;
 
-    public TacFunctionCall(String funcName, List<TacValue> args, TacValue dst) {
-        this.funcName = funcName;
+    public TacIndirectCall(TacValue funcPtr, List<TacValue> args, TacValue dst) {
+        this.funcPtr = funcPtr;
         this.args = args;
         this.dst = dst;
     }
@@ -24,7 +24,9 @@ public class TacFunctionCall implements TacInstruction {
         if (indentFirstLine) {
             stream.print("  ".repeat(indentLevel));
         }
-        stream.append("FunctionCall(name=").append(this.funcName).append(", args=[");
+        stream.append("IndirectCall(pointer=");
+        funcPtr.dump(stream);
+        stream.append(", args=[");
         for (int i = 0; i < this.args.size(); i++) {
             if (i > 0) {
                 stream.print(", ");

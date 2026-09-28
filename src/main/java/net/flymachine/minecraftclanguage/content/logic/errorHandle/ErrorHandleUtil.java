@@ -16,6 +16,11 @@ public final class ErrorHandleUtil {
         logNoteWithSourceLine(logger, file, location.line(), location.column(), location.length(), message);
     }
 
+    public static void logNote(
+        Logger logger, SourceFile file, SourceLocation location, String message) {
+        logNote(logger, file, location.line(), location.column(), location.length(), message);
+    }
+
     public static void logWarningWithSourceLine(
         Logger logger, SourceFile file, SourceLocation location, String message) {
         logWarningWithSourceLine(logger, file, location.line(), location.column(), location.length(), message);
@@ -34,11 +39,17 @@ public final class ErrorHandleUtil {
     public static void logNoteWithSourceLine(
         Logger logger, SourceFile file, int line, int column, int len, String message) {
 
+        logNote(logger, file, line, column, 0, message);
+        logSourceLineWithColor(logger, file, line, column, len, Logger.Color.CYAN);
+    }
+
+    public static void logNote(
+        Logger logger, SourceFile file, int line, int column, int len, String message) {
+
         String location = file.getFileName() + ":" + line + ":" + (column + 1) + ": ";
         logger.logLine(
             logger.formatWithColor(location, Logger.Color.WHITE) +
             logger.formatWithColor("note: ", Logger.Color.CYAN) + message);
-        logSourceLineWithColor(logger, file, line, column, len, Logger.Color.CYAN);
     }
 
     public static void logWarningWithSourceLine(

@@ -268,9 +268,6 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         //   : Star typeQualifier* pointer?
         //   ;
         TerminalNode star = ctx.Star();
-        if (baseType instanceof FunctionTypeNode) {
-            reporter.error(getSourceLocation(star), "function pointers are not supported");
-        }
         if (baseType.getType().isVoid()) {
             reporter.error(getSourceLocation(star), "pointers to void are not supported");
         }

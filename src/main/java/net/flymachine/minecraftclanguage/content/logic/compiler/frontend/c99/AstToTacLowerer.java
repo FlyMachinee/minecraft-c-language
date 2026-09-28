@@ -437,6 +437,9 @@ public final class AstToTacLowerer implements
     // 不可能是左值
     record PointerValue(TacAddressDescriptor addr) implements ExpEvalResult { }
 
+    // 不可能是左值
+    record PlainFunctionPointer(String name) implements ExpEvalResult { }
+
     private ExpEvalResult eval(ExpressionNode exp) {
         return exp.accept(this);
     }
@@ -460,6 +463,11 @@ public final class AstToTacLowerer implements
         }
         if (res instanceof PointerValue ptrVal) {
             return evalAddressDescriptor(ptrVal.addr(), expType);
+        }
+        if (res instanceof PlainFunctionPointer funcPtr) {
+            TacVariable funcPtrVal = makeTempVar(expType);
+            emitTacGetAddress(new TacVariable(funcPtr.name), funcPtrVal);
+            return funcPtrVal;
         }
         throw new IllegalStateException("control should never reach here");
     }
@@ -922,13 +930,19 @@ public final class AstToTacLowerer implements
         // dst = invoke(func, [res0, res1,...])
         // yield dst
 
-        VariableNode funcId = (VariableNode) funcCall.func;
         List<TacValue> args = new ArrayList<>();
         for (ExpressionNode arg : funcCall.args) {
             args.add(evalAndLvalueConvert(arg));
         }
         TacVariable dst = makeTempVar(funcCall.expType);
-        emitTac(new TacFunctionCall(funcId.id.name, args, dst));
+
+        ExpEvalResult func = eval(funcCall.func);
+        if (func instanceof PlainFunctionPointer funcPtr) {
+            emitTac(new TacDirectCall(funcPtr.name, args, dst));
+        } else {
+            TacValue funcVal = toPlainValue(func, funcCall.func.expType);
+            emitTac(new TacIndirectCall(funcVal, args, dst));
+        }
         return new PlainOperand(dst);
     }
 
@@ -987,8 +1001,13 @@ public final class AstToTacLowerer implements
     public ExpEvalResult visit(AddressOfNode addrOf) {
         ExpEvalResult exp = eval(addrOf.exp);
         if (exp instanceof PlainOperand expObj) {
+            if (addrOf.exp.expType.isFunction()) {
+                // &func
+                TacVariable funcId = (TacVariable) expObj.object();
+                return new PlainFunctionPointer(funcId.name);
+            }
             TacVariable ptr = makeTempVar(addrOf.expType);
-            emitTac(new TacGetAddress(expObj.object(), ptr));
+            emitTacGetAddress(expObj.object(), ptr);
             return new PlainOperand(ptr);
         }
         if (exp instanceof DereferencedPointer expPtr) {
@@ -1000,7 +1019,11 @@ public final class AstToTacLowerer implements
 
     @Override
     public ExpEvalResult visit(DereferenceNode deref) {
-        return new DereferencedPointer(evalAsAddressDescriptor(deref.exp));
+        ExpEvalResult ptr = eval(deref.exp);
+        if (ptr instanceof PlainFunctionPointer funcPtr) {
+            return new PlainOperand(new TacVariable(funcPtr.name));
+        }
+        return new DereferencedPointer(toAddressDescriptor(ptr, deref.exp.expType));
     }
 
     @Override
@@ -1295,6 +1318,10 @@ public final class AstToTacLowerer implements
 
     private void emitTacReturn(TacValue value) {
         emitTac(new TacReturn(value));
+    }
+
+    private void emitTacGetAddress(TacValue obj, TacValue dst) {
+        emitTac(new TacGetAddress(obj, dst));
     }
 
     private void emitTacAddPtr(TacValue base, TacValue index, long scale, TacValue dst) {

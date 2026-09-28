@@ -19,7 +19,7 @@ public interface TacVisitor<T> {
 
     T visit(TacJumpIfComparison inst);
 
-    T visit(TacFunctionCall inst);
+    T visit(TacDirectCall inst);
 
     T visit(TacSignExtend inst);
 
@@ -44,4 +44,6 @@ public interface TacVisitor<T> {
     T visit(TacAddPointer inst);
 
     T visit(TacCopyToOffset inst);
+
+    T visit(TacIndirectCall inst);
 }
