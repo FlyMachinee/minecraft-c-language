@@ -740,33 +740,37 @@ public final class AstToTacLowerer implements
         // 赋值表达式
         TacValue rhs = evalAndLvalueConvert(assignment.rhs);
         ExpEvalResult dst = eval(assignment.lhs);
-
+        AssignmentOperator op = assignment.op.op;
         TacValue res;
 
-        if (assignment.op.op == AssignmentOperator.ASSIGN) {
+        if (op == AssignmentOperator.ASSIGN) {
             // 普通赋值
             res = rhs;
         } else if (assignment.lhs.expType instanceof PointerType pointerType) {
             // 复合赋值 指针运算
-            if (assignment.op.op == AssignmentOperator.ADD_ASSIGN ||
-                assignment.op.op == AssignmentOperator.SUBTRACT_ASSIGN) {
+            if (op == AssignmentOperator.ADD_ASSIGN || op == AssignmentOperator.SUBTRACT_ASSIGN) {
                 // ptr += index 或 ptr -= index
                 // 地址描述符不可能为左值，无需考虑
                 TacValue ptr = toPlainValue(dst, assignment.lhs.expType);
                 long scale = pointerType.referencedType().sizeof();
-                TacVariable tmp = makeTempVar(assignment.lhs.expType);
-                if (assignment.op.op == AssignmentOperator.SUBTRACT_ASSIGN) {
+
+                // 进行可能的 cast
+                rhs = cast(rhs, BasicType.LONG, assignment.rhs.expType);
+
+                if (op == AssignmentOperator.SUBTRACT_ASSIGN) {
                     // ptr -= index => ptr += -index
                     if (rhs instanceof TacConstant rhsConst) {
                         // 常量，直接取负
                         rhs = new TacConstant(rhsConst.value.apply(UnaryOperator.NEGATE));
                     } else {
                         // 非常量，生成取负指令
-                        TacVariable negIndex = makeTempVar(assignment.rhs.expType);
+                        TacVariable negIndex = makeTempVar(BasicType.LONG);
                         emitTacNeg(rhs, negIndex);
                         rhs = negIndex;
                     }
                 }
+
+                TacVariable tmp = makeTempVar(assignment.lhs.expType);
                 emitTacAddPtr(ptr, rhs, scale, tmp);
                 res = tmp;
             } else {
