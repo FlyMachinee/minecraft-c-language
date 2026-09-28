@@ -136,6 +136,8 @@ public abstract class Type {
 
     public abstract long sizeof();
 
+    public abstract long alignof();
+
     public abstract AsmType toAsmType();
 
     public static BasicType commonRealType(BasicType t1, BasicType t2) {

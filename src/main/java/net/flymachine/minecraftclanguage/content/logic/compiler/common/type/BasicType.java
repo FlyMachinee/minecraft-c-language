@@ -98,6 +98,11 @@ public final class BasicType extends Type {
     }
 
     @Override
+    public long alignof() {
+        return sizeof();
+    }
+
+    @Override
     public AsmType toAsmType() {
         return switch (this.primitive) {
             case INT, UNSIGNED_INT -> AsmType.WORD;

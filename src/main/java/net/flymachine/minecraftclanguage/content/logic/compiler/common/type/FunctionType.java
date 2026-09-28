@@ -110,7 +110,12 @@ public final class FunctionType extends Type {
 
     @Override
     public long sizeof() {
-        return -1;
+        throw new UnsupportedOperationException("sizeof(function) is not defined");
+    }
+
+    @Override
+    public long alignof() {
+        throw new UnsupportedOperationException("alignof(function) is not defined");
     }
 
     @Override

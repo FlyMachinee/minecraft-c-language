@@ -51,6 +51,11 @@ public final class ErrorType extends Type {
     }
 
     @Override
+    public long alignof() {
+        throw new UnsupportedOperationException("alignof(error) is not defined");
+    }
+
+    @Override
     public AsmType toAsmType() {
         throw new UnsupportedOperationException("toAsmType(error) is not defined");
     }

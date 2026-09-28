@@ -71,6 +71,11 @@ public final class PointerType extends Type {
     }
 
     @Override
+    public long alignof() {
+        return 8;
+    }
+
+    @Override
     public AsmType toAsmType() {
         return AsmType.DWORD;
     }

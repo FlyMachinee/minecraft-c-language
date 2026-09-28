@@ -87,7 +87,12 @@ public final class ArrayType extends Type {
     }
 
     @Override
+    public long alignof() {
+        return elementType.alignof();
+    }
+
+    @Override
     public AsmType toAsmType() {
-        return new AsmType.ByteArray(sizeof(), elementType.sizeof());
+        return new AsmType.ByteArray(sizeof(), alignof());
     }
 }

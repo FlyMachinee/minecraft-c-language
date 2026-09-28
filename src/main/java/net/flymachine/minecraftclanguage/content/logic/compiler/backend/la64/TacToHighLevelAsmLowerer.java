@@ -50,7 +50,7 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
                 topLevels.add(lowerFunction(func));
             } else if (topLevel instanceof TacStaticVariable staticVar) {
                 topLevels.add(
-                    new HighLevelStaticVar(staticVar.name, staticVar.global, staticVar.type.sizeof(), staticVar.init));
+                    new HighLevelStaticVar(staticVar.name, staticVar.global, staticVar.type.alignof(), staticVar.init));
             }
         }
         // 建立后端符号表

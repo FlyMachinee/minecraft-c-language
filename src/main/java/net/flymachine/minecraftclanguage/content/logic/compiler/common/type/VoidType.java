@@ -52,7 +52,12 @@ public final class VoidType extends Type {
 
     @Override
     public long sizeof() {
-        throw new UnsupportedOperationException("void size is unknown");
+        throw new UnsupportedOperationException("sizeof(void) is not defined");
+    }
+
+    @Override
+    public long alignof() {
+        throw new UnsupportedOperationException("alignof(void) is not defined");
     }
 
     @Override
