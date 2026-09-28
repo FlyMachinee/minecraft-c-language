@@ -14,8 +14,8 @@ public final class LA64Backend {
         TacToHighLevelAsmLowerer tacToHLAsm = new TacToHighLevelAsmLowerer(frontendResult.symbolTable());
         HighLevelProgram highLevelProgram = tacToHLAsm.lower(frontendResult.tacProgram());
         BackendSymbolTable backendSymbolTable = tacToHLAsm.getBackendSymbolTable();
-        ReplacePseudoRegisterPass replacePseudoRegisterPass =
-            new ReplacePseudoRegisterPass(backendSymbolTable);
+        ReplacePseudoOperandPass replacePseudoRegisterPass =
+            new ReplacePseudoOperandPass(backendSymbolTable);
         replacePseudoRegisterPass.runOnProgram(highLevelProgram);
         return new HighLevelAsmToAsmLowerer(backendSymbolTable).lower(highLevelProgram);
     }

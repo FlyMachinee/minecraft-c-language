@@ -3,6 +3,7 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64;
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.isa.instruction.LA64FloatCompareCondition;
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.register.FloatingPointRegister;
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.register.GeneralPurposeRegister;
+import net.flymachine.minecraftclanguage.content.logic.architecture.la64.util.BitMath;
 import net.flymachine.minecraftclanguage.content.logic.assembler.la64.LA64Assembler;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.*;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.instruction.*;
@@ -48,8 +49,8 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
             if (topLevel instanceof TacFunction func) {
                 topLevels.add(lowerFunction(func));
             } else if (topLevel instanceof TacStaticVariable staticVar) {
-                // topLevels.add(
-                //     new HighLevelStaticVar(staticVar.name, staticVar.global, staticVar.type.sizeof(), staticVar.init));
+                topLevels.add(
+                    new HighLevelStaticVar(staticVar.name, staticVar.global, staticVar.type.sizeof(), staticVar.init));
             }
         }
         // 建立后端符号表
@@ -225,7 +226,6 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
 
     @Override
     public Void visit(TacBinaryOperation inst) {
-        // noinspection EmptyStatement
         if ((inst.op == BinaryOperator.DIVIDE || inst.op == BinaryOperator.MODULO) &&
             inst.rhs instanceof TacConstant rhsConst && rhsConst.value.getType().isInteger() &&
             rhsConst.value.isZero()) {
@@ -609,27 +609,107 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
 
     @Override
     public Void visit(TacLoad inst) {
-        // HighLevelOperand src = lowerValue(inst.srcAddr);
-        // HighLevelOperand dst = lowerValue(inst.dst);
-        // target.add(new Load(getType(inst.dst).toAsmType(), src, dst));
+        TacAddressDescriptor addr = inst.srcAddr.fold();
+        HighLevelOperand dst = lowerValue(inst.dst);
+        AsmType asmType = getType(inst.dst).toAsmType();
+
+        HighLevelOperand base = lowerValue(addr.base());
+
+        if (addr.index() == null) {
+            // 没有索引
+            if (base instanceof Immediate imm) {
+                // 常量地址
+                if (BitMath.isSi12(imm.value())) {
+                    target.add(new Load(asmType, ZERO, imm, dst));
+                } else {
+                    target.add(new Move(AsmType.DWORD, imm, T0));
+                    target.add(new Load(asmType, T0, new Immediate(0), dst));
+                }
+            } else {
+                target.add(new Load(asmType, base, new Immediate(addr.offset()), dst));
+            }
+        } else {
+            HighLevelOperand index = lowerValue(addr.index());
+            // 有索引
+            if (addr.scale() == 1 && addr.offset() == 0) {
+                target.add(new Load(asmType, base, index, dst));
+            } else {
+                addPointer(base, index, addr.scale(), T0);
+                target.add(new Load(asmType, T0, new Immediate(addr.offset()), dst));
+            }
+        }
         return null;
     }
 
     @Override
     public Void visit(TacStore inst) {
-        // HighLevelOperand src = lowerValue(inst.src);
-        // HighLevelOperand dst = lowerValue(inst.dstAddr);
-        // target.add(new Store(getType(inst.src).toAsmType(), src, dst));
+        TacAddressDescriptor addr = inst.dstAddr.fold();
+        HighLevelOperand src = lowerValue(inst.src);
+        AsmType asmType = getType(inst.src).toAsmType();
+
+        HighLevelOperand base = lowerValue(addr.base());
+
+        if (addr.index() == null) {
+            // 没有索引
+            if (base instanceof Immediate imm) {
+                // 常量地址
+                if (BitMath.isSi12(imm.value())) {
+                    target.add(new Store(asmType, src, ZERO, imm));
+                } else {
+                    target.add(new Move(AsmType.DWORD, imm, T0));
+                    target.add(new Store(asmType, src, T0, new Immediate(0)));
+                }
+            } else {
+                target.add(new Store(asmType, src, base, new Immediate(addr.offset())));
+            }
+        } else {
+            HighLevelOperand index = lowerValue(addr.index());
+            // 有索引
+            if (addr.scale() == 1 && addr.offset() == 0) {
+                target.add(new Store(asmType, src, base, index));
+            } else {
+                addPointer(base, index, addr.scale(), T0);
+                target.add(new Store(asmType, src, T0, new Immediate(addr.offset())));
+            }
+        }
         return null;
     }
 
     @Override
     public Void visit(TacAddPointer inst) {
+        addPointer(lowerValue(inst.ptr), lowerValue(inst.index), inst.scale, lowerValue(inst.dst));
         return null;
+    }
+
+    private void addPointer(HighLevelOperand ptr, HighLevelOperand index, long scale, HighLevelOperand dst) {
+        if (index instanceof Immediate immIndex) {
+            // index 为常量，直接计算偏移量
+            long scaledOffset = immIndex.value() * scale;
+            target.add(new Binary(BinaryOperator.ADD, AsmType.DWORD, ptr, new Immediate(scaledOffset), dst));
+        } else if (scale == 1) {
+            // scale 为 1，普通加法
+            target.add(new Binary(BinaryOperator.ADD, AsmType.DWORD, ptr, index, dst));
+        } else if (scale == 2 || scale == 4 || scale == 8 || scale == 16) {
+            // 特殊 scale，使用 alsl
+            int shiftAmount = switch ((int) scale) {
+                case 2 -> 1;
+                case 4 -> 2;
+                case 8 -> 3;
+                case 16 -> 4;
+                default -> throw new IllegalArgumentException("Unsupported scale: " + scale);
+            };
+            target.add(new AddLeftShift(ptr, index, shiftAmount, dst));
+        } else {
+            // 对于任意的 scale，使用乘法
+            target.add(new Binary(BinaryOperator.MULTIPLY, AsmType.DWORD, index, new Immediate(scale), T1));
+            target.add(new Binary(BinaryOperator.ADD, AsmType.DWORD, ptr, T1, dst));
+        }
     }
 
     @Override
     public Void visit(TacCopyToOffset inst) {
+        AsmType asmType = getType(inst.src).toAsmType();
+        target.add(new Move(asmType, lowerValue(inst.src), new PseudoMemory(inst.dst, inst.offset)));
         return null;
     }
 
@@ -654,7 +734,11 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
             }
             return immediate(constant);
         } else if (tacValue instanceof TacVariable tacVariable) {
-            return new Pseudo(tacVariable.name);
+            if (getType(tacVariable).isAggregate()) {
+                return new PseudoMemory(tacVariable.name, 0);
+            } else {
+                return new Pseudo(tacVariable.name);
+            }
         }
         throw new UnsupportedOperationException("Unsupported value type: " + tacValue.getClass().getSimpleName());
     }

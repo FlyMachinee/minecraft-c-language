@@ -7,11 +7,13 @@ public class Store implements HighLevelInstruction {
     public AsmType srcAsmType;
     public HighLevelOperand src;
     public HighLevelOperand ptr;
+    public HighLevelOperand offset;
 
-    public Store(AsmType srcAsmType, HighLevelOperand src, HighLevelOperand ptr) {
+    public Store(AsmType srcAsmType, HighLevelOperand src, HighLevelOperand ptr, HighLevelOperand offset) {
         this.srcAsmType = srcAsmType;
         this.src = src;
         this.ptr = ptr;
+        this.offset = offset;
     }
 
     @Override

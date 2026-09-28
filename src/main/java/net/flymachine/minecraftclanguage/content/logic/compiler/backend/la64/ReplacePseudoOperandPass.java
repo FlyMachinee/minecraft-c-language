@@ -1,21 +1,19 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64;
 
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.register.GeneralPurposeRegister;
+import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.AsmType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.HighLevelFunction;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.HighLevelProgram;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.HighLevelTopLevel;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.instruction.*;
-import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.Data;
-import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.HighLevelOperand;
-import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.Memory;
-import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.Pseudo;
+import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.*;
 
 import java.util.HashMap;
 import java.util.Map;
 
-public final class ReplacePseudoRegisterPass implements HighLevelVisitor<Void> {
+public final class ReplacePseudoOperandPass implements HighLevelVisitor<Void> {
 
-    public ReplacePseudoRegisterPass(BackendSymbolTable backendSymbolTable) {
+    public ReplacePseudoOperandPass(BackendSymbolTable backendSymbolTable) {
         this.backendSymbolTable = backendSymbolTable;
     }
 
@@ -23,11 +21,11 @@ public final class ReplacePseudoRegisterPass implements HighLevelVisitor<Void> {
 
     // 指向当前已使用的元素
     // 相对于 $fp 寻址
-    private int stackOffset;
+    private long stackOffset;
 
     // 记录每个伪寄存器对应栈上内存偏移量
     // TODO: 暂时将所有伪寄存器都放在栈上
-    private final Map<String, Integer> registers = new HashMap<>();
+    private final Map<String, Long> nameToOffset = new HashMap<>();
 
     public void runOnProgram(HighLevelProgram program) {
         for (HighLevelTopLevel topLevel : program.topLevels) {
@@ -217,11 +215,19 @@ public final class ReplacePseudoRegisterPass implements HighLevelVisitor<Void> {
         return null;
     }
 
+    @Override
+    public Void visit(AddLeftShift inst) {
+        inst.base = replacePseudo(inst.base);
+        inst.index = replacePseudo(inst.index);
+        inst.dst = replacePseudo(inst.dst);
+        return null;
+    }
+
     private HighLevelOperand replacePseudo(HighLevelOperand operand) {
         if (operand instanceof Pseudo pseudo) {
             String id = pseudo.name();
-            if (registers.containsKey(id)) {
-                return new Memory(GeneralPurposeRegister.FP, registers.get(id));
+            if (nameToOffset.containsKey(id)) {
+                return new Memory(GeneralPurposeRegister.FP, nameToOffset.get(id));
             } else {
                 BackendSymbolTable.Entry entry = backendSymbolTable.get(id);
                 if (entry == null || entry instanceof BackendSymbolTable.FuncEntry) {
@@ -231,16 +237,40 @@ public final class ReplacePseudoRegisterPass implements HighLevelVisitor<Void> {
                 if (objectEntry.isStatic()) {
                     return new Data(id);
                 } else {
-                    int alignment = ((BackendSymbolTable.ObjectEntry) entry).asmType().alignment();
-                    stackOffset -= alignment;
-                    // 向负无穷对齐至 alignment
-                    stackOffset = Math.floorDiv(stackOffset, alignment) * alignment;
-                    registers.put(id, stackOffset);
+                    allocateStack(id, objectEntry.asmType());
                     return new Memory(GeneralPurposeRegister.FP, stackOffset);
+                }
+            }
+        } else if (operand instanceof PseudoMemory pseudoMemory) {
+            String id = pseudoMemory.name();
+            long offset = pseudoMemory.offset();
+            if (nameToOffset.containsKey(id)) {
+                return new Memory(GeneralPurposeRegister.FP, nameToOffset.get(id) + offset);
+            } else {
+                BackendSymbolTable.Entry entry = backendSymbolTable.get(id);
+                if (entry == null || entry instanceof BackendSymbolTable.FuncEntry) {
+                    throw new IllegalStateException("Undefined symbol: " + id);
+                }
+                BackendSymbolTable.ObjectEntry objectEntry = (BackendSymbolTable.ObjectEntry) entry;
+                if (objectEntry.isStatic()) {
+                    assert offset == 0 : "Static object should not have offset: " + id;
+                    return new Data(id);
+                } else {
+                    allocateStack(id, objectEntry.asmType());
+                    return new Memory(GeneralPurposeRegister.FP, stackOffset + offset);
                 }
             }
         }
         return operand;
+    }
+
+    private void allocateStack(String id, AsmType asmType) {
+        long size = asmType.size();
+        long alignment = asmType.alignment();
+        stackOffset -= size;
+        // 向负无穷对齐至 alignment
+        stackOffset = Math.floorDiv(stackOffset, alignment) * alignment;
+        nameToOffset.put(id, stackOffset);
     }
 
 }

@@ -6,11 +6,13 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.hig
 public class Load implements HighLevelInstruction {
     public AsmType dstAsmType;
     public HighLevelOperand ptr;
+    public HighLevelOperand offset;
     public HighLevelOperand dst;
 
-    public Load(AsmType dstAsmType, HighLevelOperand ptr, HighLevelOperand dst) {
+    public Load(AsmType dstAsmType, HighLevelOperand ptr, HighLevelOperand offset, HighLevelOperand dst) {
         this.dstAsmType = dstAsmType;
         this.ptr = ptr;
+        this.offset = offset;
         this.dst = dst;
     }
 

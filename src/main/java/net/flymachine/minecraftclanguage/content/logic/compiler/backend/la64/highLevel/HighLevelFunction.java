@@ -43,14 +43,14 @@ public class HighLevelFunction implements HighLevelTopLevel {
     /**
      * 栈帧中用于存放临时变量、局部变量、形参所使用的栈帧大小
      */
-    public int variableSize = 0;
+    public long variableSize = 0;
 
     /**
      * 该函数的所有函数调用中，参数所占用的栈空间的最大大小值
      * <p>
      * 参数顺序 a0 -> a1 -> ... -> a7 -> [0(sp) -> 8(sp) -> ...]
      */
-    public int maxCallStackArgSize = 0;
+    public long maxCallStackArgSize = 0;
 
     public HighLevelFunction(String name, boolean global, List<HighLevelInstruction> insts) {
         this.name = name;
@@ -58,8 +58,8 @@ public class HighLevelFunction implements HighLevelTopLevel {
         this.insts = insts;
     }
 
-    public int getStackFrameSize() {
-        int size = savedRegisters * 8 + variableSize + maxCallStackArgSize;
+    public long getStackFrameSize() {
+        long size = savedRegisters * 8 + variableSize + maxCallStackArgSize;
         return (size + STACK_ALIGNMENT - 1) & -STACK_ALIGNMENT;
     }
 }

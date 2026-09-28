@@ -88,6 +88,6 @@ public final class ArrayType extends Type {
 
     @Override
     public AsmType toAsmType() {
-        return null;
+        return new AsmType.ByteArray(sizeof(), elementType.sizeof());
     }
 }

@@ -15,7 +15,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.hig
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.instruction.*;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.*;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.Comparison;
-import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.DoubleInit;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.*;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -81,34 +81,33 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
     }
 
     private void lowerStaticVariable(HighLevelStaticVar staticVar) {
-        // if (staticVar.global) {
-        //     emitDir("global", new LA64DirectiveSymArg(staticVar.name));
-        // }
-        // BackendSymbolTable.ObjectEntry entry =
-        //     (BackendSymbolTable.ObjectEntry) backendSymbolTable.get(staticVar.name);
-        // AsmType asmType = entry.asmType();
-        // long initValue =
-        //     asmType == AsmType.DOUBLE ?
-        //         Double.doubleToLongBits(staticVar.init.toConstantDouble().value()) :
-        //         staticVar.init.toConstantLong().value();
-        // if (asmType != AsmType.DOUBLE && initValue == 0) {
-        //     // 初始化为0，放在bss段
-        //     emitDir("bss");
-        // } else {
-        //     // 初始化非0，放在data段
-        //     emitDir("data");
-        // }
-        // emitDir("balign", new LA64DirectiveNumArg(staticVar.alignment));
-        // emitLabel(staticVar.name);
-        // if (initValue != 0) {
-        //     if (asmType == AsmType.WORD) {
-        //         emitDir("word", new LA64DirectiveNumArg((int) initValue));
-        //     } else {
-        //         emitDir("dword", new LA64DirectiveNumArg(initValue));
-        //     }
-        // } else {
-        //     emitDir("zero", new LA64DirectiveNumArg(staticVar.alignment));
-        // }
+        if (staticVar.global) {
+            emitDir("global", new LA64DirectiveSymArg(staticVar.name));
+        }
+        if (staticVar.init.stream().allMatch(init -> init instanceof ZeroInit)) {
+            // 初始化为0，放在bss段
+            emitDir("bss");
+        } else {
+            // 初始化非0，放在data段
+            emitDir("data");
+        }
+        emitDir("balign", new LA64DirectiveNumArg(staticVar.alignment));
+        emitLabel(staticVar.name);
+        for (StaticInit init : staticVar.init) {
+            if (init instanceof IntInit intInit) {
+                emitDir("word", new LA64DirectiveNumArg(intInit.value()));
+            } else if (init instanceof LongInit longInit) {
+                emitDir("dword", new LA64DirectiveNumArg(longInit.value()));
+            } else if (init instanceof UnsignedIntInit unsignedIntInit) {
+                emitDir("word", new LA64DirectiveNumArg(unsignedIntInit.value()));
+            } else if (init instanceof UnsignedLongInit unsignedLongInit) {
+                emitDir("dword", new LA64DirectiveNumArg(unsignedLongInit.value()));
+            } else if (init instanceof DoubleInit doubleInit) {
+                emitDir("dword", new LA64DirectiveNumArg(Double.doubleToLongBits(doubleInit.value())));
+            } else if (init instanceof ZeroInit zeroInit) {
+                emitDir("zero", new LA64DirectiveNumArg(zeroInit.bytes()));
+            }
+        }
     }
 
     private void lowerStaticConst(HighLevelStaticConst staticConst) {
@@ -139,23 +138,23 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
     }
 
     private void generatePrologue(HighLevelFunction function) {
-        int size = function.getStackFrameSize();
+        long size = function.getStackFrameSize();
         // 申请栈空间
-        emitInst("addi.d", SP, SP, new LA64AsmImmOperand(-size));
+        lowerBinary(Binary.Operator.ADD, AsmType.DWORD, SP, new Immediate(-size), SP);
         // 保存 ra 与 fp
-        emitInst("st.d", RA, SP, new LA64AsmImmOperand(size - 8));
-        emitInst("st.d", FP, SP, new LA64AsmImmOperand(size - 16));
+        lowerStore(AsmType.DWORD, RA, SP, new Immediate(size - 8));
+        lowerStore(AsmType.DWORD, FP, SP, new Immediate(size - 16));
         // 设置新的 fp
-        emitInst("addi.d", FP, SP, new LA64AsmImmOperand(size));
+        lowerBinary(Binary.Operator.ADD, AsmType.DWORD, SP, new Immediate(size), FP);
     }
 
     private void generateEpilogue(HighLevelFunction function) {
-        int size = function.getStackFrameSize();
+        long size = function.getStackFrameSize();
         // 恢复 ra 与 fp
-        emitInst("ld.d", RA, SP, new LA64AsmImmOperand(size - 8));
-        emitInst("ld.d", FP, SP, new LA64AsmImmOperand(size - 16));
+        lowerLoad(AsmType.DWORD, SP, new Immediate(size - 8), RA);
+        lowerLoad(AsmType.DWORD, SP, new Immediate(size - 16), FP);
         // 释放栈空间
-        emitInst("addi.d", SP, SP, new LA64AsmImmOperand(size));
+        lowerBinary(Binary.Operator.ADD, AsmType.DWORD, SP, new Immediate(size), SP);
         // 返回
         emitInst("ret");
     }
@@ -185,7 +184,7 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
                 lowerRegMove(asmType, srcReg, dstReg);
             } else if (src instanceof Memory srcMem) {
                 // 内存 -> 寄存器
-                loadMem(asmType, dstReg, srcMem);
+                lowerLoad(asmType, srcMem.gpr(), new Immediate(srcMem.offset()), (HighLevelOperand) dstReg);
             } else if (src instanceof Data srcData) {
                 // 全局符号 -> 寄存器
                 loadData(asmType, dstReg, srcData, T0);
@@ -196,7 +195,7 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
             // 寄存器 ->
             if (dst instanceof Memory dstMem) {
                 // 寄存器 -> 内存
-                storeMem(asmType, srcReg, dstMem);
+                lowerStore(asmType, (HighLevelOperand) srcReg, dstMem.gpr(), new Immediate(dstMem.offset()));
             } else if (dst instanceof Data dstData) {
                 // 寄存器 -> 全局符号
                 storeData(asmType, srcReg, dstData, T0);
@@ -210,7 +209,7 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
         if (src instanceof Immediate srcImm) {
             loadImm(asmType, tmp, srcImm, T0);
         } else if (src instanceof Memory srcMem) {
-            loadMem(asmType, tmp, srcMem);
+            lowerLoad(asmType, srcMem.gpr(), new Immediate(srcMem.offset()), (HighLevelOperand) tmp);
         } else if (src instanceof Data srcData) {
             loadData(asmType, tmp, srcData, T0);
         } else {
@@ -218,7 +217,7 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
         }
 
         if (dst instanceof Memory dstMem) {
-            storeMem(asmType, tmp, dstMem);
+            lowerStore(asmType, (HighLevelOperand) tmp, dstMem.gpr(), new Immediate(dstMem.offset()));
         } else if (dst instanceof Data dstData) {
             storeData(asmType, tmp, dstData, T1);
         } else {
@@ -268,11 +267,13 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
 
     @Override
     public Void visit(Binary binary) {
-        Binary.Operator op = binary.op;
-        AsmType asmType = binary.asmType;
-        HighLevelOperand lhs = binary.lhs;
-        HighLevelOperand rhs = binary.rhs;
-        HighLevelOperand dst = binary.dst;
+        lowerBinary(binary.op, binary.asmType, binary.lhs, binary.rhs, binary.dst);
+        return null;
+    }
+
+    private void lowerBinary(
+        Binary.Operator op, AsmType asmType, HighLevelOperand lhs, HighLevelOperand rhs, HighLevelOperand dst) {
+
         testBinaryHighLevelOperand(lhs, rhs, dst);
 
         // 浮点处理
@@ -283,7 +284,7 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
             FloatingPointRegister dstReg = (FloatingPointRegister) calcDestination(dst, FT0);
             emitInst(mnemonic, dstReg, lhsReg, rhsReg);
             storeToDest(AsmType.DOUBLE, dstReg, dst, T0);
-            return null;
+            return;
         }
 
         // 特殊情况检查
@@ -293,17 +294,17 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
             if (lhs instanceof Immediate imm && BitMath.isSi12(imm.value())) {
                 // 立即数在左操作数
                 visit(new AddSi12(asmType, rhs, (int) imm.value(), dst));
-                return null;
+                return;
             } else if (rhs instanceof Immediate imm && BitMath.isSi12(imm.value())) {
                 // 立即数在右操作数
                 visit(new AddSi12(asmType, lhs, (int) imm.value(), dst));
-                return null;
+                return;
             }
         }
         // 立即数减法，处理减立即数的情况
         if (op == Binary.Operator.SUB && rhs instanceof Immediate imm && BitMath.isSi12(-imm.value())) {
             visit(new AddSi12(asmType, lhs, (int) -imm.value(), dst));
-            return null;
+            return;
         }
 
         // 通用处理
@@ -314,7 +315,6 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
         GeneralPurposeRegister dstReg = (GeneralPurposeRegister) calcDestination(dst, T0);
         emitInst(mnemonic, dstReg, lhsReg, rhsReg);
         storeToDest(asmType, dstReg, dst, T1);
-        return null;
     }
 
     @Override
@@ -735,31 +735,62 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
 
     @Override
     public Void visit(Load inst) {
-        AsmType dstAsmType = inst.dstAsmType;
-        HighLevelOperand ptr = inst.ptr;
-        HighLevelOperand dst = inst.dst;
-        testUnaryHighLevelOperand(ptr, dst);
+        lowerLoad(inst.dstAsmType, inst.ptr, inst.offset, inst.dst);
+        return null;
+    }
+
+    private void lowerLoad(AsmType dstAsmType, HighLevelOperand ptr, HighLevelOperand offset, HighLevelOperand dst) {
+        testBinaryHighLevelOperand(ptr, offset, dst);
 
         GeneralPurposeRegister ptrReg = (GeneralPurposeRegister) loadOperand(AsmType.DWORD, ptr, T0, T0);
         LA64Register dstReg = calcDestination(dst, dstAsmType == AsmType.DOUBLE ? FT0 : T0);
 
-        loadMem(dstAsmType, dstReg, new Memory(ptrReg, 0));
+        if (offset instanceof Immediate imm && BitMath.isSi12(imm.value())) {
+            loadMem(dstAsmType, dstReg, ptrReg, (int) imm.value());
+        } else {
+            GeneralPurposeRegister idxReg = (GeneralPurposeRegister) loadOperand(AsmType.DWORD, offset, T1, T1);
+            loadMem(dstAsmType, dstReg, ptrReg, idxReg);
+        }
 
         storeToDest(dstAsmType, dstReg, dst, T1);
-        return null;
     }
 
     @Override
     public Void visit(Store inst) {
-        AsmType srcAsmType = inst.srcAsmType;
-        HighLevelOperand ptr = inst.ptr;
-        HighLevelOperand src = inst.src;
-        testBinaryHighLevelOperand(src, ptr, null);
+        lowerStore(inst.srcAsmType, inst.src, inst.ptr, inst.offset);
+        return null;
+    }
+
+    private void lowerStore(AsmType srcAsmType, HighLevelOperand src, HighLevelOperand ptr, HighLevelOperand offset) {
+        testTernaryHighLevelOperand(src, ptr, offset, null);
 
         GeneralPurposeRegister ptrReg = (GeneralPurposeRegister) loadOperand(AsmType.DWORD, ptr, T0, T0);
         LA64Register srcReg = loadOperand(srcAsmType, src, srcAsmType == AsmType.DOUBLE ? FT1 : T1, T1);
 
-        storeMem(srcAsmType, srcReg, new Memory(ptrReg, 0));
+        if (offset instanceof Immediate imm && BitMath.isSi12(imm.value())) {
+            storeMem(srcAsmType, srcReg, ptrReg, (int) imm.value());
+        } else {
+            GeneralPurposeRegister idxReg = (GeneralPurposeRegister) loadOperand(AsmType.DWORD, offset, T1, T1);
+            storeMem(srcAsmType, srcReg, ptrReg, idxReg);
+        }
+    }
+
+    @Override
+    public Void visit(AddLeftShift inst) {
+        // alsl.d rd, rj, rk, sa2
+        // rd = (rj << (sa2 + 1)) + rk
+
+        HighLevelOperand base = inst.base;
+        HighLevelOperand index = inst.index;
+        int sa2 = inst.shiftAmount - 1;
+        HighLevelOperand dst = inst.dst;
+        testBinaryHighLevelOperand(base, index, dst);
+
+        GeneralPurposeRegister baseReg = (GeneralPurposeRegister) loadOperand(AsmType.DWORD, base, T0, T0);
+        GeneralPurposeRegister indexReg = (GeneralPurposeRegister) loadOperand(AsmType.DWORD, index, T1, T1);
+        GeneralPurposeRegister dstReg = (GeneralPurposeRegister) calcDestination(dst, T0);
+        emitInst("alsl.d", dstReg, indexReg, baseReg, new LA64AsmImmOperand(sa2));
+        storeToDest(AsmType.DWORD, dstReg, dst, T1);
         return null;
     }
 
@@ -777,6 +808,17 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
             throw new UnsupportedOperationException("Cannot store result in an immediate");
         }
         if (lhs instanceof Pseudo || rhs instanceof Pseudo || dst instanceof Pseudo) {
+            throw new UnsupportedOperationException("Cannot operate on pseudo register, should be replaced earlier");
+        }
+    }
+
+    private static void testTernaryHighLevelOperand(
+        HighLevelOperand src1, HighLevelOperand src2, HighLevelOperand src3, HighLevelOperand dst) {
+
+        if (dst instanceof Immediate) {
+            throw new UnsupportedOperationException("Cannot store result in an immediate");
+        }
+        if (src1 instanceof Pseudo || src2 instanceof Pseudo || src3 instanceof Pseudo || dst instanceof Pseudo) {
             throw new UnsupportedOperationException("Cannot operate on pseudo register, should be replaced earlier");
         }
     }
@@ -814,7 +856,7 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
         }
         if (toLoad instanceof Memory mem) {
             // 在内存，加载到 fallback 寄存器
-            loadMem(asmType, fallback, mem);
+            lowerLoad(asmType, mem.gpr(), new Immediate(mem.offset()), (HighLevelOperand) fallback);
             return fallback;
         }
         if (toLoad instanceof Immediate immediate) {
@@ -870,7 +912,7 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
         if (dest instanceof LA64Register reg) {
             lowerRegMove(asmType, val, reg);
         } else if (dest instanceof Memory dstMem) {
-            storeMem(asmType, val, dstMem);
+            lowerStore(asmType, (HighLevelOperand) val, dstMem.gpr(), new Immediate(dstMem.offset()));
         } else if (dest instanceof Data dstData) {
             storeData(asmType, val, dstData, tmp);
         }
@@ -886,9 +928,12 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
      */
     private void loadImm(AsmType asmType, LA64Register dst, Immediate imm, GeneralPurposeRegister tmp) {
         if (dst instanceof GeneralPurposeRegister dstGpr) {
-            switch (asmType) {
-                case WORD -> emitInst("li.w", dstGpr, new LA64AsmImmOperand((int) imm.value()));
-                case DWORD, DOUBLE -> emitInst("li.d", dstGpr, new LA64AsmImmOperand(imm));
+            if (asmType.equals(AsmType.WORD)) {
+                emitInst("li.w", dstGpr, new LA64AsmImmOperand((int) imm.value()));
+            } else if (asmType.equals(AsmType.DWORD) || asmType.equals(AsmType.DOUBLE)) {
+                emitInst("li.d", dstGpr, new LA64AsmImmOperand(imm));
+            } else {
+                throw new UnsupportedOperationException("Invalid asmType: " + asmType);
             }
         } else if (dst instanceof FloatingPointRegister dstFpr) {
             if (asmType != AsmType.DOUBLE) {
@@ -906,20 +951,50 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
      *
      * @param asmType 加载值类型
      * @param dst     目标寄存器
-     * @param src     内存位置
+     * @param src     基址寄存器
+     * @param si12    偏移量，保证在 si12 范围内
      */
-    private void loadMem(AsmType asmType, LA64Register dst, Memory src) {
-        GeneralPurposeRegister regRef = src.gpr();
+    private void loadMem(AsmType asmType, LA64Register dst, GeneralPurposeRegister src, int si12) {
         if (dst instanceof GeneralPurposeRegister dstGpr) {
-            switch (asmType) {
-                case WORD -> emitInst("ld.w", dstGpr, regRef, new LA64AsmImmOperand(src.offset()));
-                case DWORD, DOUBLE -> emitInst("ld.d", dstGpr, regRef, new LA64AsmImmOperand(src.offset()));
+            if (asmType == AsmType.WORD) {
+                emitInst("ld.w", dstGpr, src, new LA64AsmImmOperand(si12));
+            } else if (asmType == AsmType.DWORD || asmType == AsmType.DOUBLE) {
+                emitInst("ld.d", dstGpr, src, new LA64AsmImmOperand(si12));
+            } else {
+                throw new UnsupportedOperationException("Invalid asmType: " + asmType);
             }
         } else if (dst instanceof FloatingPointRegister dstFpr) {
             if (asmType != AsmType.DOUBLE) {
                 throw new UnsupportedOperationException("Invalid asmType: " + asmType);
             }
-            emitInst("fld.d", dstFpr, regRef, new LA64AsmImmOperand(src.offset()));
+            emitInst("fld.d", dstFpr, src, new LA64AsmImmOperand(si12));
+        } else {
+            throw new UnsupportedOperationException("Invalid register: " + dst);
+        }
+    }
+
+    /**
+     * 加载内存值至寄存器
+     *
+     * @param asmType 加载值类型
+     * @param dst     目标寄存器
+     * @param src     基址寄存器
+     * @param idx     偏移量寄存器
+     */
+    private void loadMem(AsmType asmType, LA64Register dst, GeneralPurposeRegister src, GeneralPurposeRegister idx) {
+        if (dst instanceof GeneralPurposeRegister dstGpr) {
+            if (asmType == AsmType.WORD) {
+                emitInst("ldx.w", dstGpr, src, idx);
+            } else if (asmType == AsmType.DWORD || asmType == AsmType.DOUBLE) {
+                emitInst("ldx.d", dstGpr, src, idx);
+            } else {
+                throw new UnsupportedOperationException("Invalid asmType: " + asmType);
+            }
+        } else if (dst instanceof FloatingPointRegister dstFpr) {
+            if (asmType != AsmType.DOUBLE) {
+                throw new UnsupportedOperationException("Invalid asmType: " + asmType);
+            }
+            emitInst("fldx.d", dstFpr, src, idx);
         } else {
             throw new UnsupportedOperationException("Invalid register: " + dst);
         }
@@ -930,20 +1005,50 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
      *
      * @param asmType 写入值类型
      * @param val     写入值所在寄存器，保证写入寄存器不变
-     * @param dst     内存位置
+     * @param dst     基址寄存器
+     * @param si12    偏移量，保证在 si12 范围内
      */
-    private void storeMem(AsmType asmType, LA64Register val, Memory dst) {
-        GeneralPurposeRegister regRef = dst.gpr();
+    private void storeMem(AsmType asmType, LA64Register val, GeneralPurposeRegister dst, int si12) {
         if (val instanceof GeneralPurposeRegister srcGpr) {
-            switch (asmType) {
-                case WORD -> emitInst("st.w", srcGpr, regRef, new LA64AsmImmOperand(dst.offset()));
-                case DWORD, DOUBLE -> emitInst("st.d", srcGpr, regRef, new LA64AsmImmOperand(dst.offset()));
+            if (asmType == AsmType.WORD) {
+                emitInst("st.w", srcGpr, dst, new LA64AsmImmOperand(si12));
+            } else if (asmType == AsmType.DWORD || asmType == AsmType.DOUBLE) {
+                emitInst("st.d", srcGpr, dst, new LA64AsmImmOperand(si12));
+            } else {
+                throw new UnsupportedOperationException("Invalid asmType: " + asmType);
             }
         } else if (val instanceof FloatingPointRegister srcFpr) {
             if (asmType != AsmType.DOUBLE) {
                 throw new UnsupportedOperationException("Invalid asmType: " + asmType);
             }
-            emitInst("fst.d", srcFpr, regRef, new LA64AsmImmOperand(dst.offset()));
+            emitInst("fst.d", srcFpr, dst, new LA64AsmImmOperand(si12));
+        } else {
+            throw new UnsupportedOperationException("Invalid register: " + val);
+        }
+    }
+
+    /**
+     * 将寄存器值写入内存位置
+     *
+     * @param asmType 写入值类型
+     * @param val     写入值所在寄存器，保证写入寄存器不变
+     * @param dst     基址寄存器
+     * @param idx     偏移量寄存器
+     */
+    private void storeMem(AsmType asmType, LA64Register val, GeneralPurposeRegister dst, GeneralPurposeRegister idx) {
+        if (val instanceof GeneralPurposeRegister srcGpr) {
+            if (asmType == AsmType.WORD) {
+                emitInst("stx.w", srcGpr, dst, idx);
+            } else if (asmType == AsmType.DWORD || asmType == AsmType.DOUBLE) {
+                emitInst("stx.d", srcGpr, dst, idx);
+            } else {
+                throw new UnsupportedOperationException("Invalid asmType: " + asmType);
+            }
+        } else if (val instanceof FloatingPointRegister srcFpr) {
+            if (asmType != AsmType.DOUBLE) {
+                throw new UnsupportedOperationException("Invalid asmType: " + asmType);
+            }
+            emitInst("fstx.d", srcFpr, dst, idx);
         } else {
             throw new UnsupportedOperationException("Invalid register: " + val);
         }
@@ -964,10 +1069,12 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
         emitInst("la.pcrel", tmpAddr, new LA64AsmSymOperand(isConstant ? ".L" + sym.name() : sym.name()));
         // 再对符号地址访存
         if (dst instanceof GeneralPurposeRegister dstGpr) {
-            switch (asmType) {
-                case WORD -> emitInst("ld.w", dstGpr, tmpAddr, LA64AsmImmOperand.ZERO);
-                case DWORD -> emitInst("ld.d", dstGpr, tmpAddr, LA64AsmImmOperand.ZERO);
-                case DOUBLE -> throw new UnsupportedOperationException("Invalid asmType: " + asmType);
+            if (asmType == AsmType.WORD) {
+                emitInst("ld.w", dstGpr, tmpAddr, LA64AsmImmOperand.ZERO);
+            } else if (asmType == AsmType.DWORD) {
+                emitInst("ld.d", dstGpr, tmpAddr, LA64AsmImmOperand.ZERO);
+            } else {
+                throw new UnsupportedOperationException("Invalid asmType: " + asmType);
             }
         } else if (dst instanceof FloatingPointRegister dstFpr) {
             if (asmType != AsmType.DOUBLE) {
@@ -995,10 +1102,12 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
         emitInst("la.pcrel", tmpAddr, new LA64AsmSymOperand(isConstant ? ".L" + sym.name() : sym.name()));
         // 再将值写入符号地址
         if (val instanceof GeneralPurposeRegister srcGpr) {
-            switch (asmType) {
-                case WORD -> emitInst("st.w", srcGpr, tmpAddr, LA64AsmImmOperand.ZERO);
-                case DWORD -> emitInst("st.d", srcGpr, tmpAddr, LA64AsmImmOperand.ZERO);
-                case DOUBLE -> throw new UnsupportedOperationException("Invalid asmType: " + asmType);
+            if (asmType == AsmType.WORD) {
+                emitInst("st.w", srcGpr, tmpAddr, LA64AsmImmOperand.ZERO);
+            } else if (asmType == AsmType.DWORD) {
+                emitInst("st.d", srcGpr, tmpAddr, LA64AsmImmOperand.ZERO);
+            } else {
+                throw new UnsupportedOperationException("Invalid asmType: " + asmType);
             }
         } else if (val instanceof FloatingPointRegister srcFpr) {
             if (asmType != AsmType.DOUBLE) {

@@ -52,4 +52,6 @@ public interface HighLevelVisitor<T> {
     T visit(Load inst);
 
     T visit(Store inst);
+
+    T visit(AddLeftShift inst);
 }
