@@ -1,5 +1,9 @@
 package net.flymachine.minecraftclanguage.content.logic.cpu.la64;
 
+import net.flymachine.minecraftclanguage.content.logic.architecture.la64.register.LA64RegisterResolver;
+
+import java.io.PrintStream;
+
 public class LA64CpuState {
 
     public static final int GRLEN = 64;
@@ -57,5 +61,14 @@ public class LA64CpuState {
 
     public void pcAdd(long offset) {
         pc += offset;
+    }
+
+    public void dump(PrintStream out) {
+        out.printf("PC:\t0x%016X\n", pc);
+        LA64RegisterResolver resolver = LA64RegisterResolver.getInstance();
+        for (int i = 0; i < gr.length; i++) {
+            out.printf("r%02d(%s):\t0x%016x(%d)\n",
+                       i, resolver.getGeneralPurposeRegister(i).orElseThrow(), getGr(i), getGr(i));
+        }
     }
 }

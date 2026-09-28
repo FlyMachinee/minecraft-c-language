@@ -75,8 +75,23 @@ public final class LA64Emulator {
     }
 
     public long start() {
-        while (!stopFlag) {
-            step();
+        try {
+            while (!stopFlag) {
+                step();
+            }
+        } catch (LA64RuntimeException e) {
+            System.err.println("Emulator stopped with exception: " + e.getCode());
+            try {
+                if ((cpuState.getPc() & 0b11) == 0) {
+                    long fetchPA = mmu.translateVirtualAddress(cpuState.getPc(),
+                                                               LA64MemoryManagementUnit.LA64MemoryAccessType.FETCH);
+                    int instruction = ram.loadWord(fetchPA);
+                    LA64Instruction decoded = LA64Decoder.decode(instruction);
+                    System.err.println("Instruction: " + decoded);
+                }
+            } catch (Exception ignore) { }
+            cpuState.dump(System.err);
+            fpuState.dump(System.err);
         }
         return cpuState.getGr(GeneralPurposeRegister.A0.getNumber()); // 返回 a0 寄存器的值
     }
