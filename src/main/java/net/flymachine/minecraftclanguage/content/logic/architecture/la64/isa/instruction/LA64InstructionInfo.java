@@ -83,6 +83,20 @@ public record LA64InstructionInfo(
         );
     }
 
+    public static LA64InstructionInfo formatFpr2Gpr(
+        @NotBlank String mnemonic,
+        int opcode,
+        @NotNull BiConsumer<LA64EmulatorHandler, LA64Operand[]> executor) {
+        return new LA64InstructionInfo(
+            mnemonic,
+            opcode << 15,
+            ((1 << 17) - 1) << 15,
+            LA64InstructionFormat.FORMAT_3R,
+            LA64OperandType.FORMAT_FPR_2GPR_OPTYPE,
+            executor
+        );
+    }
+
     public static LA64InstructionInfo format2GprSi12(
         @NotBlank String mnemonic,
         int opcode,

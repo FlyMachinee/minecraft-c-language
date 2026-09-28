@@ -17,6 +17,7 @@ public record LA64Operand(LA64OperandType type, int value) {
             case OFFS21 -> BitMath.extractSignedBits(value, 21);
             case OFFS26 -> BitMath.extractSignedBits(value, 26);
             case CFR -> BitMath.extractBits(value, 3);
+            case SA2 -> BitMath.extractBits(value, 2);
         };
     }
 
@@ -32,6 +33,7 @@ public record LA64Operand(LA64OperandType type, int value) {
             case OFFS16, OFFS21, OFFS26 -> value == 0 ? "0" : String.valueOf(value << 2);
             case CFR ->
                 LA64RegisterResolver.getInstance().getConditionFlagRegister(value).orElseThrow().getPrimaryName();
+            case SA2 -> String.valueOf(value + 1);
         };
     }
 
@@ -85,4 +87,7 @@ public record LA64Operand(LA64OperandType type, int value) {
         return new LA64Operand(LA64OperandType.OFFS26, offs26);
     }
 
+    public static LA64Operand sa2(int sa2) {
+        return new LA64Operand(LA64OperandType.SA2, sa2);
+    }
 }

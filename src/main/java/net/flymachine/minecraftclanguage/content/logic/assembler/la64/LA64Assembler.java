@@ -206,7 +206,7 @@ public final class LA64Assembler {
                                 case GPR -> current.isGpr();
                                 case FPR -> current.isFpr();
                                 case CFR -> current.isCfr();
-                                case UI5, UI6, UI12, SI12, SI20 -> {
+                                case UI5, UI6, UI12, SI12, SI20, SA2 -> {
                                     if (!current.isImm()) {
                                         yield false;
                                     }
@@ -220,6 +220,7 @@ public final class LA64Assembler {
                                         case UI12 -> BitMath.isUi12((int) imm);
                                         case SI12 -> BitMath.isSi12((int) imm);
                                         case SI20 -> BitMath.isSi20((int) imm);
+                                        case SA2 -> (imm & ~0b11) == 0;
                                         default -> throw new IllegalStateException("Unexpected value: " + expected);
                                     };
                                 }
