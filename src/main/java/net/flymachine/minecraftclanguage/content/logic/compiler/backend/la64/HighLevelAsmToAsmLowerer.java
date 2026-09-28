@@ -226,8 +226,9 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
         return null;
     }
 
+    // 只进行相同二进制表示之间的移动
     private void lowerRegMove(AsmType asmType, LA64Register srcReg, LA64Register dstReg) {
-        if (srcReg == dstReg && asmType != AsmType.WORD) {
+        if (srcReg == dstReg) {
             return;
         }
         if (srcReg instanceof GeneralPurposeRegister srcGpr) {

@@ -494,7 +494,7 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
     public Void visit(TacTruncate inst) {
         HighLevelOperand src = lowerValue(inst.src);
         HighLevelOperand dst = lowerValue(inst.dst);
-        target.add(new Move(AsmType.WORD, src, dst));
+        target.add(new Binary(BinaryOperator.ADD, AsmType.WORD, src, ZERO, dst));
         return null;
     }
 
@@ -525,7 +525,7 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
             // double -> unsigned int:
             // double -> long -> unsigned int
             target.add(new DoubleToIntRoundZero(src, T0, AsmType.DWORD));
-            target.add(new Move(AsmType.WORD, T0, dst));
+            target.add(new Binary(BinaryOperator.ADD, AsmType.WORD, T0, ZERO, dst));
         } else if (asmType == AsmType.DWORD) {
             // double -> unsigned long:
             String labelInRange = makeBackendLabel("in_range");

@@ -3,6 +3,9 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.hi
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.AsmType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.HighLevelOperand;
 
+/**
+ * 仅表示移动相同二进制表示的值
+ */
 public class Move implements HighLevelInstruction {
     public final AsmType asmType;
     public HighLevelOperand src;
