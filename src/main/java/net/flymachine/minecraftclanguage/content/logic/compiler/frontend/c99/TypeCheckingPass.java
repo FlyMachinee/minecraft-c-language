@@ -382,7 +382,7 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
                 if (lhsType.isArithmetic() && rhsType.isArithmetic()) {
                     // 若两个运算数都拥有算术类型，则进行一般算术转换，而以通常数学意义比较所得值
                     commonType = Type.commonRealType((BasicType) lhsType, (BasicType) rhsType);
-                } else if (lhsType instanceof PointerType || rhsType instanceof PointerType) {
+                } else if (lhsType.isPointer() || rhsType.isPointer()) {
                     // 若一个操作数为指针而另一空指针常量，则首先转换空指针常量为该指针的类型（给出空指针值），并以后述方式比较两个指针
                     if (isNullPointerConstant(node.lhs)) {
                         commonType = rhsType;
@@ -975,7 +975,7 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
             }
         }
         // lhs 是指针，而 rhs 是空指针常量
-        if (lhsType instanceof PointerType && isNullPointerConstant(rhs)) {
+        if (lhsType.isPointer() && isNullPointerConstant(rhs)) {
             return true;
         }
         return false;
@@ -1003,7 +1003,7 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
         if (!exp.expType.isComplete()) {
             return false;
         }
-        if (exp.expType instanceof ArrayType) {
+        if (exp.expType.isArray()) {
             return false;
         }
         return !exp.expType.isConst() && isLvalueExpression(exp);
@@ -1099,7 +1099,7 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
             return null;
         }
         // 前缀和后缀自增或自减的操作数表达式 必须为整数类型、实浮点数类型或指针类型的可修改左值
-        if (!node.operand.expType.isArithmetic() && !(node.operand.expType instanceof PointerType)) {
+        if (!node.operand.expType.isArithmetic() && !node.operand.expType.isPointer()) {
             String msg = "operand of " + (node.isIncrement ? "increment" : "decrement") +
                          " operator must have arithmetic or pointer type; have '" +
                          reporter.white(node.operand.expType.typename()) + "'";
@@ -1179,7 +1179,7 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
             return null;
         }
         // 一个表达式是指针而另一个是空指针常量
-        if (thenExpType instanceof PointerType || elseExpType instanceof PointerType) {
+        if (thenExpType.isPointer() || elseExpType.isPointer()) {
             Type commonType = ErrorType.INSTANCE;
 
             // 若一个表达式为指针而另一个是空指针常量，则类型为该指针的类型
@@ -1467,10 +1467,10 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
         // 不允许不列于此的转换。特别是
         // 没有指针和浮点数类型间的转换
         boolean error = false;
-        if (node.exp.expType instanceof PointerType && targetType instanceof BasicType bt && bt == BasicType.DOUBLE) {
+        if (node.exp.expType.isPointer() && targetType.isDouble()) {
             error = true;
         }
-        if (targetType instanceof PointerType && node.exp.expType instanceof BasicType bt && bt == BasicType.DOUBLE) {
+        if (targetType.isPointer() && node.exp.expType.isDouble()) {
             error = true;
         }
         // 没有指向函数指针和指向对象指针（含 void*）间的转换

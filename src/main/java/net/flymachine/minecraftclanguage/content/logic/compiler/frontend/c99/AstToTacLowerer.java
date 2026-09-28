@@ -668,7 +668,7 @@ public final class AstToTacLowerer implements
         Type lhsType = binaryExp.lhs.expType;
         Type rhsType = binaryExp.rhs.expType;
         // 指针 + 整数 或 整数 + 指针
-        if (op == BinaryOperator.ADD && (lhsType instanceof PointerType || rhsType instanceof PointerType)) {
+        if (op == BinaryOperator.ADD && (lhsType.isPointer() || rhsType.isPointer())) {
             PointerType pointerType;
             ExpressionNode ptr;
             ExpressionNode index;
@@ -699,8 +699,7 @@ public final class AstToTacLowerer implements
             return new PointerValue(pointerAdd(addr, pointerType, negIndexVal, scale));
         }
         // 指针 - 指针
-        if (op == BinaryOperator.SUBTRACT &&
-            lhsType instanceof PointerType lhsPt && rhsType instanceof PointerType) {
+        if (op == BinaryOperator.SUBTRACT && lhsType instanceof PointerType lhsPt && rhsType.isPointer()) {
 
             TacValue lhsVal = evalAndLvalueConvert(binaryExp.lhs);
             TacValue rhsVal = evalAndLvalueConvert(binaryExp.rhs);
@@ -938,10 +937,11 @@ public final class AstToTacLowerer implements
         }
         TacVariable dst = makeTempVar(targetType);
 
-        BasicType targetBasic = targetType instanceof BasicType ? (BasicType) targetType : BasicType.UNSIGNED_LONG;
-        BasicType originBasic = originType instanceof BasicType ? (BasicType) originType : BasicType.UNSIGNED_LONG;
+        // 指针视为 unsigned long
+        BasicType targetBasic = targetType.isBasic() ? (BasicType) targetType : BasicType.UNSIGNED_LONG;
+        BasicType originBasic = originType.isBasic() ? (BasicType) originType : BasicType.UNSIGNED_LONG;
 
-        if (targetBasic == BasicType.DOUBLE) {
+        if (targetBasic.isDouble()) {
             switch (originBasic.primitive()) {
                 case INT, LONG -> emitTac(new TacIntToDouble(toCast, dst));
                 case UNSIGNED_INT, UNSIGNED_LONG -> emitTac(new TacUnsignedIntToDouble(toCast, dst));
@@ -949,7 +949,7 @@ public final class AstToTacLowerer implements
             }
             return dst;
         }
-        if (originBasic == BasicType.DOUBLE) {
+        if (originBasic.isDouble()) {
             switch (targetBasic.primitive()) {
                 case INT, LONG -> emitTac(new TacDoubleToInt(toCast, dst));
                 case UNSIGNED_INT, UNSIGNED_LONG -> emitTac(new TacDoubleToUnsignedInt(toCast, dst));
