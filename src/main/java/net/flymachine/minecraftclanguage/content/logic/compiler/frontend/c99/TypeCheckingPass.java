@@ -988,7 +988,8 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
             return true;
         }
         // 对指向对象指针运用间接使用（一元 *）运算符的结果
-        if (exp instanceof DereferenceNode deref && deref.exp.expType instanceof PointerType pt && pt.isObject()) {
+        if (exp instanceof DereferenceNode deref && deref.exp.expType instanceof PointerType pt
+            && pt.referencedType().isObject()) {
             return true;
         }
         // 下标运算符的结果
