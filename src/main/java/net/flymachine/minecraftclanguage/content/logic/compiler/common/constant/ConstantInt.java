@@ -69,7 +69,7 @@ public record ConstantInt(int value) implements Constant {
         Type rhsType = rhs.getType();
 
         return switch (op) {
-            case ADD, SUBTRACT, MULTIPLY, DIVIDE -> {
+            case ADD, SUBTRACT, MULTIPLY, DIVIDE, EQUAL, NOT_EQUAL -> {
                 if (rhsType.isArithmetic()) {
                     if (lhsType != rhsType) {
                         throw new UnsupportedOperationException("Cast to their common real type first");
@@ -104,16 +104,7 @@ public record ConstantInt(int value) implements Constant {
                 throw new UnsupportedOperationException("Unsupported operation");
             }
             case LESS_THAN, LESS_OR_EQUAL, GREATER_THAN, GREATER_OR_EQUAL -> {
-                if (!rhsType.isReal()) {
-                    if (lhsType != rhsType) {
-                        throw new UnsupportedOperationException("Cast to their common real type first");
-                    }
-                    yield apply(op, (ConstantInt) rhs);
-                }
-                throw new UnsupportedOperationException("Unsupported operation");
-            }
-            case EQUAL, NOT_EQUAL -> {
-                if (!rhsType.isArithmetic()) {
+                if (rhsType.isReal()) {
                     if (lhsType != rhsType) {
                         throw new UnsupportedOperationException("Cast to their common real type first");
                     }
