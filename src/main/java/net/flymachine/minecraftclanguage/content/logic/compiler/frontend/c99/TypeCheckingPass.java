@@ -1480,7 +1480,7 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
         node.exp = checkExpressionAndDecay(node.exp);
         // 类型名 - void 类型或任何标量类型
         // 表达式 - 任何标量类型表达式（除非 类型名是 void，此情况下它可以是任何表达式）
-        Type targetType = node.targetType.getType();
+        Type targetType = node.targetType.getType().removeQualifiers();
 
         // 若类型名是 void，则表达式为其副效应求值，并舍弃其返回值，与单独将表达式用作表达式语句时相同
         if (targetType.isVoid()) {
