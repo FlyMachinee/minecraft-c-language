@@ -858,10 +858,6 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
 
         // 加载操作数至寄存器
         if (toLoad instanceof LA64Register reg) {
-            if (reg.getType() != fallback.getType()) {
-                throw new UnsupportedOperationException(
-                    "Incompatible register type: " + reg + " and fallback: " + fallback);
-            }
             // 本身就在寄存器，直接使用
             return reg;
         }
@@ -894,10 +890,6 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
 
         // 计算结果的存放地点
         if (dst instanceof LA64Register reg) {
-            if (reg.getType() != fallback.getType()) {
-                throw new UnsupportedOperationException(
-                    "Incompatible register type: " + reg + " and fallback: " + fallback);
-            }
             // 存放至寄存器，直接赋值
             return reg;
         }
@@ -1082,7 +1074,7 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
         if (dst instanceof GeneralPurposeRegister dstGpr) {
             if (asmType == AsmType.WORD) {
                 emitInst("ld.w", dstGpr, tmpAddr, LA64AsmImmOperand.ZERO);
-            } else if (asmType == AsmType.DWORD) {
+            } else if (asmType == AsmType.DWORD || asmType == AsmType.DOUBLE) {
                 emitInst("ld.d", dstGpr, tmpAddr, LA64AsmImmOperand.ZERO);
             } else {
                 throw new UnsupportedOperationException("Invalid asmType: " + asmType);
@@ -1115,7 +1107,7 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
         if (val instanceof GeneralPurposeRegister srcGpr) {
             if (asmType == AsmType.WORD) {
                 emitInst("st.w", srcGpr, tmpAddr, LA64AsmImmOperand.ZERO);
-            } else if (asmType == AsmType.DWORD) {
+            } else if (asmType == AsmType.DWORD || asmType == AsmType.DOUBLE) {
                 emitInst("st.d", srcGpr, tmpAddr, LA64AsmImmOperand.ZERO);
             } else {
                 throw new UnsupportedOperationException("Invalid asmType: " + asmType);
