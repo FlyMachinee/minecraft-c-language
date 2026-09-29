@@ -713,9 +713,16 @@ public final class AstToTacLowerer implements
         }
         // 指针 - 指针
         if (op == BinaryOperator.SUBTRACT && lhsType instanceof PointerType lhsPt && rhsType.isPointer()) {
-
             TacValue lhsVal = evalAndLvalueConvert(binaryExp.lhs);
             TacValue rhsVal = evalAndLvalueConvert(binaryExp.rhs);
+
+            if (lhsVal instanceof TacConstant lhsConstPtr && rhsVal instanceof TacConstant rhsConstPtr &&
+                lhsConstPtr.value instanceof ConstantPointer lhsConst &&
+                rhsConstPtr.value instanceof ConstantPointer rhsConst) {
+                // 常量指针，直接计算差值
+                return new PlainOperand(lhsConst.apply(op, rhsConst));
+            }
+
             // 计算指针之间的差值
             TacVariable diff = makeTempVar(binaryExp.expType);
             emitTacSub(lhsVal, rhsVal, diff);

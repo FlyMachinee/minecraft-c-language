@@ -67,8 +67,32 @@ public record ConstantPointer(long value, Type referencedType) implements Consta
         Type rhsType = rhs.getType();
 
         return switch (op) {
-            case ADD, SUBTRACT, MULTIPLY, DIVIDE, LESS_THAN, LESS_OR_EQUAL, GREATER_THAN, GREATER_OR_EQUAL, LEFT_SHIFT,
-                 RIGHT_SHIFT, MODULO, BITWISE_AND, BITWISE_OR, BITWISE_XOR ->
+            case ADD -> {
+                if (rhsType.isInteger()) {
+                    if (!rhsType.isLong()) {
+                        throw new UnsupportedOperationException("Cast to long first");
+                    }
+                    yield new ConstantPointer(value + rhs.toLong().value() * referencedType.sizeof(), referencedType);
+                }
+                throw new UnsupportedOperationException("Unsupported operation");
+            }
+            case SUBTRACT -> {
+                if (rhsType.isInteger()) {
+                    if (!rhsType.isLong()) {
+                        throw new UnsupportedOperationException("Cast to long first");
+                    }
+                    yield new ConstantPointer(value - rhs.toLong().value() * referencedType.sizeof(), referencedType);
+                }
+                if (rhs instanceof ConstantPointer rhsPtr) {
+                    if (!lhsType.referencedType().removeQualifiers()
+                                .isCompatible(rhsPtr.referencedType().removeQualifiers())) {
+                        throw new UnsupportedOperationException("Only allow compatible pointers");
+                    }
+                    yield new ConstantLong((value - rhsPtr.value) / referencedType.sizeof());
+                }
+                throw new UnsupportedOperationException("Unsupported operation");
+            }
+            case MULTIPLY, DIVIDE, LEFT_SHIFT, RIGHT_SHIFT, MODULO, BITWISE_AND, BITWISE_OR, BITWISE_XOR ->
                 throw new UnsupportedOperationException("Unsupported operation");
             case LOGICAL_AND, LOGICAL_OR -> {
                 if (rhsType.isScalar()) {
@@ -80,15 +104,34 @@ public record ConstantPointer(long value, Type referencedType) implements Consta
                 }
                 throw new UnsupportedOperationException("Unsupported operation");
             }
+            case LESS_THAN, LESS_OR_EQUAL, GREATER_THAN, GREATER_OR_EQUAL -> {
+                if (rhs instanceof ConstantPointer rhsPtr) {
+                    if (!lhsType.referencedType().removeQualifiers()
+                                .isCompatible(rhsPtr.referencedType().removeQualifiers())) {
+                        throw new UnsupportedOperationException("Only allow compatible pointers");
+                    }
+                    if (op == BinaryOperator.LESS_THAN) {
+                        yield new ConstantInt(this.value < rhsPtr.value ? 1 : 0);
+                    } else if (op == BinaryOperator.LESS_OR_EQUAL) {
+                        yield new ConstantInt(this.value <= rhsPtr.value ? 1 : 0);
+                    } else if (op == BinaryOperator.GREATER_THAN) {
+                        yield new ConstantInt(this.value > rhsPtr.value ? 1 : 0);
+                    } else { // GREATER_OR_EQUAL
+                        yield new ConstantInt(this.value >= rhsPtr.value ? 1 : 0);
+                    }
+                }
+                throw new UnsupportedOperationException("Unsupported operation");
+            }
             case EQUAL, NOT_EQUAL -> {
-                if (rhsType instanceof PointerType rhsPtrType) {
-                    if (!lhsType.referencedType().isCompatible(rhsPtrType.referencedType())) {
+                if (rhs instanceof ConstantPointer rhsPtr) {
+                    if (!lhsType.referencedType().removeQualifiers()
+                                .isCompatible(rhsPtr.referencedType().removeQualifiers())) {
                         throw new UnsupportedOperationException("Only allow compatible pointers");
                     }
                     if (op == BinaryOperator.EQUAL) {
-                        yield new ConstantInt(this.value == ((ConstantPointer) rhs).value ? 1 : 0);
+                        yield new ConstantInt(this.value == rhsPtr.value ? 1 : 0);
                     } else {
-                        yield new ConstantInt(this.value != ((ConstantPointer) rhs).value ? 1 : 0);
+                        yield new ConstantInt(this.value != rhsPtr.value ? 1 : 0);
                     }
                 }
                 throw new UnsupportedOperationException("Unsupported operation");

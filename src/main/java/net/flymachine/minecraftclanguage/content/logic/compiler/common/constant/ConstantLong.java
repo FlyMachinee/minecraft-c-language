@@ -69,7 +69,21 @@ public record ConstantLong(long value) implements Constant {
         Type rhsType = rhs.getType();
 
         return switch (op) {
-            case ADD, SUBTRACT, MULTIPLY, DIVIDE, EQUAL, NOT_EQUAL -> {
+            case ADD -> {
+                if (rhsType.isArithmetic()) {
+                    if (lhsType != rhsType) {
+                        throw new UnsupportedOperationException("Cast to their common real type first");
+                    }
+                    yield apply(op, (ConstantLong) rhs);
+                }
+                if (rhs instanceof ConstantPointer rhsPtr) {
+                    yield new ConstantPointer(
+                        rhsPtr.value() + value * rhsPtr.referencedType().sizeof(),
+                        rhsPtr.referencedType());
+                }
+                throw new UnsupportedOperationException("Unsupported operation");
+            }
+            case SUBTRACT, MULTIPLY, DIVIDE, EQUAL, NOT_EQUAL -> {
                 if (rhsType.isArithmetic()) {
                     if (lhsType != rhsType) {
                         throw new UnsupportedOperationException("Cast to their common real type first");
