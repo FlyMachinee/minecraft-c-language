@@ -1510,7 +1510,6 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
         // 否则，转换表达式的值为由类型名所指名的类型，如下：
         // 允许每种如同赋值的隐式转换
         if (validConvertAsIfByAssignment(node.exp, targetType)) {
-            node.exp = convertTo(node.exp, targetType);
             node.expType = targetType;
             return null;
         }
@@ -1538,7 +1537,6 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
             reporter.error(node.exp.wholeLoc, msg);
             node.expType = ErrorType.INSTANCE;
         } else {
-            node.exp = convertTo(node.exp, targetType);
             node.expType = targetType;
         }
         return null;
