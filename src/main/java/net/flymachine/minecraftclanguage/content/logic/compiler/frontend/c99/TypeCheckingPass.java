@@ -1088,11 +1088,10 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
 
     @Override
     public Void visit(AssignmentNode node) {
-
         boolean error = false;
 
         // 检查左侧
-        checkExpression(node.lhs);
+        node.lhs = checkExpressionAndDecay(node.lhs);
         if (node.lhs.expType.isError()) {
             error = true;
         } else if (!isModifiableLvalueExpression(node.lhs)) {
