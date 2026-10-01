@@ -133,12 +133,7 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
             return exp;
         }
 
-        ExpressionNode ret;
-        if (exp instanceof ConstantNode constExp) {
-            ret = new ConstantNode(constExp.wholeLoc, constExp.value.castTo(type));
-        } else {
-            ret = new CastExpressionNode(exp.wholeLoc, TypeNode.fromType(type), exp);
-        }
+        ExpressionNode ret = new CastExpressionNode(exp.wholeLoc, TypeNode.fromType(type), exp);
         ret.expType = type;
         return ret;
     }
