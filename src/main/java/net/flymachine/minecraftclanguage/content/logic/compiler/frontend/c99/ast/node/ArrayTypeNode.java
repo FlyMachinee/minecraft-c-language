@@ -46,16 +46,23 @@ public final class ArrayTypeNode extends TypeNode {
         if (constQualifier != null) {
             pointeeType = pointeeType.addConst();
         }
-        return new ArrayType(
-            pointeeType,
-            size == null ? ConstantUnsignedLong.ZERO : ((ConstantNode) size).value.toUnsignedLong());
+        ConstantUnsignedLong size =
+            this.size == null ||
+            !(this.size instanceof ConstantNode) ? ConstantUnsignedLong.ZERO : ((ConstantNode) this.size).value.toUnsignedLong();
+        return new ArrayType(pointeeType, size);
     }
 
     @Override
     protected String format(String declarator) {
-        long sizeValue = size == null ? 0 : ((ConstantNode) size).value.toUnsignedLong().value();
-        String newDecl = Type.wrapIfPointer(declarator) + "[" + (constLoc == null ? "" : "const ") +
-                         (sizeValue > 0 ? sizeValue : "") + "]";
+        String newDecl;
+        if (size == null) {
+            newDecl = Type.wrapIfPointer(declarator) + "[" + (constLoc == null ? "" : "const") + "]";
+        } else if (size instanceof ConstantNode constSize) {
+            newDecl = Type.wrapIfPointer(declarator) + "[" + (constLoc == null ? "" : "const ") +
+                      constSize.value.toUnsignedLong().value() + "]";
+        } else {
+            newDecl = Type.wrapIfPointer(declarator) + "[" + (constLoc == null ? "" : "const ") + "...]";
+        }
         return elementType.format(newDecl);
     }
 

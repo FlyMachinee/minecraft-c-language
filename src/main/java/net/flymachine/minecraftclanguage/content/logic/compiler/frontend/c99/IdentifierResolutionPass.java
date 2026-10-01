@@ -99,19 +99,40 @@ public final class IdentifierResolutionPass implements AstVisitor<Void> {
         return null;
     }
 
+    private void visitStatementLabel(StatementNode node) {
+        for (var caseLabel : node.caseLabels) {
+            caseLabel.caseValue.accept(this);
+        }
+    }
+
     private void panicWithPreviousRef(String msg, IdentifierNode id, IdentifierEntry previous) {
         reporter.error(id.wholeLoc, msg);
         msg = "previous " + (previous.defined ? "definition" : "declaration") + " of '" +
               reporter.white(id.name) + "' with type '" +
-              reporter.white(previous.t.getType().toString()) + "'";
+              reporter.white(previous.t.typename()) + "'";
         reporter.note(previous.id.wholeLoc, msg);
+    }
+
+    private void visitTypeNode(TypeNode type) {
+        if (type instanceof FunctionTypeNode funcType) {
+            visitFunctionTypeNode(funcType, false);
+        }
+
+        if (type instanceof ArrayTypeNode arrayType) {
+            if (arrayType.size != null) {
+                arrayType.size.accept(this);
+            }
+            visitTypeNode(arrayType.elementType);
+        }
+
+        if (type instanceof PointerTypeNode pointerType) {
+            visitTypeNode(pointerType.referencedType);
+        }
     }
 
     private void visitFunctionTypeNode(FunctionTypeNode funcType, boolean isDefinition) {
         // 处理返回类型
-        if (funcType.retType instanceof FunctionTypeNode retFuncType) {
-            visitFunctionTypeNode(retFuncType, false);
-        }
+        visitTypeNode(funcType.retType);
 
         if (funcType.hasNoParameters()) {
             // 参数列表为单独的 void
@@ -124,9 +145,7 @@ public final class IdentifierResolutionPass implements AstVisitor<Void> {
 
         for (int i = 0; i < funcType.params.size(); i++) {
             TypeNode type = funcType.paramTypes.get(i);
-            if (type instanceof FunctionTypeNode paramFuncType) {
-                visitFunctionTypeNode(paramFuncType, false);
-            }
+            visitTypeNode(type);
 
             IdentifierNode identifier = funcType.params.get(i);
             if (identifier == null) {
@@ -150,8 +169,10 @@ public final class IdentifierResolutionPass implements AstVisitor<Void> {
     @Override
     public Void visit(FunctionDefinitionNode node) {
         enterScope();
-        if (node.funcType instanceof FunctionTypeNode) {
-            visitFunctionTypeNode((FunctionTypeNode) node.funcType, true);
+        if (node.funcType instanceof FunctionTypeNode funcType) {
+            visitFunctionTypeNode(funcType, true);
+        } else {
+            visitTypeNode(node.funcType);
         }
         var bodyScope = popScope();
         visitDeclarationLike(node.id, node.funcType, node.storageClass, true);
@@ -165,6 +186,7 @@ public final class IdentifierResolutionPass implements AstVisitor<Void> {
 
     @Override
     public Void visit(ReturnNode node) {
+        visitStatementLabel(node);
         node.exp.accept(this);
         return null;
     }
@@ -185,9 +207,7 @@ public final class IdentifierResolutionPass implements AstVisitor<Void> {
     @Override
     public Void visit(DeclarationNode node) {
         for (InitDeclaratorNode initDecl : node.initDeclarators) {
-            if (initDecl.finalType instanceof FunctionTypeNode funcType) {
-                visitFunctionTypeNode(funcType, false);
-            }
+            visitTypeNode(initDecl.finalType);
             visitDeclarationLike(
                 initDecl.id, initDecl.finalType, node.storageClass,
                 !(initDecl.finalType instanceof FunctionTypeNode) && initDecl.init != null);
@@ -295,12 +315,14 @@ public final class IdentifierResolutionPass implements AstVisitor<Void> {
 
     @Override
     public Void visit(ExpressionStatementNode node) {
+        visitStatementLabel(node);
         node.exp.accept(this);
         return null;
     }
 
     @Override
     public Void visit(NullStatementNode node) {
+        visitStatementLabel(node);
         return null;
     }
 
@@ -342,6 +364,7 @@ public final class IdentifierResolutionPass implements AstVisitor<Void> {
 
     @Override
     public Void visit(IfStatementNode node) {
+        visitStatementLabel(node);
         enterScope();
         node.cond.accept(this);
         visitSubstatement(node.thenStmt);
@@ -362,11 +385,13 @@ public final class IdentifierResolutionPass implements AstVisitor<Void> {
 
     @Override
     public Void visit(GotoNode node) {
+        visitStatementLabel(node);
         return null;
     }
 
     @Override
     public Void visit(CompoundStatementNode node) {
+        visitStatementLabel(node);
         enterScope();
         for (BlockItemNode item : node.blockItems) {
             item.accept(this);
@@ -377,16 +402,19 @@ public final class IdentifierResolutionPass implements AstVisitor<Void> {
 
     @Override
     public Void visit(BreakNode node) {
+        visitStatementLabel(node);
         return null;
     }
 
     @Override
     public Void visit(ContinueNode node) {
+        visitStatementLabel(node);
         return null;
     }
 
     @Override
     public Void visit(WhileLoopNode node) {
+        visitStatementLabel(node);
         enterScope();
         if (node.isDoWhile) {
             visitSubstatement(node.body);
@@ -401,6 +429,7 @@ public final class IdentifierResolutionPass implements AstVisitor<Void> {
 
     @Override
     public Void visit(ForLoopNode node) {
+        visitStatementLabel(node);
         enterScope();
         if (node.init != null) {
             node.init.accept(this);
@@ -418,6 +447,7 @@ public final class IdentifierResolutionPass implements AstVisitor<Void> {
 
     @Override
     public Void visit(SwitchStatementNode node) {
+        visitStatementLabel(node);
         enterScope();
         node.exp.accept(this);
         visitSubstatement(node.body);
@@ -441,6 +471,7 @@ public final class IdentifierResolutionPass implements AstVisitor<Void> {
 
     @Override
     public Void visit(CastExpressionNode node) {
+        visitTypeNode(node.targetType);
         return node.exp.accept(this);
     }
 

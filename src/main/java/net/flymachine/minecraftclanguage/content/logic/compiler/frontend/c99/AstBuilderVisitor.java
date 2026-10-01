@@ -315,12 +315,12 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
             return parseFromDirectDeclarator(baseType, ctx.directDeclarator());
         }
 
-        // directDeclarator -> directDeclarator LeftBracket typeQualifier* IntegerConstant? RightBracket
+        // directDeclarator -> directDeclarator LeftBracket typeQualifier* constantExpression? RightBracket
         if (ctx.LeftBracket() != null) {
             // 构造数组类型
-            ConstantNode size = null;
-            if (ctx.IntegerConstant() != null) {
-                size = parseIntegerConstant(ctx.IntegerConstant());
+            ExpressionNode size = null;
+            if (ctx.constantExpression() != null) {
+                size = (ExpressionNode) visit(ctx.constantExpression());
             }
             SourceLocation constLoc = null;
             if (!ctx.typeQualifier().isEmpty()) {
@@ -365,12 +365,12 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         }
 
         if (ctx.LeftBracket() != null) {
-            // directAbstractDeclarator -> LeftBracket IntegerConstant? RightBracket
-            // directAbstractDeclarator -> directAbstractDeclarator LeftBracket IntegerConstant? RightBracket
+            // directAbstractDeclarator -> LeftBracket constantExpression? RightBracket
+            // directAbstractDeclarator -> directAbstractDeclarator LeftBracket constantExpression? RightBracket
 
-            ConstantNode size = null;
-            if (ctx.IntegerConstant() != null) {
-                size = parseIntegerConstant(ctx.IntegerConstant());
+            ExpressionNode size = null;
+            if (ctx.constantExpression() != null) {
+                size = (ExpressionNode) visit(ctx.constantExpression());
             }
 
             // 构造数组类型
@@ -544,8 +544,8 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
 
     @Override
     public AstNode visitDesignator(C99Parser.DesignatorContext ctx) {
-        // -> LeftBracket IntegerConstant RightBracket
-        return new ArrayDesignatorNode(getSourceLocation(ctx), parseIntegerConstant(ctx.IntegerConstant()));
+        // -> LeftBracket constantExpression RightBracket
+        return new ArrayDesignatorNode(getSourceLocation(ctx), (ExpressionNode) visit(ctx.constantExpression()));
     }
 
     @Override
@@ -558,7 +558,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
             return statement;
         } else if (ctx.Case() != null) {
             SourceLocation caseLocation = getSourceLocation(ctx.Case());
-            ExpressionNode caseValue = parseIntegerConstant(ctx.IntegerConstant());
+            ExpressionNode caseValue = (ExpressionNode) visit(ctx.constantExpression());
             statement.caseLabels.add(new StatementNode.CaseLabelInfo(caseLocation, caseValue));
             return statement;
         } else if (ctx.Default() != null) {

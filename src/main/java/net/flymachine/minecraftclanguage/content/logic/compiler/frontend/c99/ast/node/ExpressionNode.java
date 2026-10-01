@@ -1,6 +1,9 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node;
 
+import com.mojang.datafixers.util.Either;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.Constant;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.ConstantEvalVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.ExpressionBoolVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.ExpressionVisitor;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
@@ -18,6 +21,9 @@ public abstract class ExpressionNode extends AstNode {
 
     public abstract ExpressionBoolVisitor.BoolGenResult accept(
         ExpressionBoolVisitor visitor, String jumpTarget, boolean inverse);
+
+    public abstract Either<Constant, SourceLocation> accept(
+        ConstantEvalVisitor visitor, ConstantEvalVisitor.ConstantCategory category);
 
     /**
      * 会在结尾加换行

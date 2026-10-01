@@ -75,7 +75,7 @@ public final class ArrayType extends Type {
 
     @Override
     public boolean isComplete() {
-        return size.value() != 0;
+        return size.value() != 0 && elementType.isComplete();
     }
 
     @Override

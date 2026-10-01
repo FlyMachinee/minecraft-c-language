@@ -1,6 +1,9 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node;
 
+import com.mojang.datafixers.util.Either;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.Constant;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.ConstantEvalVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.ExpressionBoolVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.ExpressionVisitor;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
@@ -61,5 +64,11 @@ public final class IncrementDecrementNode extends ExpressionNode {
     public ExpressionBoolVisitor.BoolGenResult accept(
         ExpressionBoolVisitor visitor, String jumpTarget, boolean inverse) {
         return visitor.visit(this, jumpTarget, inverse);
+    }
+
+    @Override
+    public Either<Constant, SourceLocation> accept(ConstantEvalVisitor visitor,
+        ConstantEvalVisitor.ConstantCategory category) {
+        return Either.right(wholeLoc);
     }
 }

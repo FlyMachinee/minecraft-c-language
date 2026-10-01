@@ -86,9 +86,9 @@ public abstract class StatementNode extends AstNode {
     }
 
     public static class CaseLabelInfo {
-        public SourceLocation caseLocation;
-        public ExpressionNode caseValue;
-        public String switchLabel;
+        public SourceLocation caseLocation; // case 关键字的位置
+        public ExpressionNode caseValue; // 要求为整数常量表达式
+        public String switchLabel; // 关联至的 switch 语句的标签
 
         public CaseLabelInfo(SourceLocation caseLocation, ExpressionNode caseValue) {
             this.caseLocation = caseLocation;

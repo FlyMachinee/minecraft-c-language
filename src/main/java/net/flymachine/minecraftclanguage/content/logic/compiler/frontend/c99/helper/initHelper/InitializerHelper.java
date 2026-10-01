@@ -1,12 +1,15 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.helper.initHelper;
 
+import com.mojang.datafixers.util.Either;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.*;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.StaticInit;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.ZeroInit;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.*;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.TypeCheckingPass;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.*;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.helper.constexprHelper.ConstantEvaluator;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.DiagnosticReporter;
+import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 import org.apache.commons.lang3.mutable.MutableBoolean;
 
 import java.util.ArrayList;
@@ -16,10 +19,12 @@ public final class InitializerHelper {
 
     private final DiagnosticReporter reporter;
     private final TypeCheckingPass typeChecker;
+    private final ConstantEvaluator constantEvaluator;
 
     public InitializerHelper(DiagnosticReporter reporter, TypeCheckingPass typeChecker) {
         this.reporter = reporter;
         this.typeChecker = typeChecker;
+        this.constantEvaluator = new ConstantEvaluator(typeChecker.getSymbolTable());
     }
 
     private static SingleInitializerNode makeSingleInit(Constant constant) {
@@ -74,9 +79,9 @@ public final class InitializerHelper {
      * @param arrayType 要确定大小的数组类型
      * @param init      初始化器
      */
-    public ArrayType determineArraySize(ArrayType arrayType, CompoundInitializerNode init) {
+    public long determineArraySize(ArrayType arrayType, CompoundInitializerNode init) {
         if (arrayType.size().value() > 0) {
-            return arrayType;
+            return arrayType.size().value();
         }
 
         Designation cursor = new Designation(arrayType);
@@ -84,7 +89,9 @@ public final class InitializerHelper {
         for (DesignationInitializerNode din : init.inits) {
             // 如果有指代符，将其应用
             if (!din.designators.isEmpty()) {
-                Designation newCursor = makeDesignation(arrayType, din.designators, true);
+                reporter.suppressDiagnostics();
+                Designation newCursor = makeDesignation(arrayType, din.designators);
+                reporter.unsuppressDiagnostics();
                 if (newCursor != null) {
                     cursor = newCursor;
                 }
@@ -97,7 +104,7 @@ public final class InitializerHelper {
             }
             cursor.next();
         }
-        return arrayType.withSize(new ConstantUnsignedLong(size));
+        return size;
     }
 
     private void checkOverwrite(InitializerNode toBeWritten, InitializerNode newInit, MutableBoolean warned) {
@@ -132,7 +139,7 @@ public final class InitializerHelper {
         // 标量的初始化式必须是单个表达式，可选地以花括号环绕
         DesignationInitializerNode first = init.inits.get(0);
         // 不允许有指代符
-        makeDesignation(typeToInit, first.designators, false);
+        makeDesignation(typeToInit, first.designators);
 
         InitializerNode firstInit = first.initializer;
         if (firstInit instanceof CompoundInitializerNode cin) {
@@ -173,7 +180,7 @@ public final class InitializerHelper {
         for (DesignationInitializerNode din : init.inits) {
             // 如果有指代符，将其应用
             if (!din.designators.isEmpty()) {
-                Designation newCursor = makeDesignation(typeToInit, din.designators, false);
+                Designation newCursor = makeDesignation(typeToInit, din.designators);
                 if (newCursor != null) {
                     cursor = newCursor;
                 }
@@ -231,12 +238,11 @@ public final class InitializerHelper {
     /**
      * 从指代符列表构造指代符序列
      *
-     * @param typeToInit         指代符序列所管理的类型
-     * @param designators        指代符列表
-     * @param suppressDiagnostic 是否抑制诊断信息
+     * @param typeToInit  指代符序列所管理的类型
+     * @param designators 指代符列表
      * @return 构造得到的指代符序列，或 {@code null} 如果无法构造
      */
-    private Designation makeDesignation(Type typeToInit, List<DesignatorNode> designators, boolean suppressDiagnostic) {
+    private Designation makeDesignation(Type typeToInit, List<DesignatorNode> designators) {
         Type currentType = typeToInit;
         List<Designator> currentDesignators = new ArrayList<>();
 
@@ -248,23 +254,23 @@ public final class InitializerHelper {
                     typeChecker.checkExpression(adn.index);
 
                     // 要求为整数常量
-                    if (!(adn.index instanceof ConstantNode index && index.expType.isInteger())) {
-                        if (!suppressDiagnostic) {
-                            String msg = "array index in initializer must be a constant integer expression";
-                            reporter.error(adn.index.wholeLoc, msg);
-                        }
-                        return null;
+                    Either<Constant, SourceLocation> evalResult = constantEvaluator.tryEvalIntegerConstant(adn.index);
+                    long indexValue;
+                    if (evalResult.right().isPresent()) {
+                        String msg = "array index in initializer must be a constant integer expression";
+                        reporter.error(evalResult.right().get(), msg);
+                        indexValue = 0;
+                    } else {
+                        indexValue = evalResult.orThrow().toLong().value();
                     }
-                    long indexValue = index.value.toLong().value();
+                    adn.index = new ConstantNode(adn.index.wholeLoc, new ConstantLong(indexValue));
 
                     // 检查是否越界
                     long size = at.size().value();
                     if (indexValue < 0 || (size > 0 && indexValue >= size)) {
-                        if (!suppressDiagnostic) {
-                            String msg = "array index in initializer exceeds array bounds";
-                            reporter.error(adn.index.wholeLoc, msg);
-                        }
-                        return null;
+                        String msg = "array index in initializer exceeds array bounds";
+                        reporter.error(adn.index.wholeLoc, msg);
+                        indexValue = 0;
                     }
 
                     currentDesignators.add(new ArrayDesignator(indexValue, at));
@@ -347,12 +353,32 @@ public final class InitializerHelper {
         if (normalized instanceof SingleInitializerNode sin) {
             ExpressionNode init = sin.exp;
             StaticInit toAppend;
-            if (!(init instanceof ConstantNode constInit)) {
-                String msg = "initializer element is not constant";
-                reporter.error(init.wholeLoc, msg);
-                toAppend = new ZeroInit(type.sizeof());
+
+            // 拥有静态存储期的对象的初始化式中使用的表达式，必须是下列表达式之一
+            // 算术常量表达式
+            // 空指针常量
+            // 地址常量表达式
+            // 某完整对象类型的地址常量表达式加或减一个整数常量表达式
+
+            // 在类型检查时，已经将初始化表达式转换至对应的类型
+            if (type.isArithmetic()) {
+                Either<Constant, SourceLocation> evalResult = constantEvaluator.tryEvalArithmeticConstant(init);
+                if (evalResult.right().isPresent()) {
+                    String msg = "initializer element is not constant";
+                    reporter.error(evalResult.right().get(), msg);
+                    toAppend = new ZeroInit(type.sizeof());
+                } else {
+                    Constant constant = evalResult.orThrow();
+                    toAppend = constant.toStaticInitOrZero();
+                }
             } else {
-                toAppend = constInit.value.toStaticInitOrZero();
+                if (!(init instanceof ConstantNode constInit)) {
+                    String msg = "initializer element is not constant";
+                    reporter.error(init.wholeLoc, msg);
+                    toAppend = new ZeroInit(type.sizeof());
+                } else {
+                    toAppend = constInit.value.toStaticInitOrZero();
+                }
             }
 
             if (result.isEmpty()) {

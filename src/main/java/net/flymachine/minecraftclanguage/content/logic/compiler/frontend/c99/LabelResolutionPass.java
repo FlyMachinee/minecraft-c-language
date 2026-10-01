@@ -118,20 +118,12 @@ public final class LabelResolutionPass implements StatementVisitor {
             // 当前没有在switch语句内
             reporter.error(caseLabelInfo.caseLocation, "case label not within a switch statement");
         } else {
-            if (!(caseLabelInfo.caseValue instanceof ConstantNode)) {
-                reporter.error(caseLabelInfo.caseLocation, "case label does not reduce to an integer constant");
-                return;
-            }
             // 在switch中，查询当前的case数值是否已定义
-            ConstantNode newConstantNode = new ConstantNode(
-                caseLabelInfo.caseValue.wholeLoc,
-                ((ConstantNode) caseLabelInfo.caseValue).value.castTo(switchNode.exp.expType));
-            caseLabelInfo.caseValue = newConstantNode;
-
             // switch 语句体可拥有任意数量的 case: 标号，只要所有常量表达式的值（在转换到表达式的提升后类型后）各不相同
             // 需要进行常量转换
             // TODO: 若以后添加枚举，则不能直接转换至 BasicType
-            long value = newConstantNode.value.toLong().value();
+            // 在类型检查时已经处理为整数常量了，否则则不会执行该阶段
+            long value = ((ConstantNode) caseLabelInfo.caseValue).value.castTo(switchNode.exp.expType).toLong().value();
             StatementNode.CaseLabelInfo definition = switchNode.caseValues.get(value);
             if (definition != null) {
                 // 已定义

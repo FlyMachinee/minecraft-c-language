@@ -12,6 +12,8 @@ public class DiagnosticReporter {
 
     private SourceLocation lastLocation = null;
 
+    private boolean suppressDiagnostics = false;
+
     public DiagnosticReporter(Logger logger, SourceFile sourceFile) {
         this.logger = logger;
         this.sourceFile = sourceFile;
@@ -47,6 +49,18 @@ public class DiagnosticReporter {
         if (lastLocation != null) {
             ErrorHandleUtil.logNote(logger, sourceFile, lastLocation, msg);
         }
+    }
+
+    public void suppressDiagnostics(boolean suppress) {
+        this.suppressDiagnostics = suppress;
+    }
+
+    public void suppressDiagnostics() {
+        suppressDiagnostics(true);
+    }
+
+    public void unsuppressDiagnostics() {
+        suppressDiagnostics(false);
     }
 
     public int getErrorCount() {

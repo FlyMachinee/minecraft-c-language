@@ -176,6 +176,11 @@ expression:
     assignmentExpression
     ;
 
+// ISO 6.6, Constant Expressions
+constantExpression
+    : conditionalExpression
+    ;
+
 // ISO 6.7, Declarations
 declaration
     : declarationSpecifiers initDeclaratorList? Semicolon
@@ -233,7 +238,7 @@ directDeclarator
     : Identifier
     | LeftParen declarator RightParen
     | directDeclarator LeftParen parameterTypeList RightParen
-    | directDeclarator LeftBracket typeQualifier* IntegerConstant? RightBracket
+    | directDeclarator LeftBracket typeQualifier* constantExpression? RightBracket
     ;
 pointer
     : Star typeQualifier* pointer?
@@ -261,8 +266,8 @@ directAbstractDeclarator
     : LeftParen abstractDeclarator RightParen
     | LeftParen parameterTypeList RightParen
     | directAbstractDeclarator LeftParen parameterTypeList RightParen
-    | LeftBracket IntegerConstant? RightBracket
-    | directAbstractDeclarator LeftBracket IntegerConstant? RightBracket
+    | LeftBracket constantExpression? RightBracket
+    | directAbstractDeclarator LeftBracket constantExpression? RightBracket
     ;
 
 // ISO 6.7.8, Initialization
@@ -277,7 +282,7 @@ designationInitializer // rewrote
     : (designator+ Assign)? initializer
     ;
 designator
-    : LeftBracket IntegerConstant RightBracket
+    : LeftBracket constantExpression RightBracket
     ;
 
 // ISO 6.8, Statements and Blocks
@@ -293,7 +298,7 @@ statement
 // ISO 6.8.1, Labeled Statements
 labeledStatement
     : Identifier Colon statement
-    | Case IntegerConstant Colon statement
+    | Case constantExpression Colon statement
     | Default Colon statement
     ;
 
