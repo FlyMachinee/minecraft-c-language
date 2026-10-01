@@ -61,13 +61,17 @@ public final class InitializerHelper {
             // 标量初始化
             // 标量的初始化式必须是单个表达式，可选地以花括号环绕
             sin.exp = typeChecker.checkExpressionAndDecay(sin.exp);
-            if (!typeChecker.validConvertAsIfByAssignment(sin.exp, typeToInit)) {
-                String msg = "incompatible types when initializing type '" +
-                             reporter.white(typeToInit.typename()) +
-                             "' using type '" + reporter.white(sin.exp.expType.typename()) + "'";
-                reporter.error(sin.exp.wholeLoc, msg);
-            } else {
-                sin.exp = typeChecker.convertTo(sin.exp, typeToInit);
+            if (!sin.exp.expType.isError()) {
+                sin.exp.expType = sin.exp.expType.removeConst();
+
+                if (!typeChecker.validConvertAsIfByAssignment(sin.exp, typeToInit)) {
+                    String msg = "incompatible types when initializing type '" +
+                                 reporter.white(typeToInit.typename()) +
+                                 "' using type '" + reporter.white(sin.exp.expType.typename()) + "'";
+                    reporter.error(sin.exp.wholeLoc, msg);
+                } else {
+                    sin.exp = typeChecker.convertTo(sin.exp, typeToInit);
+                }
             }
             return sin;
         }
@@ -152,7 +156,7 @@ public final class InitializerHelper {
             checkOverwrite(full, firstSingle, new MutableBoolean(false));
             // 类型转换
             firstSingle.exp = typeChecker.checkExpressionAndDecay(firstSingle.exp);
-            if (!(firstSingle.exp.expType instanceof ErrorType)) {
+            if (!firstSingle.exp.expType.isError()) {
                 firstSingle.exp.expType = firstSingle.exp.expType.removeConst();
                 if (!typeChecker.validConvertAsIfByAssignment(firstSingle.exp, typeToInit)) {
                     String msg = "incompatible types when initializing type '" +
