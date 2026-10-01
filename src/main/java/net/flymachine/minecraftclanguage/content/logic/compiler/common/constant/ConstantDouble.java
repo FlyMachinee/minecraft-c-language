@@ -85,16 +85,8 @@ public record ConstantDouble(double value) implements Constant {
             }
             case MODULO, BITWISE_AND, BITWISE_OR, BITWISE_XOR, LEFT_SHIFT, RIGHT_SHIFT ->
                 throw new UnsupportedOperationException("Unsupported operation");
-            case LOGICAL_AND, LOGICAL_OR -> {
-                if (rhsType.isScalar()) {
-                    if (op == BinaryOperator.LOGICAL_AND) {
-                        yield new ConstantInt(this.isZero() || rhs.isZero() ? 0 : 1);
-                    } else {
-                        yield new ConstantInt(this.isZero() && rhs.isZero() ? 0 : 1);
-                    }
-                }
-                throw new UnsupportedOperationException("Unsupported operation");
-            }
+            case LOGICAL_AND, LOGICAL_OR ->
+                throw new UnsupportedOperationException("Logical operation shouldn't be handled by constant operation");
             case LESS_THAN, LESS_OR_EQUAL, GREATER_THAN, GREATER_OR_EQUAL -> {
                 if (rhsType.isReal()) {
                     if (lhsType != rhsType) {
@@ -141,8 +133,8 @@ public record ConstantDouble(double value) implements Constant {
                 throw new UnsupportedOperationException("Modulo operation is not supported for double constants");
             case LEFT_SHIFT, RIGHT_SHIFT, BITWISE_AND, BITWISE_OR, BITWISE_XOR ->
                 throw new UnsupportedOperationException("Bitwise operation is not supported for double constants");
-            case LOGICAL_AND -> new ConstantInt((value != 0.0 && rhs.value != 0.0) ? 1 : 0);
-            case LOGICAL_OR -> new ConstantInt((value != 0.0 || rhs.value != 0.0) ? 1 : 0);
+            case LOGICAL_AND, LOGICAL_OR ->
+                throw new UnsupportedOperationException("Should be handled earlier");
             case LESS_THAN -> new ConstantInt(value < rhs.value ? 1 : 0);
             case GREATER_THAN -> new ConstantInt(value > rhs.value ? 1 : 0);
             case EQUAL -> new ConstantInt(value == rhs.value ? 1 : 0);

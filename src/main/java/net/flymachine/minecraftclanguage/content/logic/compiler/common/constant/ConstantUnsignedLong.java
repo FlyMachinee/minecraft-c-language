@@ -99,16 +99,7 @@ public record ConstantUnsignedLong(long value) implements Constant {
                 }
                 throw new UnsupportedOperationException("Unsupported operation");
             }
-            case LOGICAL_AND, LOGICAL_OR -> {
-                if (rhsType.isScalar()) {
-                    if (op == BinaryOperator.LOGICAL_AND) {
-                        yield new ConstantInt(this.isZero() || rhs.isZero() ? 0 : 1);
-                    } else {
-                        yield new ConstantInt(this.isZero() && rhs.isZero() ? 0 : 1);
-                    }
-                }
-                throw new UnsupportedOperationException("Unsupported operation");
-            }
+            case LOGICAL_AND, LOGICAL_OR -> throw new UnsupportedOperationException("Should be handled earlier");
             case LESS_THAN, LESS_OR_EQUAL, GREATER_THAN, GREATER_OR_EQUAL -> {
                 if (rhsType.isReal()) {
                     if (lhsType != rhsType) {

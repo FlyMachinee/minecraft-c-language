@@ -94,16 +94,7 @@ public record ConstantPointer(long value, Type referencedType) implements Consta
             }
             case MULTIPLY, DIVIDE, LEFT_SHIFT, RIGHT_SHIFT, MODULO, BITWISE_AND, BITWISE_OR, BITWISE_XOR ->
                 throw new UnsupportedOperationException("Unsupported operation");
-            case LOGICAL_AND, LOGICAL_OR -> {
-                if (rhsType.isScalar()) {
-                    if (op == BinaryOperator.LOGICAL_AND) {
-                        yield new ConstantInt(this.isZero() || rhs.isZero() ? 0 : 1);
-                    } else {
-                        yield new ConstantInt(this.isZero() && rhs.isZero() ? 0 : 1);
-                    }
-                }
-                throw new UnsupportedOperationException("Unsupported operation");
-            }
+            case LOGICAL_AND, LOGICAL_OR -> throw new UnsupportedOperationException("Should be handled earlier");
             case LESS_THAN, LESS_OR_EQUAL, GREATER_THAN, GREATER_OR_EQUAL -> {
                 if (rhs instanceof ConstantPointer rhsPtr) {
                     if (!lhsType.referencedType().removeQualifiers()
