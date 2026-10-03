@@ -180,45 +180,38 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
 
     @Override
     public Void visit(TacUnaryOperation inst) {
-        if (inst.src instanceof TacConstant tacConstant) {
-            // 若源操作数为常量，直接计算结果并生成 Move 指令
-            Constant result = tacConstant.value.apply(inst.op);
-            AsmType asmType = getType(inst.dst).toAsmType();
-            target.add(new Move(asmType, immediate(result), lowerValue(inst.dst)));
-        } else {
-            AsmType asmType = getType(inst.src).toAsmType();
-            switch (inst.op) {
-                case NEGATE -> {
-                    if (asmType == AsmType.DOUBLE) {
-                        // fneg.d
-                        target.add(new DoubleNegate(lowerValue(inst.src), lowerValue(inst.dst)));
-                        return null;
-                    }
+        AsmType asmType = getType(inst.src).toAsmType();
+        switch (inst.op) {
+            case NEGATE -> {
+                if (asmType == AsmType.DOUBLE) {
+                    // fneg.d
+                    target.add(new DoubleNegate(lowerValue(inst.src), lowerValue(inst.dst)));
+                    return null;
+                }
 
-                    // sub.w(d) dst r0 src
-                    target.add(new Binary(
-                        Binary.Operator.SUB, asmType,
-                        ZERO, lowerValue(inst.src), lowerValue(inst.dst)));
+                // sub.w(d) dst r0 src
+                target.add(new Binary(
+                    Binary.Operator.SUB, asmType,
+                    ZERO, lowerValue(inst.src), lowerValue(inst.dst)));
+            }
+            case COMPLEMENT -> {
+                // nor dst src r0
+                target.add(new Bitwise(
+                    Bitwise.Operator.NOR, asmType,
+                    lowerValue(inst.src), ZERO, lowerValue(inst.dst)));
+            }
+            case NOT -> {
+                if (asmType == AsmType.DOUBLE) {
+                    target.add(new Move(AsmType.DOUBLE, ZERO, FT1));
+                    target.add(new CompareDouble(CEQ, lowerValue(inst.src), FT1, FCC0));
+                    target.add(new GetCC(FCC0, lowerValue(inst.dst)));
+                    return null;
                 }
-                case COMPLEMENT -> {
-                    // nor dst src r0
-                    target.add(new Bitwise(
-                        Bitwise.Operator.NOR, asmType,
-                        lowerValue(inst.src), ZERO, lowerValue(inst.dst)));
-                }
-                case NOT -> {
-                    if (asmType == AsmType.DOUBLE) {
-                        target.add(new Move(AsmType.DOUBLE, ZERO, FT1));
-                        target.add(new CompareDouble(CEQ, lowerValue(inst.src), FT1, FCC0));
-                        target.add(new GetCC(FCC0, lowerValue(inst.dst)));
-                        return null;
-                    }
 
-                    // sltui dst src 1
-                    target.add(new Compare(
-                        Comparison.LESS, true, asmType,
-                        lowerValue(inst.src), new Immediate(1), lowerValue(inst.dst)));
-                }
+                // sltui dst src 1
+                target.add(new Compare(
+                    Comparison.LESS, true, asmType,
+                    lowerValue(inst.src), new Immediate(1), lowerValue(inst.dst)));
             }
         }
         return null;
@@ -226,18 +219,6 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
 
     @Override
     public Void visit(TacBinaryOperation inst) {
-        if ((inst.op == BinaryOperator.DIVIDE || inst.op == BinaryOperator.MODULO) &&
-            inst.rhs instanceof TacConstant rhsConst && rhsConst.value.getType().isInteger() &&
-            rhsConst.value.isZero()) {
-            // 除0
-        } else if (inst.lhs instanceof TacConstant tacLhsConstant &&
-                   inst.rhs instanceof TacConstant tacRhsConstant) {
-            // 若左、右操作数均为常量，直接计算结果并生成 Move 指令
-            Constant result = tacLhsConstant.value.apply(inst.op, tacRhsConstant.value);
-            AsmType asmType = getType(inst.dst).toAsmType();
-            target.add(new Move(asmType, immediate(result), lowerValue(inst.dst)));
-            return null;
-        }
         Type lhsType = getType(inst.lhs);
         AsmType asmType = lhsType.toAsmType();
         boolean isUnsigned = false;

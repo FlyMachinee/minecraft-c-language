@@ -1,5 +1,6 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99;
 
+import com.mojang.datafixers.util.Either;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.AssignmentOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.BinaryOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.Comparison;
@@ -9,6 +10,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Arra
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.BasicType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.PointerType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.util.UndefinedBehaviourUtil;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.ExpressionBoolVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.ExpressionVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.StatementVisitor;
@@ -19,6 +21,7 @@ import net.flymachine.minecraftclanguage.content.logic.errorHandle.DiagnosticRep
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 public final class AstToTacLowerer implements
     StatementVisitor, ExpressionVisitor<AstToTacLowerer.ExpEvalResult>, ExpressionBoolVisitor {
@@ -538,7 +541,12 @@ public final class AstToTacLowerer implements
     public ExpEvalResult visit(UnaryExpressionNode unaryExp) {
         TacValue src = evalAndLvalueConvert(unaryExp.exp);
         if (src instanceof TacConstant constant) {
-            return new PlainOperand(constant.value.apply(unaryExp.op.op));
+            Either<Constant, String> reduced = constant.value.tryApply(unaryExp.op.op, reporter);
+            if (reduced.right().isPresent()) {
+                reporter.warning(unaryExp.op.wholeLoc, reduced.right().get());
+            } else {
+                return new PlainOperand(reduced.orThrow());
+            }
         }
         TacVariable dst = makeTempVar(unaryExp.expType);
         emitTac(new TacUnaryOperation(unaryExp.op.op, src, dst));
@@ -741,14 +749,22 @@ public final class AstToTacLowerer implements
         TacValue lhs = evalAndLvalueConvert(binaryExp.lhs);
         TacValue rhs = evalAndLvalueConvert(binaryExp.rhs);
 
-        if ((op == BinaryOperator.DIVIDE || op == BinaryOperator.MODULO) &&
-            rhsType.isInteger() && rhs instanceof TacConstant rhsConst && rhsConst.value.isZero()) {
-            // 除0
-            String msg = "division by zero";
-            reporter.warning(binaryExp.op.wholeLoc, msg);
+        Optional<String> checkRes = switch (op) {
+            case DIVIDE, MODULO -> UndefinedBehaviourUtil.checkDivision(binaryExp.rhs);
+            case LEFT_SHIFT -> UndefinedBehaviourUtil.checkBitwiseShift(true, binaryExp.lhs, binaryExp.rhs);
+            case RIGHT_SHIFT -> UndefinedBehaviourUtil.checkBitwiseShift(false, binaryExp.lhs, binaryExp.rhs);
+            default -> Optional.empty();
+        };
+
+        if (checkRes.isPresent()) {
+            reporter.warning(binaryExp.op.wholeLoc, checkRes.get());
         } else if (lhs instanceof TacConstant lhsConst && rhs instanceof TacConstant rhsConst) {
-            Constant reduced = lhsConst.value.apply(op, rhsConst.value);
-            return new PlainOperand(reduced);
+            Either<Constant, String> reduced = lhsConst.value.tryApply(op, rhsConst.value, reporter);
+            if (reduced.right().isPresent()) {
+                reporter.warning(binaryExp.op.wholeLoc, reduced.right().get());
+            } else {
+                return new PlainOperand(reduced.orThrow());
+            }
         }
         TacVariable dst = makeTempVar(binaryExp.expType);
         emitTac(new TacBinaryOperation(op, lhs, rhs, dst));
