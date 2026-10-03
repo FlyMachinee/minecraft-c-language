@@ -1,5 +1,6 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.common.constant;
 
+import com.mojang.datafixers.util.Either;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.AsmType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.BinaryOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.Comparison;
@@ -7,9 +8,13 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.UnaryOper
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.UnsignedIntInit;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.BasicType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.util.UndefinedBehaviourUtil;
+import net.flymachine.minecraftclanguage.content.logic.errorHandle.DiagnosticReporter;
 import org.jetbrains.annotations.NotNull;
 
-public record ConstantUnsignedInt(int value) implements Constant {
+import java.util.Optional;
+
+public record ConstantUnsignedInt(int value) implements IntegerConstant {
 
     public static final ConstantUnsignedInt ZERO = new ConstantUnsignedInt(0);
     public static final ConstantUnsignedInt ONE = new ConstantUnsignedInt(1);
@@ -107,6 +112,61 @@ public record ConstantUnsignedInt(int value) implements Constant {
     }
 
     @Override
+    public Either<Constant, String> tryApply(UnaryOperator op, DiagnosticReporter reporter) {
+        return Either.left(apply(op));
+    }
+
+    @Override
+    public Either<Constant, String> tryApply(BinaryOperator op, Constant rhs, DiagnosticReporter reporter) {
+        BasicType lhsType = getType();
+        Type rhsType = rhs.getType();
+
+        return switch (op) {
+            case ADD, SUBTRACT, MULTIPLY, DIVIDE, EQUAL, NOT_EQUAL -> {
+                if (rhsType.isArithmetic()) {
+                    if (lhsType != rhsType) {
+                        throw new UnsupportedOperationException("Cast to their common real type first");
+                    }
+                    yield tryApply(op, (ConstantUnsignedInt) rhs, reporter);
+                }
+                throw new UnsupportedOperationException("Unsupported operation");
+            }
+            case MODULO, BITWISE_AND, BITWISE_OR, BITWISE_XOR -> {
+                if (rhsType.isInteger()) {
+                    if (lhsType != rhsType) {
+                        throw new UnsupportedOperationException("Cast to their common real type first");
+                    }
+                    yield tryApply(op, (ConstantUnsignedInt) rhs, reporter);
+                }
+                throw new UnsupportedOperationException("Unsupported operation");
+            }
+            case LEFT_SHIFT, RIGHT_SHIFT -> {
+                if (rhsType.isInteger()) {
+                    Optional<String> checkRes =
+                        UndefinedBehaviourUtil.checkBitwiseShift(
+                            op == BinaryOperator.LEFT_SHIFT, this.asNode(), rhs.asNode());
+                    if (checkRes.isPresent()) {
+                        yield Either.right(checkRes.get());
+                    } else {
+                        yield Either.left(apply(op, rhs.toUnsignedInt()));
+                    }
+                }
+                throw new UnsupportedOperationException("Unsupported operation");
+            }
+            case LOGICAL_AND, LOGICAL_OR -> throw new UnsupportedOperationException("Should be handled earlier");
+            case LESS_THAN, LESS_OR_EQUAL, GREATER_THAN, GREATER_OR_EQUAL -> {
+                if (rhsType.isReal()) {
+                    if (lhsType != rhsType) {
+                        throw new UnsupportedOperationException("Cast to their common real type first");
+                    }
+                    yield Either.left(apply(op, rhs.toUnsignedInt()));
+                }
+                throw new UnsupportedOperationException("Unsupported operation");
+            }
+        };
+    }
+
+    @Override
     public ConstantInt apply(Comparison cmp, Constant rhs) {
         return (ConstantInt) apply(cmp.toBinaryOperator(), rhs);
     }
@@ -126,7 +186,7 @@ public record ConstantUnsignedInt(int value) implements Constant {
         return AsmType.WORD;
     }
 
-    public Constant apply(BinaryOperator op, ConstantUnsignedInt rhs) {
+    private Constant apply(BinaryOperator op, ConstantUnsignedInt rhs) {
         return switch (op) {
             case ADD -> new ConstantUnsignedInt(value + rhs.value);
             case SUBTRACT -> new ConstantUnsignedInt(value - rhs.value);
@@ -148,6 +208,15 @@ public record ConstantUnsignedInt(int value) implements Constant {
         };
     }
 
+    private Either<Constant, String> tryApply(BinaryOperator op, ConstantUnsignedInt rhs, DiagnosticReporter reporter) {
+        if (op == BinaryOperator.DIVIDE || op == BinaryOperator.MODULO) {
+            if (rhs.value == 0) {
+                return Either.right("division by zero");
+            }
+        }
+        return Either.left(apply(op, rhs));
+    }
+
     public ConstantInt apply(Comparison cmp, ConstantUnsignedInt rhs) {
         return (ConstantInt) apply(cmp.toBinaryOperator(), rhs);
     }
@@ -155,5 +224,25 @@ public record ConstantUnsignedInt(int value) implements Constant {
     @Override
     public boolean isNullPointer() {
         return value == 0;
+    }
+
+    @Override
+    public boolean isSigned() {
+        return false;
+    }
+
+    @Override
+    public boolean isPositive() {
+        return value != 0;
+    }
+
+    @Override
+    public boolean isNegative() {
+        return false;
+    }
+
+    @Override
+    public boolean isNonNegative() {
+        return true;
     }
 }

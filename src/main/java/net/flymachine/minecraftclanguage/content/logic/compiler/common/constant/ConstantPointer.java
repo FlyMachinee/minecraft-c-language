@@ -1,5 +1,6 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.common.constant;
 
+import com.mojang.datafixers.util.Either;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.AsmType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.BinaryOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.Comparison;
@@ -8,6 +9,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticIni
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.UnsignedLongInit;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.PointerType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
+import net.flymachine.minecraftclanguage.content.logic.errorHandle.DiagnosticReporter;
 import org.jetbrains.annotations.NotNull;
 
 public record ConstantPointer(long value, Type referencedType) implements Constant {
@@ -128,6 +130,16 @@ public record ConstantPointer(long value, Type referencedType) implements Consta
                 throw new UnsupportedOperationException("Unsupported operation");
             }
         };
+    }
+
+    @Override
+    public Either<Constant, String> tryApply(UnaryOperator op, DiagnosticReporter reporter) {
+        return Either.left(apply(op));
+    }
+
+    @Override
+    public Either<Constant, String> tryApply(BinaryOperator op, Constant rhs, DiagnosticReporter reporter) {
+        return Either.left(apply(op, rhs));
     }
 
     @Override

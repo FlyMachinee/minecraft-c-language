@@ -1,5 +1,6 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.common.constant;
 
+import com.mojang.datafixers.util.Either;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.AsmType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.BinaryOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.Comparison;
@@ -9,9 +10,11 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticIni
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.BasicType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.PointerType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.ConstantNode;
+import net.flymachine.minecraftclanguage.content.logic.errorHandle.DiagnosticReporter;
+import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
-public sealed interface Constant
-    permits ConstantInt, ConstantLong, ConstantUnsignedInt, ConstantUnsignedLong, ConstantDouble, ConstantPointer {
+public sealed interface Constant permits ConstantDouble, ConstantPointer, IntegerConstant {
 
     ConstantInt toInt();
 
@@ -54,6 +57,10 @@ public sealed interface Constant
 
     Constant apply(BinaryOperator op, Constant rhs);
 
+    Either<Constant, String> tryApply(UnaryOperator op, DiagnosticReporter reporter);
+
+    Either<Constant, String> tryApply(BinaryOperator op, Constant rhs, DiagnosticReporter reporter);
+
     ConstantInt apply(Comparison cmp, Constant rhs);
 
     boolean isZero();
@@ -63,4 +70,12 @@ public sealed interface Constant
     AsmType getAsmType();
 
     boolean isNullPointer();
+
+    default ConstantNode asNode() {
+        return new ConstantNode(null, this);
+    }
+
+    default ConstantNode asNode(SourceLocation wholeLoc) {
+        return new ConstantNode(wholeLoc, this);
+    }
 }

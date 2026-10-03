@@ -1,5 +1,6 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.common.constant;
 
+import com.mojang.datafixers.util.Either;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.AsmType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.BinaryOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.Comparison;
@@ -7,6 +8,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.UnaryOper
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.DoubleInit;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.BasicType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
+import net.flymachine.minecraftclanguage.content.logic.errorHandle.DiagnosticReporter;
 import org.jetbrains.annotations.NotNull;
 
 public record ConstantDouble(double value) implements Constant {
@@ -101,6 +103,16 @@ public record ConstantDouble(double value) implements Constant {
     }
 
     @Override
+    public Either<Constant, String> tryApply(UnaryOperator op, DiagnosticReporter reporter) {
+        return Either.left(apply(op));
+    }
+
+    @Override
+    public Either<Constant, String> tryApply(BinaryOperator op, Constant rhs, DiagnosticReporter reporter) {
+        return Either.left(apply(op, rhs));
+    }
+
+    @Override
     public ConstantInt apply(Comparison cmp, Constant rhs) {
         if (!(rhs instanceof ConstantDouble doubleRhs)) {
             throw new UnsupportedOperationException("Cast rhs to double first");
@@ -123,7 +135,7 @@ public record ConstantDouble(double value) implements Constant {
         return AsmType.DOUBLE;
     }
 
-    public Constant apply(BinaryOperator op, ConstantDouble rhs) {
+    private Constant apply(BinaryOperator op, ConstantDouble rhs) {
         return switch (op) {
             case ADD -> new ConstantDouble(value + rhs.value);
             case SUBTRACT -> new ConstantDouble(value - rhs.value);
@@ -133,8 +145,7 @@ public record ConstantDouble(double value) implements Constant {
                 throw new UnsupportedOperationException("Modulo operation is not supported for double constants");
             case LEFT_SHIFT, RIGHT_SHIFT, BITWISE_AND, BITWISE_OR, BITWISE_XOR ->
                 throw new UnsupportedOperationException("Bitwise operation is not supported for double constants");
-            case LOGICAL_AND, LOGICAL_OR ->
-                throw new UnsupportedOperationException("Should be handled earlier");
+            case LOGICAL_AND, LOGICAL_OR -> throw new UnsupportedOperationException("Should be handled earlier");
             case LESS_THAN -> new ConstantInt(value < rhs.value ? 1 : 0);
             case GREATER_THAN -> new ConstantInt(value > rhs.value ? 1 : 0);
             case EQUAL -> new ConstantInt(value == rhs.value ? 1 : 0);
