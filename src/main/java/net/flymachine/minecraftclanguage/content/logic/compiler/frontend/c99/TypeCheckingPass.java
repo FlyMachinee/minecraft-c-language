@@ -31,7 +31,7 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
     public TypeCheckingPass(DiagnosticReporter reporter) {
         this.reporter = reporter;
         this.initializerHelper = new InitializerHelper(reporter, this);
-        this.constantEvaluator = new ConstantEvaluator(symbolTable);
+        this.constantEvaluator = new ConstantEvaluator(symbolTable, reporter);
     }
 
     private final SymbolTable symbolTable = new SymbolTable();

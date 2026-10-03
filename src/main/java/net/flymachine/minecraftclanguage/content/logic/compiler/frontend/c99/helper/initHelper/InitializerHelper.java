@@ -24,7 +24,7 @@ public final class InitializerHelper {
     public InitializerHelper(DiagnosticReporter reporter, TypeCheckingPass typeChecker) {
         this.reporter = reporter;
         this.typeChecker = typeChecker;
-        this.constantEvaluator = new ConstantEvaluator(typeChecker.getSymbolTable());
+        this.constantEvaluator = new ConstantEvaluator(typeChecker.getSymbolTable(), reporter);
     }
 
     private static SingleInitializerNode makeSingleInit(Constant constant) {

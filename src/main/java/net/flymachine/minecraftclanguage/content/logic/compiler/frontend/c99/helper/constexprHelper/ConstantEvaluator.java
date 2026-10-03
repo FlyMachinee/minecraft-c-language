@@ -7,14 +7,17 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.SymbolTable;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.ConstantEvalVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.*;
+import net.flymachine.minecraftclanguage.content.logic.errorHandle.DiagnosticReporter;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
 public final class ConstantEvaluator implements ConstantEvalVisitor {
 
     private final SymbolTable symbolTable;
+    private final DiagnosticReporter reporter;
 
-    public ConstantEvaluator(SymbolTable symbolTable) {
+    public ConstantEvaluator(SymbolTable symbolTable, DiagnosticReporter reporter) {
         this.symbolTable = symbolTable;
+        this.reporter = reporter;
     }
 
     /**
@@ -83,8 +86,13 @@ public final class ConstantEvaluator implements ConstantEvalVisitor {
         if (operand.right().isPresent()) {
             return operand;
         }
-        Constant result = operand.orThrow().apply(node.op.op);
-        return typeAllowed(category, result.getType()) ? Either.left(result) : Either.right(node.wholeLoc);
+        Either<Constant, String> result = operand.orThrow().tryApply(node.op.op, reporter);
+        if (result.right().isPresent()) {
+            reporter.warning(node.op.wholeLoc, result.right().get());
+            return Either.right(node.wholeLoc);
+        }
+        Constant res = result.orThrow();
+        return typeAllowed(category, res.getType()) ? Either.left(res) : Either.right(node.wholeLoc);
     }
 
     @Override
@@ -99,8 +107,13 @@ public final class ConstantEvaluator implements ConstantEvalVisitor {
             return rhs;
         }
 
-        Constant result = lhs.orThrow().apply(node.op.op, rhs.orThrow());
-        return typeAllowed(category, result.getType()) ? Either.left(result) : Either.right(node.wholeLoc);
+        Either<Constant, String> result = lhs.orThrow().tryApply(node.op.op, rhs.orThrow(), reporter);
+        if (result.right().isPresent()) {
+            reporter.warning(node.op.wholeLoc, result.right().get());
+            return Either.right(node.wholeLoc);
+        }
+        Constant res = result.orThrow();
+        return typeAllowed(category, res.getType()) ? Either.left(res) : Either.right(node.wholeLoc);
     }
 
     @Override
