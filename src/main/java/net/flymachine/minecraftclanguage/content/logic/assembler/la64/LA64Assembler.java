@@ -57,7 +57,10 @@ public final class LA64Assembler {
             if (statement instanceof LA64AsmDirective directive) {
                 switch (directive.name()) {
                     case "globl", "global" -> {
-                        if (directive.argCount() != 1 && !directive.arg(0).isSym()) {
+                        if (directive.argCount() != 1) {
+                            throw new IllegalArgumentException(
+                                "Expected one argument for global directive, but got: " + directive.args());
+                        } else if (!directive.arg(0).isSym()) {
                             throw new IllegalArgumentException(
                                 "Expected symbol argument for global directive, but got: " + directive.args().get(0));
                         } else {
@@ -75,14 +78,20 @@ public final class LA64Assembler {
                         }
                     }
                     case "align", "balign" -> {
-                        if (directive.argCount() != 1 && !directive.arg(0).isNum()) {
+                        if (directive.argCount() != 1) {
+                            throw new IllegalArgumentException(
+                                "Expected one argument for align/balign directive, but got: " + directive.args());
+                        } else if (!directive.arg(0).isNum()) {
                             throw new IllegalArgumentException(
                                 "Expected numeric argument for align/balign directive, but got: " +
                                 directive.args().get(0));
                         }
                     }
                     case "long", "word" -> {
-                        if (directive.argCount() != 1 && !directive.arg(0).isNum()) {
+                        if (directive.argCount() != 1) {
+                            throw new IllegalArgumentException(
+                                "Expected one argument for word/long directive, but got: " + directive.args());
+                        } else if (!directive.arg(0).isNum()) {
                             throw new IllegalArgumentException(
                                 "Expected numeric argument for word/long directive, but got: " +
                                 directive.args().get(0));
@@ -95,14 +104,20 @@ public final class LA64Assembler {
                         }
                     }
                     case "quad", "dword" -> {
-                        if (directive.argCount() != 1 && !directive.arg(0).isNum()) {
+                        if (directive.argCount() != 1) {
                             throw new IllegalArgumentException(
-                                "Expected numeric argument for word/long directive, but got: " +
+                                "Expected one argument for quad/dword directive, but got: " + directive.args());
+                        } else if (!directive.arg(0).isNum()) {
+                            throw new IllegalArgumentException(
+                                "Expected numeric argument for quad/dword directive, but got: " +
                                 directive.args().get(0));
                         }
                     }
                     case "zero" -> {
-                        if (directive.argCount() != 1 && !directive.arg(0).isNum()) {
+                        if (directive.argCount() != 1) {
+                            throw new IllegalArgumentException(
+                                "Expected one argument for zero directive, but got: " + directive.args());
+                        } else if (!directive.arg(0).isNum()) {
                             throw new IllegalArgumentException(
                                 "Expected numeric argument for zero directive, but got: " + directive.args().get(0));
                         } else {
