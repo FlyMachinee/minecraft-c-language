@@ -2,6 +2,7 @@ package net.flymachine.minecraftclanguage.content.logic.executable.la64;
 
 import net.flymachine.minecraftclanguage.content.logic.executable.Segment;
 import net.flymachine.minecraftclanguage.content.logic.executable.SegmentPermission;
+import net.flymachine.minecraftclanguage.content.logic.object.RelocationEntry;
 
 import java.io.PrintStream;
 import java.util.List;
@@ -16,10 +17,12 @@ import java.util.List;
  * @param stackPageCount 栈占用的页数
  */
 public record LA64Executable(
-    String fileName, List<Segment> segments, long entryPoint, long stackTopVA, int stackPageCount) {
+    String fileName, boolean isPie, List<Segment> segments, List<RelocationEntry> relocations, long entryPoint,
+    long stackTopVA, int stackPageCount) {
 
     public void dump(PrintStream out) {
         out.println("File: " + fileName);
+        out.println("Pie: " + isPie);
         out.println();
 
         out.println("Segments:");
@@ -55,6 +58,18 @@ public record LA64Executable(
             idx++;
         }
         out.println();
+
+        out.println("Relocations:");
+        out.printf(
+            "  %-13s %-13s %-20s %-8s%n",
+            "Offset", "SymbolIndex", "RelocType", "Addend"
+        );
+        for (RelocationEntry reloc : relocations) {
+            out.printf(
+                "  0x%-11x %-13d %-20s %-8d%n",
+                reloc.offset(), reloc.symbolNameIndex(), reloc.relocationType(), reloc.addend()
+            );
+        }
 
         out.printf("Entry point: 0x%x%n", entryPoint);
         out.printf("Stack top: 0x%x, stack pages: %d%n", stackTopVA, stackPageCount);

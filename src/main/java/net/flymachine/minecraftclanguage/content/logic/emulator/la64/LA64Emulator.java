@@ -9,11 +9,14 @@ import net.flymachine.minecraftclanguage.content.logic.cpu.la64.LA64FpuState;
 import net.flymachine.minecraftclanguage.content.logic.cpu.la64.LA64MemoryManagementUnit;
 import net.flymachine.minecraftclanguage.content.logic.cpu.la64.exception.LA64RuntimeException;
 import net.flymachine.minecraftclanguage.content.logic.device.la64.Teletypewriter;
+import net.flymachine.minecraftclanguage.content.logic.emulator.AslrBaseGenerator;
 import net.flymachine.minecraftclanguage.content.logic.executable.Segment;
 import net.flymachine.minecraftclanguage.content.logic.executable.la64.LA64Executable;
 import net.flymachine.minecraftclanguage.content.logic.memory.MemoryCrossbar;
 import net.flymachine.minecraftclanguage.content.logic.memory.MemoryLikeDevice;
 import net.flymachine.minecraftclanguage.content.logic.memory.SimpleRam;
+import net.flymachine.minecraftclanguage.content.logic.object.RelocationEntry;
+import net.flymachine.minecraftclanguage.content.logic.object.RelocationType;
 
 public final class LA64Emulator {
 
@@ -22,6 +25,8 @@ public final class LA64Emulator {
     private final SimpleRam ram = new SimpleRam(256 * SimpleRam.PAGE_SIZE); // 1 MB
     private final MemoryCrossbar memoryCrossbar = new MemoryCrossbar(ram);
     private final LA64MemoryManagementUnit mmu = new LA64MemoryManagementUnit();
+
+    private final AslrBaseGenerator aslrBaseGenerator = new AslrBaseGenerator();
 
     private int ppn = 0;
 
@@ -52,14 +57,16 @@ public final class LA64Emulator {
 
     public void loadExecutable(LA64Executable executable) {
 
+        long executableLoadBase = executable.isPie() ? aslrBaseGenerator.nextBase() : 0;
+
         for (Segment segment : executable.segments()) {
-            long startVPN = segment.virtualAddr() / SimpleRam.PAGE_SIZE;
-            long endVPN = (segment.virtualAddr() + segment.size() - 1) / SimpleRam.PAGE_SIZE;
+            long vaddr = executableLoadBase + segment.virtualAddr();
+            long startVPN = vaddr / SimpleRam.PAGE_SIZE;
+            long endVPN = (vaddr + segment.size() - 1) / SimpleRam.PAGE_SIZE;
             for (long vpn = startVPN; vpn <= endVPN; ++vpn) {
                 mmu.addPageTableEntry(vpn, new LA64MemoryManagementUnit.LA64PageTableEntry(ppn++, true));
             }
             if (segment.data() != null) {
-                long vaddr = segment.virtualAddr();
                 long paddr = mmu.translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.LOAD);
                 ram.dmaToMemory(paddr, segment.data(), 0, segment.data().length);
             }
@@ -71,7 +78,19 @@ public final class LA64Emulator {
                 stackVPN - i,
                 new LA64MemoryManagementUnit.LA64PageTableEntry(ppn++, true));
         }
-        cpuState.setPc(executable.entryPoint());
+
+        // 动态链接器
+        for (RelocationEntry reloc : executable.relocations()) {
+            if (reloc.relocationType() != RelocationType.R_LARCH_RELATIVE) {
+                throw new IllegalArgumentException("Unsupported relocation type: " + reloc.relocationType());
+            }
+            long relocVA = reloc.offset() + executableLoadBase;
+            long relocPA = mmu.translateVirtualAddress(relocVA, LA64MemoryManagementUnit.LA64MemoryAccessType.LOAD);
+            long relocValue = reloc.addend() + executableLoadBase;
+            ram.storeDoubleWord(relocPA, relocValue);
+        }
+
+        cpuState.setPc(executable.entryPoint() + executableLoadBase);
     }
 
     public long start() {

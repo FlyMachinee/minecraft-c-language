@@ -128,6 +128,8 @@ public final class LA64Linker {
             throw new IllegalArgumentException("Cannot link an empty object");
         }
 
+        boolean isPie = options.pie();
+
         // 处理链接选项
         // 段信息
         Int2ObjectMap<OutputSegment> outputSegments = new Int2ObjectArrayMap<>();
@@ -135,6 +137,11 @@ public final class LA64Linker {
             if (outputSegments.containsKey(config.segmentIndex())) {
                 throw new IllegalArgumentException(
                     "Duplicate segment config for segment index: " + config.segmentIndex());
+            }
+            if (isPie && config.virtualAddr() != 0) {
+                throw new IllegalArgumentException(
+                    "Cannot specify virtual address for segment index " + config.segmentIndex() +
+                    " when PIE is enabled");
             }
             outputSegments.put(
                 config.segmentIndex(),
@@ -275,6 +282,8 @@ public final class LA64Linker {
         globalSymbols.put("__$stack_top", new GlobalSymbol(options.stackTopVA(), -1, -1, true));
 
         // 重定位
+        List<RelocationEntry> newRelocations = new ArrayList<>();
+
         for (int i = 0; i < objects.length; i++) {
             LA64Object obj = objects[i];
             EnumMap<SectionType, PlacementInfo> placementInfo = placements.get(i);
@@ -283,11 +292,6 @@ public final class LA64Linker {
             for (Section sec : obj.sections()) {
                 if (sec.relocations().isEmpty()) {
                     continue;
-                }
-                if (sec.type() != SectionType.TEXT) {
-                    throw new RuntimeException(
-                        "Relocations in section ." + sec.type().toString().toLowerCase() +
-                        " are not supported yet in object " + obj.fileName());
                 }
 
                 PlacementInfo pInfo = placementInfo.get(sec.type());
@@ -304,7 +308,7 @@ public final class LA64Linker {
                     String symName = names.get(relocationEntry.symbolNameIndex());
 
                     // 目标值
-                    int value;
+                    long value;
 
                     // 查询符号
                     // 先查询本目标文件内符号，再查询全局符号表
@@ -322,9 +326,22 @@ public final class LA64Linker {
                     }
 
                     // 将 value 写入到适当位置
-                    int offsetInOutSeg = pInfo.offsetInSegment + relocationEntry.offset();
-                    // 目前只处理 .text 内的重定位，直接这样就好
-                    patchInstruction(segData, offsetInOutSeg, relocationEntry.relocationType(), value);
+                    int offsetInOutSeg = (int) (pInfo.offsetInSegment + relocationEntry.offset());
+                    switch (sec.type()) {
+                        case TEXT ->
+                            patchInstruction(segData, offsetInOutSeg, relocationEntry.relocationType(), (int) value);
+                        case BSS -> throw new RuntimeException("Cannot apply relocation to .bss section: " + symName);
+                        case DATA, RODATA -> {
+                            if (relocationEntry.relocationType() != RelocationType.R_LARCH_64) {
+                                throw new RuntimeException(
+                                    "Unsupported relocation type for .data/.rodata section: " +
+                                    relocationEntry.relocationType());
+                            }
+                            newRelocations.add(new RelocationEntry(
+                                base + relocationEntry.offset(), 0, RelocationType.R_LARCH_RELATIVE, value
+                            ));
+                        }
+                    }
                 }
             }
         }
@@ -350,19 +367,22 @@ public final class LA64Linker {
         String outFileName = objects.length == 1 ? objects[0].fileName().replace(".o", ".exe") : "a.exe";
         return new LA64Executable(
             outFileName,
+            isPie,
             finalSegments,
+            newRelocations,
             entryPoint,
             options.stackTopVA(),
             options.stackPageCount());
     }
 
-    private int getRelocatedValue(RelocationEntry relocationEntry, long base, long targetVA, boolean isAbsolute) {
+    private long getRelocatedValue(RelocationEntry relocationEntry, long base, long targetVA, boolean isAbsolute) {
         // 需要被修补的区域的虚拟地址
         // = 所在节起始处的虚拟地址 + 该重定位项的节内偏移
         long addr = base + relocationEntry.offset();
 
         // 重定位符号的地址
         return switch (relocationEntry.relocationType()) {
+            case R_LARCH_64 -> targetVA + relocationEntry.addend();
             case R_LARCH_B21, R_LARCH_B16, R_LARCH_B26 -> {
                 // PC相对偏移 = (目标地址 - 指令地址) / 4
                 // 不能是绝对符号

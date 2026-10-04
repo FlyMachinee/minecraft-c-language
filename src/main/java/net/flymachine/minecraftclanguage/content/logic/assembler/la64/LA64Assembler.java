@@ -13,6 +13,7 @@ import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.*
 import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.operand.LA64AsmImmOperand;
 import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.operand.LA64AsmOperand;
 import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.operand.LA64AsmSymOperand;
+import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.operand.LA64DirectiveArgument;
 import net.flymachine.minecraftclanguage.content.logic.object.*;
 import net.flymachine.minecraftclanguage.content.logic.object.la64.LA64Object;
 
@@ -63,8 +64,12 @@ public final class LA64Assembler {
                         } else if (!directive.arg(0).isSym()) {
                             throw new IllegalArgumentException(
                                 "Expected symbol argument for global directive, but got: " + directive.args().get(0));
+                        } else if (directive.arg(0).asSym().offset() != 0) {
+                            throw new IllegalArgumentException(
+                                "Expected pure symbol argument for global directive, but got: " +
+                                directive.args().get(0));
                         } else {
-                            String symbolName = directive.arg(0).asSym();
+                            String symbolName = directive.arg(0).asSym().name();
                             if (symbolName.startsWith(".L")) {
                                 throw new IllegalArgumentException(
                                     "Local labels cannot be declared global: " + symbolName);
@@ -107,10 +112,6 @@ public final class LA64Assembler {
                         if (directive.argCount() != 1) {
                             throw new IllegalArgumentException(
                                 "Expected one argument for quad/dword directive, but got: " + directive.args());
-                        } else if (!directive.arg(0).isNum()) {
-                            throw new IllegalArgumentException(
-                                "Expected numeric argument for quad/dword directive, but got: " +
-                                directive.args().get(0));
                         }
                     }
                     case "zero" -> {
@@ -300,7 +301,7 @@ public final class LA64Assembler {
             if (statement instanceof LA64AsmDirective directive) {
                 switch (directive.name()) {
                     case "globl", "global" -> {
-                        String symbolName = directive.arg(0).asSym();
+                        String symbolName = directive.arg(0).asSym().name();
                         if (symbolName.startsWith(".L")) {
                             throw new IllegalArgumentException(
                                 "Local labels cannot be declared global: " + symbolName);
@@ -413,6 +414,7 @@ public final class LA64Assembler {
         // 符号表等
         List<SymbolEntry> symbolList = new ArrayList<>();
         symbolNames = new ArrayList<>();
+        symbolNames.add(""); // 保留索引 0 给空符号
         for (Map.Entry<String, SymbolLocation> entry : symbolTable.entrySet()) {
             String symbolName = entry.getKey();
             // if (symbolName.startsWith(".L")) {
@@ -463,7 +465,18 @@ public final class LA64Assembler {
                             (k, currentMaxAlign) -> Math.max(currentMaxAlign, align));
                     }
                     case "long", "word" -> writeIntLittleEndian(out, (int) directive.arg(0).asNum());
-                    case "quad", "dword" -> writeLongLittleEndian(out, directive.arg(0).asNum());
+                    case "quad", "dword" -> {
+                        LA64DirectiveArgument arg = directive.arg(0);
+                        if (arg.isNum()) {
+                            writeLongLittleEndian(out, arg.asNum());
+                        } else {
+                            // 符号值，需要添加重定位表
+                            writeLongLittleEndian(out, 0L);
+                            int index = getSymbolNameIndexOrAdd(arg.asSym().name());
+                            int addend = (int) arg.asSym().offset();
+                            relocs.add(new RelocationEntry(offset, index, RelocationType.R_LARCH_64, addend));
+                        }
+                    }
                     case "zero" -> {
                         int count = (int) directive.arg(0).asNum();
                         if (currentSectionType != SectionType.BSS) {

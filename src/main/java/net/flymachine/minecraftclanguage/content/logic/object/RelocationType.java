@@ -3,6 +3,20 @@ package net.flymachine.minecraftclanguage.content.logic.object;
 public enum RelocationType {
 
     /**
+     * 动态符号地址解析
+     * <p>
+     * *(int64_t *) PC = RtAddr + A
+     */
+    R_LARCH_64,
+
+    /**
+     * 模块动态加载地址修正
+     * <p>
+     * *(void **) PC = B + A
+     */
+    R_LARCH_RELATIVE,
+
+    /**
      * 18 位相对 PC 跳转
      * <p>
      * (*(uint32_t *) PC) [25:10] = (S+A-PC) [17:2]

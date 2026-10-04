@@ -51,10 +51,11 @@ public record LA64Object(
             if (relocs.isEmpty()) { continue; }
             String secName = sec.type().name().toLowerCase();
             out.println("Relocations in ." + secName + ":");
-            out.printf("  %-8s  %-24s %s%n", "Offset", "Type", "Symbol");
+            out.printf("  %-8s  %-24s %-10s %s%n", "Offset", "Type", "Symbol", "Addend");
             for (RelocationEntry rel : relocs) {
                 String symName = symbolNames.get(rel.symbolNameIndex());
-                out.printf("  %08x  %-24s %s%n", rel.offset(), rel.relocationType().name(), symName);
+                out.printf("  %08x  %-24s %-10s %s%n",
+                           rel.offset(), rel.relocationType().name(), symName, rel.addend());
             }
             out.println();
         }

@@ -16,6 +16,7 @@ import java.util.Set;
  * @param segmentConfigs  段配置列表，定义段的虚拟地址和权限等属性
  */
 public record LinkOptions(
+    boolean pie,
     String entrySymbol,
     long stackTopVA,
     int stackPageCount,
@@ -34,6 +35,7 @@ public record LinkOptions(
     }
 
     public static final LinkOptions DEFAULT = new LinkOptions(
+        true,
         "_start",
         0x00007ffffffffff0L,
         4,
@@ -43,7 +45,7 @@ public record LinkOptions(
             new SegmentMapping(SectionType.BSS, 1),
             new SegmentMapping(SectionType.RODATA, 0)),
         List.of(
-            new SegmentConfig(0, 0x80000000L, Set.of(SegmentPermission.READ, SegmentPermission.EXEC)),
+            new SegmentConfig(0, 0, Set.of(SegmentPermission.READ, SegmentPermission.EXEC)),
             new SegmentConfig(1, 0, Set.of(SegmentPermission.READ, SegmentPermission.WRITE)))
     );
 
