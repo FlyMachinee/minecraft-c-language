@@ -14,7 +14,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.DiagnosticReporter;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
-public sealed interface Constant permits ConstantDouble, ConstantPointer, IntegerConstant {
+public sealed interface Constant permits ConstantDouble, IntegerConstant, PointerConstant {
 
     ConstantInt toInt();
 
@@ -26,7 +26,7 @@ public sealed interface Constant permits ConstantDouble, ConstantPointer, Intege
 
     ConstantDouble toDouble();
 
-    ConstantPointer toPointer(Type referencedType);
+    PointerConstant toPointer(Type referencedType);
 
     default Constant castTo(Type type) {
         if (type instanceof BasicType bt) {

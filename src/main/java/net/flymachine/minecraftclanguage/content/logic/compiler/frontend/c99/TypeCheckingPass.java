@@ -238,7 +238,7 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
         return null;
     }
 
-    private boolean isNullPointerConstant(ExpressionNode exp) {
+    public boolean isNullPointerConstant(ExpressionNode exp) {
         Either<Constant, SourceLocation> evalResult = constantEvaluator.tryEvalArithmeticConstant(exp);
         if (evalResult.right().isPresent()) {
             return false;

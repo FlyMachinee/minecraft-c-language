@@ -12,7 +12,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.DiagnosticReporter;
 import org.jetbrains.annotations.NotNull;
 
-public record ConstantPointer(long value, Type referencedType) implements Constant {
+public record ConstantPointer(long value, Type referencedType) implements PointerConstant {
 
     @Override
     public @NotNull String toString() {

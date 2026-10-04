@@ -366,23 +366,30 @@ public final class InitializerHelper {
 
             // 在类型检查时，已经将初始化表达式转换至对应的类型
             if (type.isArithmetic()) {
-                Either<Constant, SourceLocation> evalResult = constantEvaluator.tryEvalArithmeticConstant(init);
+                var evalResult = constantEvaluator.tryEvalArithmeticConstant(init);
                 if (evalResult.right().isPresent()) {
                     String msg = "initializer element is not constant";
                     reporter.error(evalResult.right().get(), msg);
                     toAppend = new ZeroInit(type.sizeof());
                 } else {
-                    Constant constant = evalResult.orThrow();
-                    toAppend = constant.toStaticInitOrZero();
+                    toAppend = evalResult.orThrow().toStaticInitOrZero();
+                }
+            } else if (type.isPointer()) {
+                if (typeChecker.isNullPointerConstant(init)) {
+                    toAppend = new ZeroInit(8);
+                } else {
+                    var evalResult = constantEvaluator.tryEvalAddressConstant(init);
+                    if (evalResult.right().isPresent()) {
+                        String msg = "initializer element is not constant";
+                        reporter.error(evalResult.right().get(), msg);
+                        toAppend = new ZeroInit(8);
+                    } else {
+                        toAppend = evalResult.orThrow().toStaticInitOrZero();
+                    }
                 }
             } else {
-                if (!(init instanceof ConstantNode constInit)) {
-                    String msg = "initializer element is not constant";
-                    reporter.error(init.wholeLoc, msg);
-                    toAppend = new ZeroInit(type.sizeof());
-                } else {
-                    toAppend = constInit.value.toStaticInitOrZero();
-                }
+                throw new UnsupportedOperationException(
+                    "type '" + type.typename() + "' cannot be converted to static init");
             }
 
             if (result.isEmpty()) {

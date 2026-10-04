@@ -1,8 +1,11 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.helper.constexprHelper;
 
 import com.mojang.datafixers.util.Either;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.BinaryOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.Constant;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.ConstantDouble;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.ConstantSymbolPointer;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.PointerType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.SymbolTable;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.ConstantEvalVisitor;
@@ -10,14 +13,18 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.DiagnosticReporter;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
+import java.util.Optional;
+
 public final class ConstantEvaluator implements ConstantEvalVisitor {
 
     private final SymbolTable symbolTable;
     private final DiagnosticReporter reporter;
+    private final LValuePathEvaluator lValuePathEvaluator;
 
     public ConstantEvaluator(SymbolTable symbolTable, DiagnosticReporter reporter) {
         this.symbolTable = symbolTable;
         this.reporter = reporter;
+        this.lValuePathEvaluator = new LValuePathEvaluator(symbolTable, this);
     }
 
     /**
@@ -52,6 +59,22 @@ public final class ConstantEvaluator implements ConstantEvalVisitor {
         return tryEvaluate(exp, ConstantCategory.ARITHMETIC);
     }
 
+    /**
+     * 尝试计算表达式的地址常量值，如果无法计算则返回第一次出错的源位置
+     * <p>
+     * ISO C99 6.6p3: 常量表达式不得包含赋值、自增、自减、函数调用或逗号运算符，除非它们包含在未被求值的子表达式中。
+     * <p>
+     * ISO C99 6.6p4: 每个常量表达式求值得到的常量应在其类型可表示的值范围内。
+     * <p>
+     * ISO C99 6.6p9: 地址常量是空指针、指向静态存储期对象左值的指针，或指向函数指代符的指针；它应通过一元 & 运算符，或通过强制转换为指针类型的整数常量来显式创建，也可以通过使用数组类型或函数类型的表达式隐式创建。数组下标 [] 和成员访问 . 与 -> 运算符、取地址 & 和间接寻址 * 一元运算符，以及指针强制转换，均可用于创建地址常量，但不得通过使用这些运算符来访问对象的值。
+     *
+     * @param exp 表达式节点
+     * @return 如果计算成功返回左值，失败返回右值
+     */
+    public Either<Constant, SourceLocation> tryEvalAddressConstant(ExpressionNode exp) {
+        return tryEvaluate(exp, ConstantCategory.ADDRESS);
+    }
+
     public Either<Constant, SourceLocation> tryEvaluate(ExpressionNode exp, ConstantCategory category) {
         if (exp.expType == null || exp.expType.isError()) {
             return Either.right(exp.wholeLoc);
@@ -63,9 +86,10 @@ public final class ConstantEvaluator implements ConstantEvalVisitor {
     public Either<Constant, SourceLocation> visit(ConstantNode node, ConstantCategory category) {
         Type t = node.expType;
         return switch (category) {
-            case INTEGER -> t.isInteger() ? Either.left(node.value) : Either.right(node.wholeLoc);
-            case ARITHMETIC -> t.isArithmetic() ? Either.left(node.value) : Either.right(node.wholeLoc);
-        };
+            case INTEGER -> t.isInteger();
+            case ARITHMETIC -> t.isArithmetic();
+            case ADDRESS -> node.value.isNullPointer();
+        } ? Either.left(node.value) : Either.right(node.wholeLoc);
     }
 
     @Override
@@ -77,6 +101,7 @@ public final class ConstantEvaluator implements ConstantEvalVisitor {
         return switch (category) {
             case INTEGER -> type.isInteger();
             case ARITHMETIC -> type.isArithmetic();
+            case ADDRESS -> type.isPointer();
         };
     }
 
@@ -85,6 +110,9 @@ public final class ConstantEvaluator implements ConstantEvalVisitor {
         Either<Constant, SourceLocation> operand = tryEvaluate(node.exp, category);
         if (operand.right().isPresent()) {
             return operand;
+        }
+        if (category == ConstantCategory.ADDRESS) {
+            return Either.right(node.wholeLoc);
         }
         Either<Constant, String> result = operand.orThrow().tryApply(node.op.op, reporter);
         if (result.right().isPresent()) {
@@ -97,6 +125,10 @@ public final class ConstantEvaluator implements ConstantEvalVisitor {
 
     @Override
     public Either<Constant, SourceLocation> visit(BinaryExpressionNode node, ConstantCategory category) {
+        if (category == ConstantCategory.ADDRESS) {
+            return visitAddressBinary(node);
+        }
+
         Either<Constant, SourceLocation> lhs = tryEvaluate(node.lhs, category);
         if (lhs.right().isPresent()) {
             return lhs;
@@ -114,6 +146,40 @@ public final class ConstantEvaluator implements ConstantEvalVisitor {
         }
         Constant res = result.orThrow();
         return typeAllowed(category, res.getType()) ? Either.left(res) : Either.right(node.wholeLoc);
+    }
+
+    private Either<Constant, SourceLocation> visitAddressBinary(BinaryExpressionNode node) {
+        // 指针 + 整数 或 整数 + 指针
+        if (node.op.op == BinaryOperator.ADD) {
+            var lhs = tryEvaluate(node.lhs, ConstantCategory.ADDRESS);
+            if (lhs.left().isPresent()) {
+                var rhs = tryEvaluate(node.rhs, ConstantCategory.ARITHMETIC);
+                if (rhs.left().isPresent()) {
+                    return Either.left(lhs.orThrow().apply(BinaryOperator.ADD, rhs.orThrow()));
+                }
+                return rhs;
+            }
+            var rhs = tryEvaluate(node.rhs, ConstantCategory.ADDRESS);
+            if (rhs.left().isPresent()) {
+                var lhs2 = tryEvaluate(node.lhs, ConstantCategory.ARITHMETIC);
+                if (lhs2.left().isPresent()) {
+                    return Either.left(rhs.orThrow().apply(BinaryOperator.ADD, lhs2.orThrow()));
+                }
+                return lhs2;
+            }
+        }
+        // 指针 - 整数
+        else if (node.op.op == BinaryOperator.SUBTRACT) {
+            var lhs = tryEvaluate(node.lhs, ConstantCategory.ADDRESS);
+            if (lhs.left().isPresent()) {
+                var rhs = tryEvaluate(node.rhs, ConstantCategory.ARITHMETIC);
+                if (rhs.left().isPresent()) {
+                    return Either.left(lhs.orThrow().apply(BinaryOperator.SUBTRACT, rhs.orThrow()));
+                }
+                return rhs;
+            }
+        }
+        return Either.right(node.wholeLoc);
     }
 
     @Override
@@ -136,7 +202,7 @@ public final class ConstantEvaluator implements ConstantEvalVisitor {
                     constNode.value instanceof ConstantDouble constDouble) {
                     toCast = constDouble;
                 } else {
-                    Either<Constant, SourceLocation> res = tryEvaluate(node.exp, ConstantCategory.INTEGER);
+                    var res = tryEvaluate(node.exp, ConstantCategory.INTEGER);
                     if (res.right().isPresent()) {
                         return res;
                     }
@@ -152,11 +218,35 @@ public final class ConstantEvaluator implements ConstantEvalVisitor {
                 if (!node.exp.expType.isArithmetic()) {
                     return Either.right(node.exp.wholeLoc);
                 }
-                Either<Constant, SourceLocation> res = tryEvaluate(node.exp, ConstantCategory.ARITHMETIC);
+                var res = tryEvaluate(node.exp, ConstantCategory.ARITHMETIC);
                 if (res.right().isPresent()) {
                     return res;
                 }
                 return Either.left(res.orThrow().castTo(targetType));
+            }
+            case ADDRESS -> {
+                // 必须是转换至指针类型
+                if (!targetType.isPointer()) {
+                    return Either.right(node.wholeLoc);
+                }
+                // 由类型检查保证肯定为标量类型
+                if (node.exp.expType.isPointer()) {
+                    // 指针转指针
+                    var res = tryEvaluate(node.exp, ConstantCategory.ADDRESS);
+                    if (res.right().isPresent()) {
+                        return res;
+                    }
+                    return Either.left(res.orThrow().castTo(targetType));
+                } else {
+                    // 由类型检查保证肯定为整数类型
+                    assert node.exp.expType.isInteger();
+                    var res = tryEvaluate(node.exp, ConstantCategory.ARITHMETIC);
+                    if (res.right().isPresent()) {
+                        return res;
+                    }
+                    // 不可能是浮点类型，从而该 cast 是安全的
+                    return Either.left(res.orThrow().castTo(targetType));
+                }
             }
         }
         return Either.right(node.wholeLoc);
@@ -167,6 +257,13 @@ public final class ConstantEvaluator implements ConstantEvalVisitor {
         Either<Constant, SourceLocation> cond = switch (category) {
             case INTEGER -> tryEvaluate(node.cond, ConstantCategory.INTEGER);
             case ARITHMETIC -> tryEvaluate(node.cond, ConstantCategory.ARITHMETIC);
+            case ADDRESS -> {
+                var tmp = tryEvaluate(node.cond, ConstantCategory.ARITHMETIC);
+                if (tmp.left().isPresent()) {
+                    yield tmp;
+                }
+                yield tryEvaluate(node.cond, ConstantCategory.ADDRESS);
+            }
         };
         if (cond.right().isPresent()) {
             return cond;
@@ -176,7 +273,36 @@ public final class ConstantEvaluator implements ConstantEvalVisitor {
 
     @Override
     public Either<Constant, SourceLocation> visit(AddressOfNode node, ConstantCategory category) {
-        return Either.right(node.wholeLoc);
+        if (category != ConstantCategory.ADDRESS) {
+            return Either.right(node.wholeLoc);
+        }
+
+        PointerType pt = (PointerType) node.expType;
+
+        // &*p -> p
+        if (node.exp instanceof DereferenceNode deref) {
+            return deref.exp.accept(this, ConstantCategory.ADDRESS);
+        }
+
+        // &name
+        if (node.exp instanceof VariableNode variable) {
+            SymbolTable.Entry entry = symbolTable.get(variable.id.name);
+            if (entry == null) {
+                return Either.right(variable.wholeLoc);
+            }
+            if (entry.attr instanceof SymbolTable.Entry.StaticAttr ||
+                entry.attr instanceof SymbolTable.Entry.FuncAttr) {
+                // 不能直接用符号本身的类型，由于有数组到指向其元素的衰减
+                return Either.left(new ConstantSymbolPointer(variable.id.name, pt.referencedType()));
+            }
+            return Either.right(variable.wholeLoc);
+        }
+
+        // &左值对象
+        Optional<LValuePath> path = lValuePathEvaluator.tryEvalPath(node.exp);
+        return path.<Either<Constant, SourceLocation>>map(
+                       lValuePath -> Either.left(lValuePathEvaluator.pathToAddress(lValuePath)))
+                   .orElseGet(() -> Either.right(node.exp.wholeLoc));
     }
 
     @Override

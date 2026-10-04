@@ -25,6 +25,6 @@ public interface ConstantEvalVisitor {
     Either<Constant, SourceLocation> visit(SubscriptNode node, ConstantCategory category);
 
     enum ConstantCategory {
-        INTEGER, ARITHMETIC
+        INTEGER, ARITHMETIC, ADDRESS
     }
 }
