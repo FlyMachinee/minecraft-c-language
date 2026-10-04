@@ -301,7 +301,8 @@ public final class ConstantEvaluator implements ConstantEvalVisitor {
         // &左值对象
         Optional<LValuePath> path = lValuePathEvaluator.tryEvalPath(node.exp);
         return path.<Either<Constant, SourceLocation>>map(
-                       lValuePath -> Either.left(lValuePathEvaluator.pathToAddress(lValuePath)))
+                       lValuePath -> Either.left(
+                           lValuePathEvaluator.pathToAddress(lValuePath).toPointer(pt.referencedType())))
                    .orElseGet(() -> Either.right(node.exp.wholeLoc));
     }
 
