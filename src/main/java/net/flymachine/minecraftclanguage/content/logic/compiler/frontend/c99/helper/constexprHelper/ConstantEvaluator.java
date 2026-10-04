@@ -4,6 +4,7 @@ import com.mojang.datafixers.util.Either;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.BinaryOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.Constant;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.ConstantDouble;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.ConstantInt;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.ConstantSymbolPointer;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.PointerType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
@@ -134,9 +135,23 @@ public final class ConstantEvaluator implements ConstantEvalVisitor {
             return lhs;
         }
 
+        if (node.op.op == BinaryOperator.LOGICAL_AND || node.op.op == BinaryOperator.LOGICAL_OR) {
+            // 短路求值
+            if (lhs.orThrow().isZero() && node.op.op == BinaryOperator.LOGICAL_AND) {
+                return Either.left(ConstantInt.ZERO);
+            }
+            if (!lhs.orThrow().isZero() && node.op.op == BinaryOperator.LOGICAL_OR) {
+                return Either.left(ConstantInt.ONE);
+            }
+        }
+
         Either<Constant, SourceLocation> rhs = tryEvaluate(node.rhs, category);
         if (rhs.right().isPresent()) {
             return rhs;
+        }
+
+        if (node.op.op == BinaryOperator.LOGICAL_AND || node.op.op == BinaryOperator.LOGICAL_OR) {
+            return Either.left(rhs.orThrow().isZero() ? ConstantInt.ZERO : ConstantInt.ONE);
         }
 
         Either<Constant, String> result = lhs.orThrow().tryApply(node.op.op, rhs.orThrow(), reporter);
