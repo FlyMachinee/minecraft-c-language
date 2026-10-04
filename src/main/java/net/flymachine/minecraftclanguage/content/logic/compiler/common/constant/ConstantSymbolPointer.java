@@ -42,6 +42,16 @@ public record ConstantSymbolPointer(String symbol, long offset, Type referencedT
     }
 
     @Override
+    public ConstantChar toChar() {
+        throw new UnsupportedOperationException("Cannot determine value in compile time");
+    }
+
+    @Override
+    public ConstantUnsignedChar toUnsignedChar() {
+        throw new UnsupportedOperationException("Cannot determine value in compile time");
+    }
+
+    @Override
     public ConstantSymbolPointer toPointer(Type referencedType) {
         return new ConstantSymbolPointer(symbol, offset, referencedType);
     }

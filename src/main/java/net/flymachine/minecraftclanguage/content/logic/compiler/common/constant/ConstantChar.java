@@ -6,6 +6,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.BinaryOpe
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.Comparison;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.UnaryOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.StaticInit;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.BasicType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.DiagnosticReporter;
 import org.jetbrains.annotations.NotNull;
@@ -42,6 +43,16 @@ public record ConstantChar(byte value) implements IntegerConstant {
     @Override
     public ConstantDouble toDouble() {
         return new ConstantDouble(value);
+    }
+
+    @Override
+    public ConstantChar toChar() {
+        return this;
+    }
+
+    @Override
+    public ConstantUnsignedChar toUnsignedChar() {
+        return new ConstantUnsignedChar(value);
     }
 
     @Override
@@ -86,8 +97,8 @@ public record ConstantChar(byte value) implements IntegerConstant {
     }
 
     @Override
-    public Type getType() {
-        return null;
+    public BasicType getType() {
+        return BasicType.CHAR;
     }
 
     @Override

@@ -51,6 +51,16 @@ public record ConstantDouble(double value) implements Constant {
     }
 
     @Override
+    public ConstantChar toChar() {
+        return new ConstantChar((byte) value);
+    }
+
+    @Override
+    public ConstantUnsignedChar toUnsignedChar() {
+        return new ConstantUnsignedChar((byte) (int) value);
+    }
+
+    @Override
     public ConstantPointer toPointer(Type referencedType) {
         throw new UnsupportedOperationException("Invalid cast");
     }

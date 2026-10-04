@@ -45,6 +45,16 @@ public record ConstantPointer(long value, Type referencedType) implements Pointe
     }
 
     @Override
+    public ConstantChar toChar() {
+        return toUnsignedLong().toChar();
+    }
+
+    @Override
+    public ConstantUnsignedChar toUnsignedChar() {
+        return toUnsignedLong().toUnsignedChar();
+    }
+
+    @Override
     public ConstantPointer toPointer(Type referencedType) {
         return new ConstantPointer(value, referencedType);
     }

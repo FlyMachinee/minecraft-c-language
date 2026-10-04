@@ -26,6 +26,10 @@ public sealed interface Constant permits ConstantDouble, IntegerConstant, Pointe
 
     ConstantDouble toDouble();
 
+    ConstantChar toChar();
+
+    ConstantUnsignedChar toUnsignedChar();
+
     PointerConstant toPointer(Type referencedType);
 
     default Constant castTo(Type type) {
@@ -36,6 +40,8 @@ public sealed interface Constant permits ConstantDouble, IntegerConstant, Pointe
                 case UNSIGNED_INT -> toUnsignedInt();
                 case UNSIGNED_LONG -> toUnsignedLong();
                 case DOUBLE -> toDouble();
+                case CHAR, SIGNED_CHAR -> toChar();
+                case UNSIGNED_CHAR -> toUnsignedChar();
             };
         }
         if (type instanceof PointerType pt) {

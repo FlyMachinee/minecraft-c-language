@@ -50,6 +50,16 @@ public record ConstantInt(int value) implements IntegerConstant {
     }
 
     @Override
+    public ConstantChar toChar() {
+        return new ConstantChar((byte) value);
+    }
+
+    @Override
+    public ConstantUnsignedChar toUnsignedChar() {
+        return new ConstantUnsignedChar((byte) value);
+    }
+
+    @Override
     public ConstantPointer toPointer(Type referencedType) {
         return new ConstantPointer(value, referencedType);
     }
