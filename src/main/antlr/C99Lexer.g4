@@ -49,7 +49,7 @@ fragment HexadecimalPrefix: '0' [xX];
 fragment NonzeroDigit: [1-9];
 fragment OctalDigit: [0-7];
 fragment HexadecimalDigit: [0-9a-fA-F];
-fragment IntegerSuffix: [a-zA-Z0-9._]*;
+fragment IntegerSuffix: [a-zA-Z0-9._]+;
 
 fragment DecimalFloatingConstant
     : FractionalConstant ExponentPart?
@@ -59,18 +59,19 @@ fragment HexadecimalFloatingConstant
     : HexadecimalPrefix (HexadecimalFractionalConstant | HexadecimalDigitSequence) BinaryExponentPart
     ;
 fragment FractionalConstant
-    : DigitSequence? '.' DigitSequence
-    | DigitSequence '.'
+    : DigitSequence? '.' DigitSequence FloatTail?
+    | DigitSequence '.' FloatTail?
     ;
-fragment ExponentPart: [eE] Sign? DigitSequence;
+fragment ExponentPart: [eE] Sign? FloatTail?;
 fragment Sign: [+-];
 fragment DigitSequence: Digit+;
 fragment HexadecimalFractionalConstant
-    : HexadecimalDigitSequence? '.' HexadecimalDigitSequence
-    | HexadecimalDigitSequence '.'
+    : HexadecimalDigitSequence? '.' HexadecimalDigitSequence FloatTail?
+    | HexadecimalDigitSequence '.' FloatTail?
     ;
-fragment BinaryExponentPart: [pP] Sign? DigitSequence;
+fragment BinaryExponentPart: [pP] Sign? FloatTail?;
 fragment HexadecimalDigitSequence: HexadecimalDigit+;
+fragment FloatTail: [a-zA-Z0-9._]+;
 
 // Operators
 

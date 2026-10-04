@@ -798,7 +798,6 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
             double value = Double.parseDouble(fullText);
             return new ConstantNode(loc, new ConstantDouble(value));
         } catch (NumberFormatException e) {
-            // should never reach here
             reporter.error(loc, "malformed floating constant");
             return new ConstantNode(loc, new ConstantDouble(0.0));
         }
