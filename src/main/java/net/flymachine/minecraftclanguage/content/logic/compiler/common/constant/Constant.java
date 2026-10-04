@@ -78,10 +78,14 @@ public sealed interface Constant permits ConstantDouble, IntegerConstant, Pointe
     boolean isNullPointer();
 
     default ConstantNode asNode() {
-        return new ConstantNode(null, this);
+        ConstantNode node = new ConstantNode(null, this);
+        node.expType = getType();
+        return node;
     }
 
     default ConstantNode asNode(SourceLocation wholeLoc) {
-        return new ConstantNode(wholeLoc, this);
+        ConstantNode node = new ConstantNode(wholeLoc, this);
+        node.expType = getType();
+        return node;
     }
 }

@@ -17,7 +17,7 @@ public class UndefinedBehaviourUtil {
             }
         }
         if (rhs instanceof ConstantNode constRhs && constRhs.value instanceof IntegerConstant intRhs) {
-            long width = intRhs.getType().sizeof() * 8;
+            long width = lhs.expType.sizeof() * 8;
             if (intRhs.isNegative()) {
                 return Optional.of((isLeftShift ? "left" : "right") + " shift count is negative");
             }
