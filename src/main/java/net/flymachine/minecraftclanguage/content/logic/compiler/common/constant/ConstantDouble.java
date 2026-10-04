@@ -78,7 +78,7 @@ public record ConstantDouble(double value) implements Constant {
         return switch (op) {
             case ADD, SUBTRACT, MULTIPLY, DIVIDE, EQUAL, NOT_EQUAL -> {
                 if (rhsType.isArithmetic()) {
-                    if (lhsType != rhsType) {
+                    if (!lhsType.isCompatible(rhsType)) {
                         throw new UnsupportedOperationException("Cast to their common real type first");
                     }
                     yield apply(op, (ConstantDouble) rhs);
@@ -91,7 +91,7 @@ public record ConstantDouble(double value) implements Constant {
                 throw new UnsupportedOperationException("Logical operation shouldn't be handled by constant operation");
             case LESS_THAN, LESS_OR_EQUAL, GREATER_THAN, GREATER_OR_EQUAL -> {
                 if (rhsType.isReal()) {
-                    if (lhsType != rhsType) {
+                    if (!lhsType.isCompatible(rhsType)) {
                         throw new UnsupportedOperationException("Cast to their common real type first");
                     }
                     yield apply(op, (ConstantDouble) rhs);

@@ -76,7 +76,7 @@ public record ConstantLong(long value) implements IntegerConstant {
         return switch (op) {
             case ADD -> {
                 if (rhsType.isArithmetic()) {
-                    if (lhsType != rhsType) {
+                    if (!lhsType.isCompatible(rhsType)) {
                         throw new UnsupportedOperationException("Cast to their common real type first");
                     }
                     yield apply(op, (ConstantLong) rhs);
@@ -90,7 +90,7 @@ public record ConstantLong(long value) implements IntegerConstant {
             }
             case SUBTRACT, MULTIPLY, DIVIDE, EQUAL, NOT_EQUAL -> {
                 if (rhsType.isArithmetic()) {
-                    if (lhsType != rhsType) {
+                    if (!lhsType.isCompatible(rhsType)) {
                         throw new UnsupportedOperationException("Cast to their common real type first");
                     }
                     yield apply(op, (ConstantLong) rhs);
@@ -99,7 +99,7 @@ public record ConstantLong(long value) implements IntegerConstant {
             }
             case MODULO, BITWISE_AND, BITWISE_OR, BITWISE_XOR -> {
                 if (rhsType.isInteger()) {
-                    if (lhsType != rhsType) {
+                    if (!lhsType.isCompatible(rhsType)) {
                         throw new UnsupportedOperationException("Cast to their common real type first");
                     }
                     yield apply(op, (ConstantLong) rhs);
@@ -115,7 +115,7 @@ public record ConstantLong(long value) implements IntegerConstant {
             case LOGICAL_AND, LOGICAL_OR -> throw new UnsupportedOperationException("Should be handled earlier");
             case LESS_THAN, LESS_OR_EQUAL, GREATER_THAN, GREATER_OR_EQUAL -> {
                 if (rhsType.isReal()) {
-                    if (lhsType != rhsType) {
+                    if (!lhsType.isCompatible(rhsType)) {
                         throw new UnsupportedOperationException("Cast to their common real type first");
                     }
                     yield apply(op, (ConstantLong) rhs);
@@ -143,7 +143,7 @@ public record ConstantLong(long value) implements IntegerConstant {
         return switch (op) {
             case ADD -> {
                 if (rhsType.isArithmetic()) {
-                    if (lhsType != rhsType) {
+                    if (!lhsType.isCompatible(rhsType)) {
                         throw new UnsupportedOperationException("Cast to their common real type first");
                     }
                     yield tryApply(op, (ConstantLong) rhs, reporter);
@@ -156,7 +156,7 @@ public record ConstantLong(long value) implements IntegerConstant {
             }
             case SUBTRACT, MULTIPLY, DIVIDE, EQUAL, NOT_EQUAL -> {
                 if (rhsType.isArithmetic()) {
-                    if (lhsType != rhsType) {
+                    if (!lhsType.isCompatible(rhsType)) {
                         throw new UnsupportedOperationException("Cast to their common real type first");
                     }
                     yield tryApply(op, (ConstantLong) rhs, reporter);
@@ -165,7 +165,7 @@ public record ConstantLong(long value) implements IntegerConstant {
             }
             case MODULO, BITWISE_AND, BITWISE_OR, BITWISE_XOR -> {
                 if (rhsType.isInteger()) {
-                    if (lhsType != rhsType) {
+                    if (!lhsType.isCompatible(rhsType)) {
                         throw new UnsupportedOperationException("Cast to their common real type first");
                     }
                     yield tryApply(op, (ConstantLong) rhs, reporter);
@@ -188,7 +188,7 @@ public record ConstantLong(long value) implements IntegerConstant {
             case LOGICAL_AND, LOGICAL_OR -> throw new UnsupportedOperationException("Should be handled earlier");
             case LESS_THAN, LESS_OR_EQUAL, GREATER_THAN, GREATER_OR_EQUAL -> {
                 if (rhsType.isReal()) {
-                    if (lhsType != rhsType) {
+                    if (!lhsType.isCompatible(rhsType)) {
                         throw new UnsupportedOperationException("Cast to their common real type first");
                     }
                     yield Either.left(apply(op, (ConstantLong) rhs));

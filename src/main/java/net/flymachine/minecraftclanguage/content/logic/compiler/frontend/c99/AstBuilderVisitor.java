@@ -195,7 +195,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
                             case INT, LONG -> {
                                 signedness = newSignedness;
                                 if (newSignedness == Signedness.UNSIGNED) {
-                                    t = t == BasicType.INT ? BasicType.UNSIGNED_INT : BasicType.UNSIGNED_LONG;
+                                    t = t.isInt() ? BasicType.UNSIGNED_INT : BasicType.UNSIGNED_LONG;
                                 }
                             }
                             case DOUBLE -> {

@@ -1369,7 +1369,7 @@ public final class AstToTacLowerer implements
         } else if (scale == 2 || scale == 4 || scale == 8 || scale == 16) {
             emitTac(new TacAddPointer(base, index, scale, dst));
         } else {
-            TacVariable tmp = makeTempVar(BasicType.UNSIGNED_LONG);
+            TacVariable tmp = makeTempVar(BasicType.LONG);
             emitTacMul(index, new TacConstant(new ConstantLong(scale)), tmp);
             emitTacAdd(base, tmp, dst);
         }
