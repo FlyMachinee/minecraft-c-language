@@ -524,6 +524,7 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
             }
             // 检查其维度是否为整数常量，且要求为正数
             if (at.size != null) {
+                reporter.unsuppressDiagnostics();
                 at.size = checkExpressionAndDecay(at.size);
                 Either<Constant, SourceLocation> evalResult = constantEvaluator.tryEvalIntegerConstant(at.size);
                 if (evalResult.right().isPresent()) {
@@ -540,6 +541,7 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
                         at.size = new ConstantNode(at.size.wholeLoc, new ConstantUnsignedLong(sizeValue));
                     }
                 }
+                reporter.clearSuppressDiagnostics();
             }
         }
 
@@ -799,7 +801,7 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
                 if (atn.size == null) {
                     reporter.suppressDiagnostics();
                     checkObjectType(atn, id, false);
-                    reporter.unsuppressDiagnostics();
+                    reporter.clearSuppressDiagnostics();
 
                     // 更新类型节点的第一维大小
                     long size = initializerHelper.determineArraySize(atn.getType(), cin);
@@ -903,7 +905,7 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
                 if (atn.size == null) {
                     reporter.suppressDiagnostics();
                     checkObjectType(atn, id, false);
-                    reporter.unsuppressDiagnostics();
+                    reporter.clearSuppressDiagnostics();
 
                     // 更新类型节点的第一维大小
                     long size = initializerHelper.determineArraySize(atn.getType(), cin);

@@ -95,7 +95,7 @@ public final class InitializerHelper {
             if (!din.designators.isEmpty()) {
                 reporter.suppressDiagnostics();
                 Designation newCursor = makeDesignation(arrayType, din.designators);
-                reporter.unsuppressDiagnostics();
+                reporter.clearSuppressDiagnostics();
                 if (newCursor != null) {
                     cursor = newCursor;
                 }

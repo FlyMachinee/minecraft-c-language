@@ -3,6 +3,8 @@ package net.flymachine.minecraftclanguage.content.logic.errorHandle;
 import net.flymachine.minecraftclanguage.content.logger.ConsoleLogger;
 import net.flymachine.minecraftclanguage.content.logger.Logger;
 
+import java.util.Stack;
+
 public class DiagnosticReporter {
     private final Logger logger;
     private final SourceFile sourceFile;
@@ -12,7 +14,7 @@ public class DiagnosticReporter {
 
     private SourceLocation lastLocation = null;
 
-    private boolean suppressDiagnostics = false;
+    private Stack<Boolean> suppressDiagnosticsStack = new Stack<>();
 
     public DiagnosticReporter(Logger logger, SourceFile sourceFile) {
         this.logger = logger;
@@ -24,43 +26,60 @@ public class DiagnosticReporter {
     }
 
     public void error(SourceLocation loc, String msg) {
+        if (!suppressDiagnosticsStack.isEmpty() && suppressDiagnosticsStack.peek()) {
+            return;
+        }
         ++errorCount;
         ErrorHandleUtil.logErrorWithSourceLine(logger, sourceFile, loc, msg);
         lastLocation = loc;
     }
 
     public void error(int line, int charPosition, int len, String msg) {
+        if (!suppressDiagnosticsStack.isEmpty() && suppressDiagnosticsStack.peek()) {
+            return;
+        }
         ++errorCount;
         ErrorHandleUtil.logErrorWithSourceLine(logger, sourceFile, line, charPosition, len, msg);
     }
 
     public void warning(SourceLocation loc, String msg) {
+        if (!suppressDiagnosticsStack.isEmpty() && suppressDiagnosticsStack.peek()) {
+            return;
+        }
         ++warningCount;
         ErrorHandleUtil.logWarningWithSourceLine(logger, sourceFile, loc, msg);
         lastLocation = loc;
     }
 
     public void note(SourceLocation loc, String msg) {
+        if (!suppressDiagnosticsStack.isEmpty() && suppressDiagnosticsStack.peek()) {
+            return;
+        }
         ErrorHandleUtil.logNoteWithSourceLine(logger, sourceFile, loc, msg);
         lastLocation = loc;
     }
 
     public void note(String msg) {
+        if (!suppressDiagnosticsStack.isEmpty() && suppressDiagnosticsStack.peek()) {
+            return;
+        }
         if (lastLocation != null) {
             ErrorHandleUtil.logNote(logger, sourceFile, lastLocation, msg);
         }
     }
 
-    public void suppressDiagnostics(boolean suppress) {
-        this.suppressDiagnostics = suppress;
-    }
-
     public void suppressDiagnostics() {
-        suppressDiagnostics(true);
+        suppressDiagnosticsStack.push(true);
     }
 
     public void unsuppressDiagnostics() {
-        suppressDiagnostics(false);
+        suppressDiagnosticsStack.push(false);
+    }
+
+    public void clearSuppressDiagnostics() {
+        if (!suppressDiagnosticsStack.isEmpty()) {
+            suppressDiagnosticsStack.pop();
+        }
     }
 
     public int getErrorCount() {
