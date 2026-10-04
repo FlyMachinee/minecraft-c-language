@@ -51,7 +51,7 @@ public record ConstantUnsignedInt(int value) implements IntegerConstant {
 
     @Override
     public ConstantPointer toPointer(Type referencedType) {
-        return new ConstantPointer(value, referencedType);
+        return new ConstantPointer(Integer.toUnsignedLong(value), referencedType);
     }
 
     @Override

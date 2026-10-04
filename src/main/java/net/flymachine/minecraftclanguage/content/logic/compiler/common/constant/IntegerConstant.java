@@ -1,6 +1,6 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.common.constant;
 
-public sealed interface IntegerConstant extends Constant permits ConstantInt, ConstantLong, ConstantUnsignedInt, ConstantUnsignedLong {
+public sealed interface IntegerConstant extends Constant permits ConstantChar, ConstantInt, ConstantLong, ConstantUnsignedChar, ConstantUnsignedInt, ConstantUnsignedLong {
 
     boolean isSigned();
 
