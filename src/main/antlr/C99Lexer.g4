@@ -34,27 +34,23 @@ fragment Digit: [0-9];
 
 // Constants
 
-IntegerConstant
-    : (DecimalConstant | OctalConstant | HexadecimalConstant) IntegerSuffix?;
-
-fragment DecimalConstant: NonzeroDigit Digit*;
-fragment OctalConstant: '0' OctalDegit*;
-fragment HexadecimalConstant: HexadecimalPrefix HexadecimalDigit+;
-fragment HexadecimalPrefix: '0' [xX];
-fragment NonzeroDigit: [1-9];
-fragment OctalDegit: [0-7];
-fragment HexadecimalDigit: [0-9a-fA-F];
-fragment IntegerSuffix
-    : UnsignedSuffix LongSuffix?
-    | LongSuffix UnsignedSuffix?
-    ;
-fragment UnsignedSuffix: 'u' | 'U';
-fragment LongSuffix: 'l' | 'L';
-
 FloatingConstant
     : DecimalFloatingConstant
     | HexadecimalFloatingConstant
     ;
+
+IntegerConstant
+    : (DecimalConstant | OctalConstant | HexadecimalConstant) IntegerSuffix?;
+
+fragment DecimalConstant: NonzeroDigit Digit*;
+fragment OctalConstant: '0' OctalDigit*;
+fragment HexadecimalConstant: HexadecimalPrefix HexadecimalDigit+;
+fragment HexadecimalPrefix: '0' [xX];
+fragment NonzeroDigit: [1-9];
+fragment OctalDigit: [0-7];
+fragment HexadecimalDigit: [0-9a-fA-F];
+fragment IntegerSuffix: [a-zA-Z0-9._]*;
+
 fragment DecimalFloatingConstant
     : FractionalConstant ExponentPart?
     | DigitSequence ExponentPart

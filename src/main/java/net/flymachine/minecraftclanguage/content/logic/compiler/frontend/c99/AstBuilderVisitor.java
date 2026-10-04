@@ -681,39 +681,69 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         }
     }
 
+    private boolean isHexadecimalDigit(char c) {
+        return (c >= '0' && c <= '9') ||
+               (c >= 'a' && c <= 'f') ||
+               (c >= 'A' && c <= 'F');
+    }
+
     private ConstantNode parseIntegerConstant(TerminalNode integerConstant) {
-        String fullText = integerConstant.getText();
-        int pos = fullText.length();
+        String text = integerConstant.getText().toLowerCase();
+        SourceLocation loc = getSourceLocation(integerConstant);
+        int pos = 0;
+        int radix;
+        String number;
+
+        if (text.length() > 2 && text.startsWith("0x")) {
+            pos = 2;
+            radix = 16;
+            // fragment HexadecimalConstant: HexadecimalPrefix HexadecimalDigit+;
+            while (pos < text.length() && isHexadecimalDigit(text.charAt(pos))) {
+                pos++;
+            }
+            number = text.substring(2, pos);
+        } else if (text.length() > 1 && text.startsWith("0")) {
+            radix = 8;
+            // fragment OctalConstant: '0' OctalDigit*;
+            while (pos < text.length() && text.charAt(pos) >= '0' && text.charAt(pos) <= '7') {
+                pos++;
+            }
+            if (pos < text.length() && (text.charAt(pos) == '8' || text.charAt(pos) == '9')) {
+                reporter.error(loc, "invalid octal digit '" + reporter.white(String.valueOf(text.charAt(pos))) +
+                                    "' in octal constant");
+                return new ConstantNode(loc, ConstantInt.ZERO);
+            }
+            number = text.substring(0, pos);
+        } else {
+            radix = 10;
+            // fragment DecimalConstant: NonzeroDigit Digit*;
+            while (pos < text.length() && Character.isDigit(text.charAt(pos))) {
+                pos++;
+            }
+            number = text.substring(0, pos);
+        }
+        String postfix = text.substring(pos);
+
+        boolean isDecimal = radix == 10;
 
         boolean isUnsigned = false;
         boolean isLong = false;
-        while (pos > 0) {
-            char c = fullText.charAt(pos - 1);
-            if (c == 'l' || c == 'L') {
-                isLong = true;
-                pos--;
-            } else if (c == 'u' || c == 'U') {
+        switch (postfix) {
+            case "" -> { }
+            case "u" -> isUnsigned = true;
+            case "l" -> isLong = true;
+            case "ul", "lu" -> {
                 isUnsigned = true;
-                pos--;
-            } else {
-                break;
+                isLong = true;
+            }
+            default -> {
+                String rawPostfix = integerConstant.getText().substring(pos);
+                reporter.error(loc, "invalid suffix '" + reporter.white(rawPostfix) + "' on integer constant");
+                return new ConstantNode(loc, ConstantInt.ZERO);
             }
         }
-        String numberPart = fullText.substring(0, pos);
 
-        int radix;
-        if (numberPart.startsWith("0x") || numberPart.startsWith("0X")) {
-            radix = 16;
-            numberPart = numberPart.substring(2);
-        } else if (numberPart.startsWith("0") && numberPart.length() > 1) {
-            radix = 8;
-        } else {
-            radix = 10;
-        }
-        boolean isDecimal = radix == 10;
-
-        BigInteger bigValue = new BigInteger(numberPart, radix);
-        SourceLocation loc = getSourceLocation(integerConstant);
+        BigInteger bigValue = new BigInteger(number, radix);
 
         // deci     none    => int < long < error                   == 1 0 1 0
         // bi/hex   none    => int < uint < long < ulong < error    == 1 1 1 1
@@ -758,7 +788,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
             msg = "integer constant is so large that it is unsigned";
         }
         reporter.error(loc, msg);
-        return new ConstantNode(loc, new ConstantInt(0));
+        return new ConstantNode(loc, ConstantInt.ZERO);
     }
 
     private ConstantNode parseFloatingConstant(TerminalNode floatingConstant) {
