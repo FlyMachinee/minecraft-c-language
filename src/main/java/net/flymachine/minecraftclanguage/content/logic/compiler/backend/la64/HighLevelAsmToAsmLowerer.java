@@ -106,6 +106,8 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
                 emitDir("dword", new LA64DirectiveNumArg(Double.doubleToLongBits(doubleInit.value())));
             } else if (init instanceof ZeroInit zeroInit) {
                 emitDir("zero", new LA64DirectiveNumArg(zeroInit.bytes()));
+            } else if (init instanceof SymbolInit symbolInit) {
+                emitDir("dword", new LA64DirectiveSymArg(symbolInit.symbol(), symbolInit.offset()));
             }
         }
     }

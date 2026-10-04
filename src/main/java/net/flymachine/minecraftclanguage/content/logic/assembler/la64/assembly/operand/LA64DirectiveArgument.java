@@ -13,7 +13,7 @@ public sealed interface LA64DirectiveArgument permits LA64DirectiveNumArg, LA64D
         return ((LA64DirectiveNumArg) this).value();
     }
 
-    default String asSym() {
-        return ((LA64DirectiveSymArg) this).name();
+    default LA64DirectiveSymArg asSym() {
+        return (LA64DirectiveSymArg) this;
     }
 }

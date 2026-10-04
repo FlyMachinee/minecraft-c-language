@@ -10,6 +10,6 @@ public record LA64DirectiveSymArg(String name, long offset) implements LA64Direc
 
     @Override
     public @NotNull String toString() {
-        return name;
+        return name + (offset != 0 ? " + " + offset : "");
     }
 }
