@@ -49,6 +49,7 @@ unaryExpression
 unaryOperator
     : And
     | Star
+    | Plus
     | Minus
     | Tilde
     | Not

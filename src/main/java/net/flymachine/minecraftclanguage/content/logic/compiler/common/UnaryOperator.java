@@ -1,6 +1,7 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.common;
 
 public enum UnaryOperator {
+    POSITIVE("+"),
     NEGATE("-"),
     COMPLEMENT("~"),
     NOT("!");
