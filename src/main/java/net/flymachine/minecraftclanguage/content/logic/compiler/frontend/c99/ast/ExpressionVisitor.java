@@ -27,4 +27,6 @@ public interface ExpressionVisitor<T> {
     T visit(DereferenceNode deref);
 
     T visit(SubscriptNode subscript);
+
+    T visit(StringLiteralNode string);
 }

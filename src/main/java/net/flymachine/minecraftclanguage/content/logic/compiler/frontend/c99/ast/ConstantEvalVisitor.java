@@ -24,6 +24,8 @@ public interface ConstantEvalVisitor {
 
     Either<Constant, SourceLocation> visit(SubscriptNode node, ConstantCategory category);
 
+    Either<Constant, SourceLocation> visit(StringLiteralNode node, ConstantCategory category);
+
     enum ConstantCategory {
         INTEGER, ARITHMETIC, ADDRESS
     }

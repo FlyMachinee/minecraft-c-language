@@ -8,6 +8,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.BasicType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.VoidType;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.util.EscapeUnescapeHelper;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.antlr.C99Parser;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.antlr.C99ParserBaseVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.*;
@@ -18,6 +19,7 @@ import org.antlr.v4.runtime.Token;
 import org.antlr.v4.runtime.tree.TerminalNode;
 import org.jetbrains.annotations.Nullable;
 
+import java.io.ByteArrayOutputStream;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
@@ -29,9 +31,11 @@ import java.util.List;
 public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
 
     private final DiagnosticReporter reporter;
+    private final EscapeUnescapeHelper escapeUnescapeHelper;
 
     public AstBuilderVisitor(DiagnosticReporter reporter) {
         this.reporter = reporter;
+        this.escapeUnescapeHelper = new EscapeUnescapeHelper(reporter);
     }
 
     private static SourceLocation getSourceLocation(ParserRuleContext ctx) {
@@ -112,7 +116,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
             if (t == null) {
                 this.loc = loc;
                 switch (typeSpecifierName) {
-                    case "int", "double" -> {
+                    case "int", "double", "char" -> {
                         t = BasicType.fromString(typeSpecifierName);
                         nonLongCount++;
                     }
@@ -146,6 +150,21 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
                     // nonLongCount 为 0，可能是 long/signed/unsigned，都不需要变化
                     nonLongCount++;
                 }
+                case "char" -> {
+                    if (nonLongCount > 0) {
+                        reporter.error(loc, "two or more data types in declaration specifiers");
+                    } else if (longCount > 0) {
+                        assertBothType("long", "char");
+                    } else {
+                        // 只能是 signed/unsigned
+                        t = switch (signedness) {
+                            case SIGNED -> BasicType.SIGNED_CHAR;
+                            case UNSIGNED -> BasicType.UNSIGNED_CHAR;
+                            case NONE -> BasicType.CHAR;
+                        };
+                    }
+                    nonLongCount++;
+                }
                 case "void", "double" -> {
                     String previous;
                     if (longCount > 0) {
@@ -155,7 +174,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
                     } else {
                         previous = t.toString();
                     }
-                    assertBothType(typeSpecifierName, previous);
+                    assertBothType(previous, typeSpecifierName);
                     nonLongCount++;
                 }
                 case "long" -> {
@@ -167,12 +186,10 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
                                 String msg = "'" + reporter.white("long long") + "' is too long";
                                 reporter.error(loc, msg);
                             }
-                            case DOUBLE -> {
-                                assertBothType("long", "double");
-                            }
+                            case DOUBLE, CHAR, SIGNED_CHAR, UNSIGNED_CHAR -> assertBothType(bt.toString(), "long");
                         }
                     } else if (t instanceof VoidType) {
-                        assertBothType("long", "void");
+                        assertBothType("void", "long");
                     }
                     ++longCount;
                 }
@@ -185,7 +202,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
                     }
 
                     if (signedness != Signedness.NONE) {
-                        assertBothType(typeSpecifierName, signedness.name().toLowerCase());
+                        assertBothType(signedness.name().toLowerCase(), typeSpecifierName);
                         return;
                     }
 
@@ -198,12 +215,19 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
                                     t = t.isInt() ? BasicType.UNSIGNED_INT : BasicType.UNSIGNED_LONG;
                                 }
                             }
-                            case DOUBLE -> {
-                                assertBothType(typeSpecifierName, "double");
+                            case DOUBLE -> assertBothType("double", typeSpecifierName);
+                            case CHAR -> {
+                                signedness = newSignedness;
+                                t = switch (newSignedness) {
+                                    case SIGNED -> BasicType.SIGNED_CHAR;
+                                    case UNSIGNED -> BasicType.UNSIGNED_CHAR;
+                                    default -> throw new IllegalStateException("Control should not reach here");
+                                };
                             }
+                            default -> throw new IllegalStateException("Control should not reach here");
                         }
                     } else if (t instanceof VoidType) {
-                        assertBothType(typeSpecifierName, "void");
+                        assertBothType("void", typeSpecifierName);
                     }
                 }
             }
@@ -676,6 +700,8 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
             return parseIntegerConstant(ctx.IntegerConstant());
         } else if (ctx.FloatingConstant() != null) {
             return parseFloatingConstant(ctx.FloatingConstant());
+        } else if (ctx.CharacterConstant() != null) {
+            return parseCharacterConstant(ctx.CharacterConstant());
         } else {
             throw new IllegalStateException("Unknown constant");
         }
@@ -803,6 +829,19 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         }
     }
 
+    private ConstantNode parseCharacterConstant(TerminalNode characterConstant) {
+        String fullText = characterConstant.getText();
+        SourceLocation loc = getSourceLocation(characterConstant);
+        String content = fullText.substring(1, fullText.length() - 1);
+        try {
+            int value = escapeUnescapeHelper.evalChar(content);
+            return new ConstantNode(loc, new ConstantInt(value));
+        } catch (IllegalArgumentException e) {
+            reporter.error(loc, e.getMessage());
+            return new ConstantNode(loc, ConstantInt.ZERO);
+        }
+    }
+
     @Override
     public ExpressionNode visitPrimaryExpression(C99Parser.PrimaryExpressionContext ctx) {
         if (ctx.Identifier() != null) {
@@ -811,11 +850,32 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
             return new VariableNode(identifierNode);
         } else if (ctx.constant() != null) {
             return visitConstant(ctx.constant());
+        } else if (ctx.StringLiteral() != null) {
+            return parseStringLiteral(ctx.StringLiteral());
         } else if (ctx.LeftParen() != null) {
             return (ExpressionNode) visit(ctx.expression());
         } else {
             throw new IllegalStateException("Unknown primary expression");
         }
+    }
+
+    private StringLiteralNode parseStringLiteral(List<TerminalNode> stringLiterals) {
+        int bufferSize = stringLiterals.stream().mapToInt(node -> node.getText().length()).sum();
+        ByteArrayOutputStream out = new ByteArrayOutputStream(bufferSize);
+
+        for (TerminalNode stringLiteral : stringLiterals) {
+            String fullText = stringLiteral.getText();
+            SourceLocation loc = getSourceLocation(stringLiteral);
+            String content = fullText.substring(1, fullText.length() - 1);
+            try {
+                escapeUnescapeHelper.unescapeBytes(content, out);
+            } catch (IllegalArgumentException e) {
+                reporter.error(loc, e.getMessage());
+            }
+        }
+        SourceLocation loc = SourceLocation.concat(
+            getSourceLocation(stringLiterals.get(0)), getSourceLocation(stringLiterals.get(stringLiterals.size() - 1)));
+        return new StringLiteralNode(loc, out.toByteArray());
     }
 
     @Override

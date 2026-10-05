@@ -43,6 +43,8 @@ public interface ExpressionBoolVisitor {
 
     BoolGenResult visit(SubscriptNode subscript, String jumpTarget, boolean inverse);
 
+    BoolGenResult visit(StringLiteralNode string, String jumpTarget, boolean inverse);
+
     /**
      * 作为该 visitor 的返回值
      */

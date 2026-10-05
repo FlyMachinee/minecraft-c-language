@@ -15,12 +15,14 @@ compilationUnit:
 constant
     : IntegerConstant
     | FloatingConstant
+    | CharacterConstant
     ;
 
 // ISO 6.5.1, Primary Expressions
 primaryExpression
     : Identifier
     | constant
+    | StringLiteral+
     | LeftParen expression RightParen
     ;
 
@@ -209,6 +211,7 @@ storageClassSpecifier
 // ISO 6.7.2, Type Specifiers
 typeSpecifier
     : Void
+    | Char
     | Int
     | Long
     | Double

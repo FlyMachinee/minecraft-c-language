@@ -29,6 +29,7 @@ public final class C99Frontend {
         DiagnosticReporter reporter = new DiagnosticReporter(logger, sourceFile);
 
         C99Lexer lexer = new C99Lexer(charStream);
+        lexer.setDiagnosticReporter(reporter);
         lexer.removeErrorListeners();
         LexerErrorListener lexerErrorListener = new LexerErrorListener(reporter);
         lexer.addErrorListener(lexerErrorListener);

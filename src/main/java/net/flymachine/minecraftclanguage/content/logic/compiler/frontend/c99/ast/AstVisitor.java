@@ -54,4 +54,6 @@ public interface AstVisitor<T> {
     T visit(DereferenceNode node);
 
     T visit(SubscriptNode node);
+
+    T visit(StringLiteralNode node);
 }
