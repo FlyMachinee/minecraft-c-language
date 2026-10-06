@@ -850,7 +850,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
             return new VariableNode(identifierNode);
         } else if (ctx.constant() != null) {
             return visitConstant(ctx.constant());
-        } else if (ctx.StringLiteral() != null) {
+        } else if (!ctx.StringLiteral().isEmpty()) {
             return parseStringLiteral(ctx.StringLiteral());
         } else if (ctx.LeftParen() != null) {
             return (ExpressionNode) visit(ctx.expression());
