@@ -137,14 +137,14 @@ public final class ReplacePseudoOperandPass implements HighLevelVisitor<Void> {
     }
 
     @Override
-    public Void visit(BstrpickZeroExtend inst) {
+    public Void visit(ZeroExtend inst) {
         inst.src = replacePseudo(inst.src);
         inst.dst = replacePseudo(inst.dst);
         return null;
     }
 
     @Override
-    public Void visit(AddSignExtend inst) {
+    public Void visit(SignExtend inst) {
         inst.src = replacePseudo(inst.src);
         inst.dst = replacePseudo(inst.dst);
         return null;
@@ -228,6 +228,12 @@ public final class ReplacePseudoOperandPass implements HighLevelVisitor<Void> {
     @Override
     public Void visit(CallIndirect inst) {
         inst.funcPtr = replacePseudo(inst.funcPtr);
+        return null;
+    }
+
+    @Override
+    public Void visit(CopyByteArray inst) {
+        inst.dst = replacePseudo(inst.dst);
         return null;
     }
 

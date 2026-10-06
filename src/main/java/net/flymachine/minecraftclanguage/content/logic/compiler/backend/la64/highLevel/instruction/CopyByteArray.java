@@ -2,12 +2,12 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.hi
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.HighLevelOperand;
 
-public class BstrpickZeroExtend implements HighLevelInstruction {
-    public HighLevelOperand src;
+public class CopyByteArray implements HighLevelInstruction {
+    public final byte[] data;
     public HighLevelOperand dst;
 
-    public BstrpickZeroExtend(HighLevelOperand src, HighLevelOperand dst) {
-        this.src = src;
+    public CopyByteArray(byte[] data, HighLevelOperand dst) {
+        this.data = data;
         this.dst = dst;
     }
 

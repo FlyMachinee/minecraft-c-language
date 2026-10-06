@@ -112,8 +112,8 @@ public final class BasicType extends Type {
     @Override
     public AsmType toAsmType() {
         return switch (this.primitive) {
-            case CHAR, SIGNED_CHAR, UNSIGNED_CHAR ->
-                throw new UnsupportedOperationException("char type is not supported yet in assembly");
+            case CHAR, SIGNED_CHAR -> AsmType.BYTE;
+            case UNSIGNED_CHAR -> AsmType.UBYTE;
             case INT, UNSIGNED_INT -> AsmType.WORD;
             case LONG, UNSIGNED_LONG -> AsmType.DWORD;
             case DOUBLE -> AsmType.DOUBLE;

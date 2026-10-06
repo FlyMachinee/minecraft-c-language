@@ -29,9 +29,9 @@ public interface HighLevelVisitor<T> {
 
     T visit(Bitwise inst);
 
-    T visit(BstrpickZeroExtend inst);
+    T visit(ZeroExtend inst);
 
-    T visit(AddSignExtend inst);
+    T visit(SignExtend inst);
 
     T visit(DoubleFromInt inst);
 
@@ -56,4 +56,6 @@ public interface HighLevelVisitor<T> {
     T visit(AddLeftShift inst);
 
     T visit(CallIndirect inst);
+
+    T visit(CopyByteArray inst);
 }
