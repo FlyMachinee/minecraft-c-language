@@ -53,7 +53,7 @@ public final class SymbolTable {
             this.attr = attr;
         }
 
-        public sealed interface IdentifierAttr permits FuncAttr, AutoAttr, StaticAttr {
+        public sealed interface IdentifierAttr permits FuncAttr, AutoAttr, StaticAttr, ConstantAttr {
             boolean isDefinition();
 
             boolean isGlobal();
@@ -66,7 +66,7 @@ public final class SymbolTable {
              */
             public boolean global;
 
-            FuncAttr(boolean defined, boolean global) {
+            public FuncAttr(boolean defined, boolean global) {
                 this.defined = defined;
                 this.global = global;
             }
@@ -89,7 +89,7 @@ public final class SymbolTable {
              */
             public boolean global;
 
-            StaticAttr(DefinitionType defType, boolean global) {
+            public StaticAttr(DefinitionType defType, boolean global) {
                 this.defType = defType;
                 this.global = global;
             }
@@ -125,6 +125,24 @@ public final class SymbolTable {
             private AutoAttr() { }
 
             public static final AutoAttr INSTANCE = new AutoAttr();
+
+            @Override
+            public boolean isDefinition() {
+                return true;
+            }
+
+            @Override
+            public boolean isGlobal() {
+                return false;
+            }
+        }
+
+        public static final class ConstantAttr implements IdentifierAttr {
+            public StaticInit init;
+
+            public ConstantAttr(StaticInit init) {
+                this.init = init;
+            }
 
             @Override
             public boolean isDefinition() {

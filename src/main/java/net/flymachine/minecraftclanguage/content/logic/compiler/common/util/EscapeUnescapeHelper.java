@@ -170,7 +170,6 @@ public final class EscapeUnescapeHelper {
 
     public static String escapeStringLiteral(byte[] bytes) {
         StringBuilder sb = new StringBuilder(bytes.length + 2);
-        sb.append('"');
         for (byte b : bytes) {
             int c = b & 0xFF;
             switch (c) {
@@ -193,7 +192,6 @@ public final class EscapeUnescapeHelper {
                 }
             }
         }
-        sb.append('"');
         return sb.toString();
     }
 

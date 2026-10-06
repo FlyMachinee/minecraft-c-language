@@ -3,6 +3,7 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.he
 import com.mojang.datafixers.util.Either;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.*;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.StaticInit;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.StringInit;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.ZeroInit;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.*;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.TypeCheckingPass;
@@ -45,6 +46,14 @@ public final class InitializerHelper {
      * @return 规范后的初始化器
      */
     public InitializerNode normalize(Type typeToInit, InitializerNode init) {
+        // 字符串字面量初始化特例
+        if (typeToInit instanceof ArrayType at) {
+            StringLiteralNode str = extractStringLiteral(init);
+            if (str != null) {
+                return normalizeStringInit(at, str, init);
+            }
+        }
+
         if (init instanceof CompoundInitializerNode cin) {
             InitializerNode full = zeroInitializer(typeToInit);
             normalizeHelper(typeToInit, full, cin);
@@ -77,13 +86,58 @@ public final class InitializerHelper {
         }
     }
 
+    private SingleInitializerNode normalizeStringInit(ArrayType at, StringLiteralNode str, InitializerNode original) {
+        if (!at.elementType().isCharacter()) {
+            typeChecker.checkExpression(str);
+            String msg = "cannot initialize array of '" +
+                         reporter.white(at.elementType().removeQualifiers().typename()) +
+                         "' from a string literal with type array of '" +
+                         reporter.white("char") + "'";
+            reporter.error(str.getWholeLocation(), msg);
+            return new SingleInitializerNode(str);
+        }
+
+        long size = at.size().value();
+        if (str.literal.length > size) {
+            reporter.error(original.getWholeLocation(),
+                           "initializer-string for array of '" +
+                           reporter.white(at.elementType().removeQualifiers().typename()) +
+                           "' is too long");
+        }
+        SingleInitializerNode sin = new SingleInitializerNode(str);
+        sin.exp.expType = at;
+        return sin;
+    }
+
+    /**
+     * 根据初始化器的内容，确定数组类型的第一维大小
+     *
+     * @param at   要确定大小的数组类型
+     * @param init 初始化器
+     * @return 数组长度；如果无法推导，返回 0
+     */
+    public long determineArraySize(ArrayType at, InitializerNode init) {
+        // 字符串字面量初始化 char 数组
+        if (at.elementType().isCharacter()) {
+            StringLiteralNode str = extractStringLiteral(init);
+            if (str != null) {
+                return str.literal.length + 1;
+            }
+        }
+        // 复合初始化器
+        if (init instanceof CompoundInitializerNode cin) {
+            return determineArraySize(at, cin);
+        }
+        return 0;
+    }
+
     /**
      * 根据初始化器的内容，确定数组类型的第一维大小
      *
      * @param arrayType 要确定大小的数组类型
      * @param init      初始化器
      */
-    public long determineArraySize(ArrayType arrayType, CompoundInitializerNode init) {
+    private long determineArraySize(ArrayType arrayType, CompoundInitializerNode init) {
         if (arrayType.size().value() > 0) {
             return arrayType.size().value();
         }
@@ -101,6 +155,12 @@ public final class InitializerHelper {
                 }
             }
             size = Math.max(size, ((ArrayDesignator) cursor.getDesignators().get(0)).index() + 1);
+
+            // 字符串字面量
+            if (din.initializer instanceof SingleInitializerNode sin && sin.exp instanceof StringLiteralNode) {
+                cursor.next();
+                continue;
+            }
 
             // 处理初始化器
             if (din.initializer instanceof SingleInitializerNode) {
@@ -162,7 +222,7 @@ public final class InitializerHelper {
                     String msg = "incompatible types when initializing type '" +
                                  reporter.white(typeToInit.typename()) +
                                  "' using type '" + reporter.white(firstSingle.exp.expType.typename()) + "'";
-                    reporter.error(init.wholeLoc, msg);
+                    reporter.error(firstSingle.exp.wholeLoc, msg);
                 } else {
                     firstSingle.exp = typeChecker.convertTo(firstSingle.exp, typeToInit);
                     full.exp = firstSingle.exp;
@@ -197,8 +257,38 @@ public final class InitializerHelper {
                 continue;
             }
 
-            // 处理初始化器
             InitializerNode initializer = din.initializer;
+
+            // 字符串字面量初始化内层 char[]
+            if (initializer instanceof SingleInitializerNode sin && sin.exp instanceof StringLiteralNode str) {
+                Type subtype = cursor.subtype();
+                if (subtype instanceof ArrayType innerArray) {
+                    if (innerArray.elementType().isCharacter()) {
+                        long innerSize = innerArray.size().value();
+                        if (str.literal.length > innerSize) {
+                            String msg = "initializer-string for array of '" +
+                                         reporter.white(innerArray.elementType().removeQualifiers().typename()) +
+                                         "' is too long";
+                            reporter.error(sin.getWholeLocation(), msg);
+                        }
+                        sin.exp.expType = innerArray;
+                        // 覆盖检查
+                        checkOverwrite(cursor.fetch(full), sin, new MutableBoolean(false));
+                        cursor.store(full, sin);
+                    } else {
+                        typeChecker.checkExpression(str);
+                        String msg = "cannot initialize array of '" +
+                                     reporter.white(innerArray.elementType().removeQualifiers().typename()) +
+                                     "' from a string literal with type array of '" +
+                                     reporter.white("char") + "'";
+                        reporter.error(sin.getWholeLocation(), msg);
+                    }
+                    cursor.next();
+                    continue;
+                }
+            }
+
+            // 处理初始化器
             if (initializer instanceof SingleInitializerNode sin) {
                 // 普通初始化器
                 cursor.expand();
@@ -216,9 +306,9 @@ public final class InitializerHelper {
                         reporter.error(sin.getWholeLocation(), msg);
                     } else {
                         sin.exp = typeChecker.convertTo(sin.exp, subtype);
+                        cursor.store(full, sin);
                     }
                 }
-                cursor.store(full, sin);
                 cursor.next();
             } else {
                 // 复合初始化器
@@ -237,6 +327,20 @@ public final class InitializerHelper {
                 cursor.next();
             }
         }
+    }
+
+    private static StringLiteralNode extractStringLiteral(InitializerNode init) {
+        if (init instanceof SingleInitializerNode sin && sin.exp instanceof StringLiteralNode str) {
+            return str;
+        }
+        if (init instanceof CompoundInitializerNode cin && cin.inits.size() == 1) {
+            DesignationInitializerNode din = cin.inits.get(0);
+            if (din.designators.isEmpty() && din.initializer instanceof SingleInitializerNode sin
+                && sin.exp instanceof StringLiteralNode str) {
+                return str;
+            }
+        }
+        return null;
     }
 
     /**
@@ -312,6 +416,8 @@ public final class InitializerHelper {
                 case UNSIGNED_INT -> ConstantUnsignedInt.ZERO;
                 case UNSIGNED_LONG -> ConstantUnsignedLong.ZERO;
                 case DOUBLE -> ConstantDouble.ZERO;
+                case CHAR, SIGNED_CHAR -> ConstantChar.ZERO;
+                case UNSIGNED_CHAR -> ConstantUnsignedChar.ZERO;
             });
         }
         if (t instanceof PointerType pt) {
@@ -354,6 +460,40 @@ public final class InitializerHelper {
     }
 
     private void toStaticInitHelper(Type type, InitializerNode normalized, List<StaticInit> result) {
+
+        // 字符串字面量初始化 char[]
+        if (type instanceof ArrayType at &&
+            normalized instanceof SingleInitializerNode sin && sin.exp instanceof StringLiteralNode str) {
+
+            if (!at.elementType().isCharacter()) {
+                result.add(new ZeroInit(type.sizeof()));
+                return;
+            }
+
+            long arraySize = at.size().value();
+            long literalLength = str.literal.length;
+
+            // 大小在先前已经检查过了，此次直接截断
+            // 字面量截断至数组大小
+            byte[] truncatedLiteral = str.literal;
+            if (literalLength > arraySize) {
+                truncatedLiteral = new byte[(int) arraySize];
+                System.arraycopy(str.literal, 0, truncatedLiteral, 0, (int) arraySize);
+            }
+
+            // char[5] <- "hello" = "hello"
+            // char[6] <- "hello" = "hello\0"
+            // char[8] <- "hello" = "hello\0" + [0]*2
+
+            result.add(new StringInit(str.literal, literalLength < arraySize));
+
+            long nullBytes = arraySize - literalLength - 1;
+            if (nullBytes > 0) {
+                result.add(new ZeroInit(nullBytes));
+            }
+            return;
+        }
+
         if (normalized instanceof SingleInitializerNode sin) {
             ExpressionNode init = sin.exp;
             StaticInit toAppend;

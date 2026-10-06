@@ -493,4 +493,9 @@ public final class IdentifierResolutionPass implements AstVisitor<Void> {
         node.rhs.accept(this);
         return null;
     }
+
+    @Override
+    public Void visit(StringLiteralNode node) {
+        return null;
+    }
 }

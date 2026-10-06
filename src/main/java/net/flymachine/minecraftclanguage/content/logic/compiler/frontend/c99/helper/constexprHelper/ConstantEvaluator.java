@@ -330,4 +330,9 @@ public final class ConstantEvaluator implements ConstantEvalVisitor {
     public Either<Constant, SourceLocation> visit(SubscriptNode node, ConstantCategory category) {
         return Either.right(node.wholeLoc);
     }
+
+    @Override
+    public Either<Constant, SourceLocation> visit(StringLiteralNode node, ConstantCategory category) {
+        return Either.right(node.wholeLoc);
+    }
 }

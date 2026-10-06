@@ -3,6 +3,8 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.he
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.BinaryOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.ConstantSymbolPointer;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.PointerConstant;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.StringInit;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.ArrayType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.SymbolTable;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.ExpressionVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.*;
@@ -80,6 +82,21 @@ public final class LValuePathEvaluator implements ExpressionVisitor<Optional<LVa
 
         return Optional.of(
             new LValuePath.Dereference((PointerConstant) ptrRes.orThrow().apply(BinaryOperator.ADD, idxRes.orThrow())));
+    }
+
+    private int stringCounter = 0;
+
+    @Override
+    public Optional<LValuePath> visit(StringLiteralNode string) {
+        // 字符串字面量是静态左值，其地址作为地址常量
+        // 新增静态符号至符号表中
+        String name = "string_constexpr." + (stringCounter++);
+        ArrayType t = (ArrayType) string.expType;
+        symbolTable.put(name,
+                        new SymbolTable.Entry(
+                            new IdentifierNode(null, name), TypeNode.fromType(t), t,
+                            new SymbolTable.Entry.ConstantAttr(new StringInit(string.literal, true))));
+        return Optional.of(new LValuePath.Root(name, t));
     }
 
     @Override

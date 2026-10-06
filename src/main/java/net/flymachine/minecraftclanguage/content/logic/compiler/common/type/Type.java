@@ -134,6 +134,27 @@ public abstract class Type {
         return isBasic() && ((BasicType) this).primitive() == BasicType.Primitive.DOUBLE;
     }
 
+    public final boolean isCharacter() {
+        if (!isBasic()) {
+            return false;
+        }
+        BasicType.Primitive primitive = ((BasicType) this).primitive();
+        return primitive == BasicType.Primitive.CHAR || primitive == BasicType.Primitive.SIGNED_CHAR ||
+               primitive == BasicType.Primitive.UNSIGNED_CHAR;
+    }
+
+    public final boolean isChar() {
+        return isBasic() && ((BasicType) this).primitive() == BasicType.Primitive.CHAR;
+    }
+
+    public final boolean isSignedChar() {
+        return isBasic() && ((BasicType) this).primitive() == BasicType.Primitive.SIGNED_CHAR;
+    }
+
+    public final boolean isUnsignedChar() {
+        return isBasic() && ((BasicType) this).primitive() == BasicType.Primitive.UNSIGNED_CHAR;
+    }
+
     public abstract long sizeof();
 
     public abstract long alignof();
@@ -151,7 +172,19 @@ public abstract class Type {
         if (t1.isDouble() || t2.isDouble()) {
             return BasicType.DOUBLE;
         }
-        // 否则两个操作数均为整数。两个操作数都会经历整数提升；经过整数提升后，适用于以下情况之一：
+
+        // 否则两个操作数均为整数。两个操作数都会经历整数提升
+        // 整数提升是任何等级小于或等于 int 等级的整数类型
+        // 或是 _Bool、int、signed int、unsigned int 类型的位域类型的值到 int 或 unsigned int 类型值的隐式转换
+        // 若 int 能表示原类型的整个值域（或原位域的值域），则值转换成 int 类型。否则值转化成 unsigned int 类型
+        if (t1.isCharacter()) {
+            t1 = BasicType.INT;
+        }
+        if (t2.isCharacter()) {
+            t2 = BasicType.INT;
+        }
+
+        // 经过整数提升后，适用于以下情况之一：
         // 若两类型相同，则该类型即为公共类型
         if (t1 == t2) {
             return t1;

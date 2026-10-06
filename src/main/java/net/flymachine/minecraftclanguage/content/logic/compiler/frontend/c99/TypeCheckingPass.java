@@ -3,6 +3,7 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99;
 import com.mojang.datafixers.util.Either;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.AssignmentOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.StorageClassSpecifier;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.UnaryOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.Constant;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.ConstantLong;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.ConstantUnsignedLong;
@@ -199,12 +200,20 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
         node.exp.expType = node.exp.expType.removeConst();
 
         node.expType = switch (node.op.op) {
-            case NEGATE -> {
+            case POSITIVE, NEGATE -> {
                 if (!node.exp.expType.isArithmetic()) {
-                    String msg = "operand of unary minus must have arithmetic type; have '" +
+                    String type = node.op.op == UnaryOperator.POSITIVE ? "plus" : "minus";
+                    String msg = "operand of unary " + type + " must have arithmetic type; have '" +
                                  reporter.white(node.exp.expType.typename()) + "'";
                     reporter.error(node.op.wholeLoc, msg);
                     yield ErrorType.INSTANCE;
+                }
+                // 一元加和一元减都首先在其操作数上应用整数提升
+                // 表达式类型为提升后的类型
+                Type operandType = node.exp.expType;
+                if (operandType.isCharacter()) {
+                    node.exp = convertTo(node.exp, BasicType.INT);
+                    yield BasicType.INT;
                 }
                 yield node.exp.expType;
             }
@@ -214,6 +223,12 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
                                  reporter.white(node.exp.expType.typename()) + "'";
                     reporter.error(node.op.wholeLoc, msg);
                     yield ErrorType.INSTANCE;
+                }
+                // 运算符 ~ 在其唯一的操作数上进行整数提升
+                Type operandType = node.exp.expType;
+                if (operandType.isCharacter()) {
+                    node.exp = convertTo(node.exp, BasicType.INT);
+                    yield BasicType.INT;
                 }
                 yield node.exp.expType;
             }
@@ -797,15 +812,17 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
             type = typeNode.getType();
         } else {
             // 对于数组类型，可能需要通过其初始化器确定其第一维的大小
-            if (typeNode instanceof ArrayTypeNode atn && initDecl.init instanceof CompoundInitializerNode cin) {
+            if (typeNode instanceof ArrayTypeNode atn) {
                 if (atn.size == null) {
                     reporter.suppressDiagnostics();
                     checkObjectType(atn, id, false);
                     reporter.clearSuppressDiagnostics();
 
                     // 更新类型节点的第一维大小
-                    long size = initializerHelper.determineArraySize(atn.getType(), cin);
-                    atn.size = new ConstantNode(null, new ConstantLong(size));
+                    long size = initializerHelper.determineArraySize(atn.getType(), initDecl.init);
+                    if (size != 0) {
+                        atn.size = new ConstantNode(null, new ConstantLong(size));
+                    }
                 }
             }
             // 有初始化器，为定义，要求类型必须完整
@@ -901,15 +918,17 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
 
         if (storageClass == null || !storageClass.storageClass.equals(StorageClassSpecifier.EXTERN)) {
             // 对于数组类型，可能需要通过其初始化器确定其第一维的大小
-            if (typeNode instanceof ArrayTypeNode atn && initDecl.init instanceof CompoundInitializerNode cin) {
+            if (typeNode instanceof ArrayTypeNode atn) {
                 if (atn.size == null) {
                     reporter.suppressDiagnostics();
                     checkObjectType(atn, id, false);
                     reporter.clearSuppressDiagnostics();
 
                     // 更新类型节点的第一维大小
-                    long size = initializerHelper.determineArraySize(atn.getType(), cin);
-                    atn.size = new ConstantNode(null, new ConstantLong(size));
+                    long size = initializerHelper.determineArraySize(atn.getType(), initDecl.init);
+                    if (size != 0) {
+                        atn.size = new ConstantNode(null, new ConstantLong(size));
+                    }
                 }
             }
             // 检查类型，无链接从而要求完整
@@ -1058,6 +1077,10 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
         // 下列表达式是左值
         // 标识符，含具名函数形参，只要声明它们为指代对象（而非函数或枚举常量）
         if (exp instanceof VariableNode var && !(var.expType.isFunction())) {
+            return true;
+        }
+        // 字符串字面量
+        if (exp instanceof StringLiteralNode) {
             return true;
         }
         // 对指向对象指针运用间接使用（一元 *）运算符的结果
@@ -1671,6 +1694,12 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
         }
 
         node.expType = referencedType;
+        return null;
+    }
+
+    @Override
+    public Void visit(StringLiteralNode node) {
+        node.expType = new ArrayType(BasicType.CHAR, new ConstantUnsignedLong(node.literal.length + 1));
         return null;
     }
 }
