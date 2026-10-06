@@ -67,7 +67,7 @@ public record ConstantPointer(long value, Type referencedType) implements Pointe
     @Override
     public ConstantInt apply(UnaryOperator op) {
         return switch (op) {
-            case NEGATE -> throw new UnsupportedOperationException("Not arithmetic type");
+            case POSITIVE, NEGATE -> throw new UnsupportedOperationException("Not arithmetic type");
             case COMPLEMENT -> throw new UnsupportedOperationException("Not integer type");
             case NOT -> new ConstantInt(value == 0 ? 1 : 0);
         };

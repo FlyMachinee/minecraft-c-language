@@ -78,6 +78,7 @@ public record ConstantUnsignedLong(long value) implements IntegerConstant {
     @Override
     public Constant apply(UnaryOperator op) {
         return switch (op) {
+            case POSITIVE -> this;
             case NEGATE -> new ConstantUnsignedLong(-value);
             case NOT -> new ConstantInt(value == 0 ? 1 : 0);
             case COMPLEMENT -> new ConstantUnsignedLong(~value);

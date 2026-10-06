@@ -72,6 +72,7 @@ public record ConstantInt(int value) implements IntegerConstant {
     @Override
     public ConstantInt apply(UnaryOperator op) {
         return switch (op) {
+            case POSITIVE -> this;
             case NEGATE -> new ConstantInt(-value);
             case NOT -> new ConstantInt(value == 0 ? 1 : 0);
             case COMPLEMENT -> new ConstantInt(~value);
