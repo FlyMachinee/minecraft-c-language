@@ -52,7 +52,7 @@ public class TacFunction implements TacTopLevel {
         stream.println(") {");
         for (TacInstruction instruction : insts) {
             instruction.dumpPretty(stream, indentLevel + 1, true);
-            stream.println(";");
+            stream.println();
         }
         stream.append("  ".repeat(indentLevel)).append("}");
     }

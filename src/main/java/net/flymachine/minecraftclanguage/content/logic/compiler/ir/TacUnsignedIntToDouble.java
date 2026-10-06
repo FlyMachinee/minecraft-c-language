@@ -4,7 +4,7 @@ import java.io.PrintStream;
 
 /**
  * 将无符号整数转换为双精度浮点数
- * 源操作数可为 unsigned int 或 unsigned long，目标操作数为 double
+ * 源操作数可为 unsigned char, unsigned int 或 unsigned long，目标操作数为 double
  */
 public class TacUnsignedIntToDouble implements TacInstruction {
     public TacValue src;

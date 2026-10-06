@@ -3,7 +3,7 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.ir;
 import java.io.PrintStream;
 
 /**
- * 将左操作数视为 long 值，右操作数视为 int 值，将左操作数的值截断为 int，并将结果存储在右操作数中
+ * 将左操作数的值截断，并将结果存储在右操作数中
  */
 public class TacTruncate implements TacInstruction {
     public TacValue src;

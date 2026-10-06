@@ -5,6 +5,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.hig
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.BinaryOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.Comparison;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.UnaryOperator;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.CharInit;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.StaticInit;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.BasicType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
@@ -62,7 +63,7 @@ public record ConstantChar(byte value) implements IntegerConstant {
 
     @Override
     public StaticInit toStaticInit() {
-        return null;
+        return new CharInit(value);
     }
 
     @Override

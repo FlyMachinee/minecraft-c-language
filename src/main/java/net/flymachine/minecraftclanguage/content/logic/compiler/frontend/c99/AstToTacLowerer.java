@@ -6,6 +6,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.BinaryOpe
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.Comparison;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.UnaryOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.*;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.StringInit;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.ArrayType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.BasicType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.PointerType;
@@ -53,6 +54,8 @@ public final class AstToTacLowerer implements
                     topLevels.add(new TacStaticVariable(
                         entry.id.name, staticAttr.global, entry.type, InitializerHelper.zeroStaticInit(entry.type)));
                 }
+            } else if (attr instanceof SymbolTable.Entry.ConstantAttr constAttr) {
+                topLevels.add(new TacStaticConstant(entry.id.name, entry.type, constAttr.init));
             }
         }
         return new TacProgram(topLevels);
@@ -136,6 +139,18 @@ public final class AstToTacLowerer implements
             SingleInitializerNode singleInit = (SingleInitializerNode) init;
             TacValue val = evalAndLvalueConvert(singleInit.exp);
             emitTac(new TacCopyToOffset(val, target, offset));
+            return;
+        }
+
+        // 初始化聚合类型
+        // 特殊情况检查，字符串字面量初始化数组
+        // 由先前的类型检查保证
+        if (init instanceof SingleInitializerNode sin) {
+            ArrayType at = (ArrayType) t;
+            StringLiteralNode str = (StringLiteralNode) sin.exp;
+            byte[] data = new byte[(int) at.size().value()];
+            System.arraycopy(str.literal, 0, data, 0, Math.min(data.length, str.literal.length));
+            emitTac(new TacCopyByteArrayToOffset(data, target, offset));
             return;
         }
 
@@ -548,6 +563,12 @@ public final class AstToTacLowerer implements
                 return new PlainOperand(reduced.orThrow());
             }
         }
+        if (unaryExp.op.op == UnaryOperator.POSITIVE) {
+            // +a => a
+            // 一元加和一元减都首先在其操作数上应用整数提升，然后一元加返回提升后的值
+            // 整数提升在类型检查阶段已经完成
+            return new PlainOperand(src);
+        }
         TacVariable dst = makeTempVar(unaryExp.expType);
         emitTac(new TacUnaryOperation(unaryExp.op.op, src, dst));
         return new PlainOperand(dst);
@@ -851,18 +872,18 @@ public final class AstToTacLowerer implements
         // 自增自减表达式
         BinaryOperator op = incrementDecrement.isIncrement ? BinaryOperator.ADD : BinaryOperator.SUBTRACT;
         ExpEvalResult dst = eval(incrementDecrement.operand);
-
+        Type operandType = incrementDecrement.operand.expType;
         TacConstant step;
-        if (incrementDecrement.expType instanceof BasicType bt) {
+        if (operandType instanceof BasicType bt) {
             step = new TacConstant(switch (bt.primitive()) {
-                case INT -> ConstantInt.ONE;
+                case INT, CHAR, SIGNED_CHAR, UNSIGNED_CHAR -> ConstantInt.ONE;
                 case LONG -> ConstantLong.ONE;
                 case UNSIGNED_INT -> ConstantUnsignedInt.ONE;
                 case UNSIGNED_LONG -> ConstantUnsignedLong.ONE;
                 case DOUBLE -> ConstantDouble.ONE;
             });
         } else {
-            PointerType pt = (PointerType) incrementDecrement.expType;
+            PointerType pt = (PointerType) operandType;
             long scale = pt.referencedType().sizeof();
             step = new TacConstant(new ConstantLong(scale));
         }
@@ -870,36 +891,70 @@ public final class AstToTacLowerer implements
         if (incrementDecrement.isPrefix) {
             if (dst instanceof PlainOperand objDst) {
                 // ++/--a => a = a +/- 1; yield a;
-                emitTac(new TacBinaryOperation(op, objDst.object(), step, objDst.object()));
+                TacValue original = objDst.object();
+                if (operandType.isCharacter()) {
+                    // 整数提升
+                    // tmp = (int) a; tmp2 = tmp +/- 1; a = (char) tmp2; yield a;
+                    original = cast(original, BasicType.INT, operandType);
+                    TacVariable res = makeTempVar(BasicType.INT);
+                    emitTac(new TacBinaryOperation(op, original, step, res));
+                    emitTac(new TacTruncate(res, objDst.object()));
+                    return dst;
+                }
+                emitTac(new TacBinaryOperation(op, original, step, objDst.object()));
                 return dst;
             }
             if (dst instanceof DereferencedPointer derefPointer) {
                 // ++/--(*ptr)
                 // *ptr = *ptr +/- 1; yield *ptr;
                 // tmp = *ptr; tmp = tmp +/- 1; *ptr = tmp; yield tmp;
-                TacVariable tmp = makeTempVar(incrementDecrement.expType);
+                TacVariable tmp = makeTempVar(operandType);
                 emitTacLoad(derefPointer.addr(), tmp);
-                emitTac(new TacBinaryOperation(op, tmp, step, tmp));
+                if (operandType.isCharacter()) {
+                    // 整数提升
+                    // tmp = *ptr; tmp2 = (int) tmp; tmp2 = tmp2 +/- 1; tmp3 = (char) tmp2; *ptr = tmp3; yield tmp3;
+                    TacValue tmp2 = cast(tmp, BasicType.INT, operandType);
+                    emitTac(new TacBinaryOperation(op, tmp2, step, tmp2));
+                    tmp = (TacVariable) cast(tmp2, operandType, BasicType.INT);
+                } else {
+                    emitTac(new TacBinaryOperation(op, tmp, step, tmp));
+                }
                 emitTacStore(tmp, derefPointer.addr());
                 return new PlainOperand(tmp);
             }
         } else {
             if (dst instanceof PlainOperand objDst) {
                 // a++/-- => temp = a; a = a +/- 1; yield temp;
-                TacVariable temp = makeTempVar(incrementDecrement.expType);
+                TacVariable temp = makeTempVar(operandType);
                 emitTacCopy(objDst.object(), temp);
-                emitTac(new TacBinaryOperation(op, objDst.object(), step, objDst.object()));
+                if (operandType.isCharacter()) {
+                    // 整数提升
+                    // tmp = (int) a; tmp = tmp +/- 1; a = (char) tmp;
+                    TacValue tmp = cast(objDst.object(), BasicType.INT, operandType);
+                    emitTac(new TacBinaryOperation(op, tmp, step, tmp));
+                    emitTac(new TacTruncate(tmp, objDst.object()));
+                } else {
+                    emitTac(new TacBinaryOperation(op, objDst.object(), step, objDst.object()));
+                }
                 return new PlainOperand(temp);
             }
             if (dst instanceof DereferencedPointer derefPointer) {
                 // (*ptr)++/--
                 // old = *ptr; *ptr = old +/- 1; yield old;
                 // tmp = *ptr; old = tmp; tmp = tmp +/- 1; *ptr = tmp; yield old;
-                TacVariable tmp = makeTempVar(incrementDecrement.expType);
-                TacVariable old = makeTempVar(incrementDecrement.expType);
+                TacVariable tmp = makeTempVar(operandType);
+                TacVariable old = makeTempVar(operandType);
                 emitTacLoad(derefPointer.addr(), tmp);
                 emitTacCopy(tmp, old);
-                emitTac(new TacBinaryOperation(op, tmp, step, tmp));
+                if (operandType.isCharacter()) {
+                    // 整数提升
+                    // tmp2 = (int) tmp; tmp2 = tmp2 +/- 1; tmp3 = (char) tmp2; *ptr = tmp3; yield old;
+                    TacValue tmp2 = cast(tmp, BasicType.INT, operandType);
+                    emitTac(new TacBinaryOperation(op, tmp2, step, tmp2));
+                    tmp = (TacVariable) cast(tmp2, operandType, BasicType.INT);
+                } else {
+                    emitTac(new TacBinaryOperation(op, tmp, step, tmp));
+                }
                 emitTacStore(tmp, derefPointer.addr());
                 return new PlainOperand(old);
             }
@@ -989,17 +1044,15 @@ public final class AstToTacLowerer implements
 
         if (targetBasic.isDouble()) {
             switch (originBasic.primitive()) {
-                case INT, LONG -> emitTac(new TacIntToDouble(toCast, dst));
-                case UNSIGNED_INT, UNSIGNED_LONG -> emitTac(new TacUnsignedIntToDouble(toCast, dst));
-                default -> throw new IllegalStateException("Unexpected value: " + originBasic);
+                case SIGNED_CHAR, CHAR, INT, LONG -> emitTac(new TacIntToDouble(toCast, dst));
+                case UNSIGNED_CHAR, UNSIGNED_INT, UNSIGNED_LONG -> emitTac(new TacUnsignedIntToDouble(toCast, dst));
             }
             return dst;
         }
         if (originBasic.isDouble()) {
             switch (targetBasic.primitive()) {
-                case INT, LONG -> emitTac(new TacDoubleToInt(toCast, dst));
-                case UNSIGNED_INT, UNSIGNED_LONG -> emitTac(new TacDoubleToUnsignedInt(toCast, dst));
-                default -> throw new IllegalStateException("Unexpected value: " + targetBasic);
+                case SIGNED_CHAR, CHAR, INT, LONG -> emitTac(new TacDoubleToInt(toCast, dst));
+                case UNSIGNED_CHAR, UNSIGNED_INT, UNSIGNED_LONG -> emitTac(new TacDoubleToUnsignedInt(toCast, dst));
             }
             return dst;
         }
@@ -1075,6 +1128,20 @@ public final class AstToTacLowerer implements
         TacValue indexVal = evalAndLvalueConvert(index);
         long scale = pointerType.referencedType().sizeof();
         return new DereferencedPointer(pointerAdd(addr, pointerType, indexVal, scale));
+    }
+
+    private int stringLiteralCounter = 0;
+
+    @Override
+    public ExpEvalResult visit(StringLiteralNode string) {
+        // 字符串字面量作为表达式，生成一个静态对象
+        String name = "string." + stringLiteralCounter++;
+        Type t = string.expType;
+        symbolTable.put(name,
+                        new SymbolTable.Entry(
+                            new IdentifierNode(null, name), TypeNode.fromType(t), t,
+                            new SymbolTable.Entry.ConstantAttr(new StringInit(string.literal, true))));
+        return new PlainOperand(new TacVariable(name));
     }
 
     @Override
@@ -1290,6 +1357,11 @@ public final class AstToTacLowerer implements
     @Override
     public BoolGenResult visit(SubscriptNode subscript, String jumpTarget, boolean inverse) {
         return visitFallback(subscript, jumpTarget, inverse);
+    }
+
+    @Override
+    public BoolGenResult visit(StringLiteralNode string, String jumpTarget, boolean inverse) {
+        return visitFallback(string, jumpTarget, inverse);
     }
 
     private void emitTacNeg(TacValue src, TacValue dst) {

@@ -4,7 +4,7 @@ import java.io.PrintStream;
 
 /**
  * 将有符号整数转换为双精度浮点数
- * 源操作数可为 int 或 long，目标操作数为 double
+ * 源操作数可为 (signed) char, int 或 long，目标操作数为 double
  */
 public class TacIntToDouble implements TacInstruction {
     public TacValue src;
