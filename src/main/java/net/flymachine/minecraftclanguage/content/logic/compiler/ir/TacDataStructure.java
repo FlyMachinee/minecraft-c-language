@@ -11,4 +11,10 @@ public interface TacDataStructure {
     default void dump(PrintStream stream) {
         dump(stream, 0, false);
     }
+
+    void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine);
+
+    default void dumpPretty(PrintStream stream) {
+        dumpPretty(stream, 0, false);
+    }
 }

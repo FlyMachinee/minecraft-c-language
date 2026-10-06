@@ -1,5 +1,7 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.ir;
 
+import java.io.PrintStream;
+
 public class TacCopyToOffset implements TacInstruction {
     public TacValue src;
     public String dst;
@@ -28,5 +30,18 @@ public class TacCopyToOffset implements TacInstruction {
         stream.print(", offset=");
         stream.print(offset);
         stream.print(")");
+    }
+
+    @Override
+    public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            stream.print("  ".repeat(indentLevel));
+        }
+        // dst[offset:] = src
+        stream.print(dst);
+        stream.print("[");
+        stream.print(offset);
+        stream.print(":] = ");
+        src.dumpPretty(stream);
     }
 }

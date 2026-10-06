@@ -27,4 +27,12 @@ public class TacVariable implements TacValue {
         }
         stream.append("Var(").append(name).append(")");
     }
+
+    @Override
+    public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            stream.print("  ".repeat(indentLevel));
+        }
+        stream.append(name);
+    }
 }

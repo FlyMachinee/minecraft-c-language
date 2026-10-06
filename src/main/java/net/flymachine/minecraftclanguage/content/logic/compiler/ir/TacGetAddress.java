@@ -27,4 +27,15 @@ public class TacGetAddress implements TacInstruction {
         dst.dump(stream);
         stream.print(")");
     }
+
+    @Override
+    public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            stream.print("  ".repeat(indentLevel));
+        }
+        // dst = &src
+        dst.dumpPretty(stream);
+        stream.print(" = &");
+        src.dumpPretty(stream);
+    }
 }

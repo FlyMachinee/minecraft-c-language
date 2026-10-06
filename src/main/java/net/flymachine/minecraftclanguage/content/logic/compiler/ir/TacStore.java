@@ -27,4 +27,16 @@ public class TacStore implements TacInstruction {
         dstAddr.dump(stream);
         stream.print(")");
     }
+
+    @Override
+    public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            stream.print("  ".repeat(indentLevel));
+        }
+        // *dstAddr = src
+        stream.print("*");
+        dstAddr.dumpPretty(stream);
+        stream.print(" = ");
+        src.dumpPretty(stream);
+    }
 }

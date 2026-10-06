@@ -18,6 +18,14 @@ public class TacLabel implements TacInstruction {
     }
 
     @Override
+    public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            stream.print("  ".repeat(indentLevel - 1));
+        }
+        stream.append(name).append(":");
+    }
+
+    @Override
     public <T> T accept(TacVisitor<T> visitor) {
         return visitor.visit(this);
     }

@@ -18,4 +18,12 @@ public class TacConstant implements TacValue {
         }
         stream.append("Constant(").append(String.valueOf(value)).append(")");
     }
+
+    @Override
+    public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            stream.print("  ".repeat(indentLevel));
+        }
+        stream.append(String.valueOf(value));
+    }
 }

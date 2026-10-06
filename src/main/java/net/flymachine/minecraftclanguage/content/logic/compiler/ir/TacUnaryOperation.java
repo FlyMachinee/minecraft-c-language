@@ -28,6 +28,18 @@ public class TacUnaryOperation implements TacInstruction {
     }
 
     @Override
+    public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            stream.print("  ".repeat(indentLevel));
+        }
+        // dst = op src
+        dst.dumpPretty(stream);
+        stream.print(" = ");
+        stream.print(op.getSymbol());
+        src.dumpPretty(stream);
+    }
+
+    @Override
     public <T> T accept(TacVisitor<T> visitor) {
         return visitor.visit(this);
     }

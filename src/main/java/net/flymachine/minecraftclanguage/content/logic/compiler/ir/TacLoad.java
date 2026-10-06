@@ -28,4 +28,15 @@ public class TacLoad implements TacInstruction {
         dst.dump(stream);
         stream.print(")");
     }
+
+    @Override
+    public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            stream.print("  ".repeat(indentLevel));
+        }
+        // dst = *srcAddr
+        dst.dumpPretty(stream);
+        stream.print(" = *");
+        srcAddr.dumpPretty(stream);
+    }
 }

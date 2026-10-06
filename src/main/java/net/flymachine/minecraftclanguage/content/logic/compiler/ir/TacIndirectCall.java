@@ -38,4 +38,24 @@ public class TacIndirectCall implements TacInstruction {
         dst.dump(stream);
         stream.print(")");
     }
+
+    @Override
+    public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            stream.print("  ".repeat(indentLevel));
+        }
+        // dst = funcPtr(args)
+        dst.dumpPretty(stream);
+        stream.print(" = ");
+        funcPtr.dumpPretty(stream);
+        stream.print("(");
+        for (int i = 0; i < this.args.size(); i++) {
+            if (i > 0) {
+                stream.print(", ");
+            }
+            TacValue arg = this.args.get(i);
+            arg.dumpPretty(stream);
+        }
+        stream.print(")");
+    }
 }

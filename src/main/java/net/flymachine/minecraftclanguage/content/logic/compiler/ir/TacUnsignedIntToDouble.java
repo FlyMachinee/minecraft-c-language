@@ -1,5 +1,7 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.ir;
 
+import java.io.PrintStream;
+
 /**
  * 将无符号整数转换为双精度浮点数
  * 源操作数可为 unsigned int 或 unsigned long，目标操作数为 double
@@ -28,5 +30,16 @@ public class TacUnsignedIntToDouble implements TacInstruction {
         stream.print(", dst=");
         dst.dump(stream);
         stream.print(")");
+    }
+
+    @Override
+    public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            stream.print("  ".repeat(indentLevel));
+        }
+        // dst = (ui2d) src
+        dst.dumpPretty(stream);
+        stream.print(" = (ui2d) ");
+        src.dumpPretty(stream);
     }
 }

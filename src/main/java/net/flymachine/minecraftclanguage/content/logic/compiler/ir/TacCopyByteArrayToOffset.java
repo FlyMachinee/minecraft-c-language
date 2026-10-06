@@ -1,18 +1,17 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.ir;
 
 import java.io.PrintStream;
+import java.util.Arrays;
 
-/**
- * 将左操作数视为 unsigned int 值，右操作数视为 unsigned long 值，将左操作数的值零扩展为 unsigned long，并将结果存储在右操作数中
- */
+public class TacCopyByteArrayToOffset implements TacInstruction {
+    public byte[] data;
+    public String dst;
+    public long offset;
 
-public class TacZeroExtend implements TacInstruction {
-    public TacValue src;
-    public TacValue dst;
-
-    public TacZeroExtend(TacValue src, TacValue dst) {
-        this.src = src;
+    public TacCopyByteArrayToOffset(byte[] data, String dst, long offset) {
+        this.data = data;
         this.dst = dst;
+        this.offset = offset;
     }
 
     @Override
@@ -25,10 +24,12 @@ public class TacZeroExtend implements TacInstruction {
         if (indentFirstLine) {
             stream.print("  ".repeat(indentLevel));
         }
-        stream.print("ZeroExtend(src=");
-        src.dump(stream);
+        stream.print("CopyByteArrayToOffset(data=");
+        stream.print(Arrays.toString(data));
         stream.print(", dst=");
-        dst.dump(stream);
+        stream.print(dst);
+        stream.print(", offset=");
+        stream.print(offset);
         stream.print(")");
     }
 
@@ -37,10 +38,11 @@ public class TacZeroExtend implements TacInstruction {
         if (indentFirstLine) {
             stream.print("  ".repeat(indentLevel));
         }
-        // dst = (zero ext) src
-        dst.dumpPretty(stream);
-        stream.print(" = (zero ext) ");
-        src.dumpPretty(stream);
+        // dst[offset:] = data
+        stream.print(dst);
+        stream.print("[");
+        stream.print(offset);
+        stream.print(":] = ");
+        stream.print(Arrays.toString(data));
     }
-
 }

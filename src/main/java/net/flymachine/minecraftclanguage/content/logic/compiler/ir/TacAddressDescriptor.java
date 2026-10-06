@@ -75,4 +75,24 @@ public record TacAddressDescriptor(
         stream.print(offset);
         stream.print("]");
     }
+
+    @Override
+    public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            stream.print("  ".repeat(indentLevel));
+        }
+        stream.print('(');
+        base.dumpPretty(stream);
+        if (hasIndex()) {
+            stream.print("+");
+            index.dumpPretty(stream);
+            stream.print("*");
+            stream.print(scale);
+        }
+        if (offset != 0) {
+            stream.print("+");
+            stream.print(offset);
+        }
+        stream.print(')');
+    }
 }

@@ -34,4 +34,20 @@ public class TacStaticVariable implements TacTopLevel {
               .append(String.valueOf(init))
               .append(")");
     }
+
+    @Override
+    public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            stream.print("  ".repeat(indentLevel));
+        }
+        if (global) {
+            stream.print("global ");
+        }
+        stream.append(type.typename())
+              .append(" ")
+              .append(name)
+              .append(" = ")
+              .append(String.valueOf(init))
+              .append(";");
+    }
 }

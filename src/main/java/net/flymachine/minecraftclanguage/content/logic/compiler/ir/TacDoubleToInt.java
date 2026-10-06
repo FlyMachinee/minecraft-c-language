@@ -31,4 +31,15 @@ public class TacDoubleToInt implements TacInstruction {
         dst.dump(stream);
         stream.print(")");
     }
+
+    @Override
+    public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            stream.print("  ".repeat(indentLevel));
+        }
+        // dst = (d2i) src
+        dst.dumpPretty(stream);
+        stream.print(" = (d2i) ");
+        src.dumpPretty(stream);
+    }
 }

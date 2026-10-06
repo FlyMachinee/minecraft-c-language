@@ -33,4 +33,27 @@ public class TacFunction implements TacTopLevel {
         stream.append("  ".repeat(indentLevel + 1)).append("]\n");
         stream.append("  ".repeat(indentLevel)).append(")");
     }
+
+    @Override
+    public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            stream.print("  ".repeat(indentLevel));
+        }
+        if (global) {
+            stream.print("global ");
+        }
+        stream.append("function ").append(name).append("(");
+        for (int i = 0; i < params.size(); i++) {
+            if (i > 0) {
+                stream.print(", ");
+            }
+            stream.print(params.get(i));
+        }
+        stream.println(") {");
+        for (TacInstruction instruction : insts) {
+            instruction.dumpPretty(stream, indentLevel + 1, true);
+            stream.println(";");
+        }
+        stream.append("  ".repeat(indentLevel)).append("}");
+    }
 }

@@ -30,4 +30,15 @@ public class TacSignExtend implements TacInstruction {
         dst.dump(stream);
         stream.print(")");
     }
+
+    @Override
+    public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            stream.print("  ".repeat(indentLevel));
+        }
+        // dst = (sign ext) src
+        dst.dumpPretty(stream);
+        stream.print(" = (sign ext) ");
+        src.dumpPretty(stream);
+    }
 }

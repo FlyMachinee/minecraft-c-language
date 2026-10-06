@@ -32,6 +32,21 @@ public class TacBinaryOperation implements TacInstruction {
     }
 
     @Override
+    public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            stream.print("  ".repeat(indentLevel));
+        }
+        // dst = lhs op rhs
+        dst.dumpPretty(stream);
+        stream.print(" = ");
+        lhs.dumpPretty(stream);
+        stream.print(" ");
+        stream.print(op.getSymbol());
+        stream.print(" ");
+        rhs.dumpPretty(stream);
+    }
+
+    @Override
     public <T> T accept(TacVisitor<T> visitor) {
         return visitor.visit(this);
     }
