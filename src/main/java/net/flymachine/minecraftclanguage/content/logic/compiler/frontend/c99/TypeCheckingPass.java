@@ -281,6 +281,7 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
             node.expType = ErrorType.INSTANCE;
             return;
         }
+        // 更新时，需同时更新 typeCheckCompoundAssignment 中检查
         Type lhsType = node.lhs.expType = node.lhs.expType.removeConst();
         Type rhsType = node.rhs.expType = node.rhs.expType.removeConst();
 
@@ -409,7 +410,14 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
                     reporter.error(node.op.wholeLoc, msg);
                     yield ErrorType.INSTANCE;
                 }
-                yield lhsType;
+                // 进行整数提升
+                if (lhsType.isCharacter()) {
+                    node.lhs = convertTo(node.lhs, BasicType.INT);
+                }
+                if (rhsType.isCharacter()) {
+                    node.rhs = convertTo(node.rhs, BasicType.INT);
+                }
+                yield node.lhs.expType;
             }
             case LOGICAL_AND, LOGICAL_OR -> {
                 if (!lhsType.isScalar() || !rhsType.isScalar()) {
@@ -482,8 +490,9 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
     public record TypeCheckCompoundAssignmentResult(Type lhsTargetType, Type rhsTargetType, Type tmpType) { }
 
     public static TypeCheckCompoundAssignmentResult typeCheckCompoundAssignment(AssignmentNode node) {
-        final Type lhsType = node.lhs.expType;
-        final Type rhsType = node.rhs.expType;
+        // 逻辑需要与 typeCheckBinaryExp 保持一致
+        Type lhsType = node.lhs.expType;
+        Type rhsType = node.rhs.expType;
 
         return switch (node.op.op) {
             case ASSIGN -> throw new IllegalArgumentException("Cannot handle simple assignment");
@@ -492,8 +501,15 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
                 BasicType commonType = Type.commonRealType((BasicType) lhsType, (BasicType) rhsType);
                 yield new TypeCheckCompoundAssignmentResult(commonType, commonType, commonType);
             }
-            case LEFT_SHIFT_ASSIGN, RIGHT_SHIFT_ASSIGN ->
-                new TypeCheckCompoundAssignmentResult(lhsType, rhsType, lhsType);
+            case LEFT_SHIFT_ASSIGN, RIGHT_SHIFT_ASSIGN -> {
+                if (lhsType.isCharacter()) {
+                    lhsType = BasicType.INT;
+                }
+                if (rhsType.isCharacter()) {
+                    rhsType = BasicType.INT;
+                }
+                yield new TypeCheckCompoundAssignmentResult(lhsType, rhsType, lhsType);
+            }
         };
     }
 
