@@ -1414,6 +1414,10 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
             reporter.error(node.exp.wholeLoc, msg);
         }
         node.exp.expType = node.exp.expType.removeConst();
+        if (node.exp.expType.isCharacter()) {
+            // 进行整数提升
+            node.exp = convertTo(node.exp, BasicType.INT);
+        }
         node.body.accept(this);
         return null;
     }
