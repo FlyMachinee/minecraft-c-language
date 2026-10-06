@@ -204,6 +204,7 @@ public final class ReplacePseudoOperandPass implements HighLevelVisitor<Void> {
     @Override
     public Void visit(Load inst) {
         inst.ptr = replacePseudo(inst.ptr);
+        inst.offset = replacePseudo(inst.offset);
         inst.dst = replacePseudo(inst.dst);
         return null;
     }
@@ -212,6 +213,7 @@ public final class ReplacePseudoOperandPass implements HighLevelVisitor<Void> {
     public Void visit(Store inst) {
         inst.src = replacePseudo(inst.src);
         inst.ptr = replacePseudo(inst.ptr);
+        inst.offset = replacePseudo(inst.offset);
         return null;
     }
 
