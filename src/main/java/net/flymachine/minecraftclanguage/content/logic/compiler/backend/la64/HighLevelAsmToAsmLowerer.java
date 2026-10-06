@@ -676,8 +676,8 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
             long minSize = Math.min(srcType.size(), dstType.size());
             AsmType loadType = switch ((int) minSize) {
                 case 1 -> AsmType.UBYTE;
-                case 2 -> AsmType.UWORD;
-                case 4 -> AsmType.DWORD;
+                case 4 -> AsmType.UWORD;
+                case 8 -> AsmType.DWORD;
                 default -> throw new IllegalArgumentException("Control should not reach here");
             };
             loadOperand(loadType, src, dstReg, T0);
@@ -731,8 +731,8 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
             long minSize = Math.min(srcType.size(), dstType.size());
             AsmType loadType = switch ((int) minSize) {
                 case 1 -> AsmType.BYTE;
-                case 2 -> AsmType.WORD;
-                case 4 -> AsmType.DWORD;
+                case 4 -> AsmType.WORD;
+                case 8 -> AsmType.DWORD;
                 default -> throw new IllegalArgumentException("Control should not reach here");
             };
             loadOperand(loadType, src, dstReg, T0);
