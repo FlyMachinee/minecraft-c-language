@@ -7,6 +7,10 @@ public final class VoidType extends Type {
     public static final VoidType INSTANCE = new VoidType(false);
     private static final VoidType CONST_VOID = new VoidType(true);
 
+    public static VoidType getInstance(boolean isConst) {
+        return isConst ? CONST_VOID : INSTANCE;
+    }
+
     @Override
     TypeKind kind() {
         return TypeKind.VOID;

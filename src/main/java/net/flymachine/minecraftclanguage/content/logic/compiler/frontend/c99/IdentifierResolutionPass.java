@@ -187,7 +187,9 @@ public final class IdentifierResolutionPass implements AstVisitor<Void> {
     @Override
     public Void visit(ReturnNode node) {
         visitStatementLabel(node);
-        node.exp.accept(this);
+        if (node.exp != null) {
+            node.exp.accept(this);
+        }
         return null;
     }
 
@@ -496,6 +498,18 @@ public final class IdentifierResolutionPass implements AstVisitor<Void> {
 
     @Override
     public Void visit(StringLiteralNode node) {
+        return null;
+    }
+
+    @Override
+    public Void visit(SizeOfNode node) {
+        node.exp.accept(this);
+        return null;
+    }
+
+    @Override
+    public Void visit(SizeOfTypeNode node) {
+        visitTypeNode(node.type);
         return null;
     }
 }

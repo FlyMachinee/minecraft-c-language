@@ -40,6 +40,13 @@ public abstract class TypeNode extends AstNode {
         if (type instanceof ArrayType at) {
             return new ArrayTypeNode(null, fromType(at.elementType()), new ConstantNode(null, at.size()));
         }
+        if (type instanceof VoidType vt) {
+            VoidTypeNode node = new VoidTypeNode(null);
+            if (vt.isConst()) {
+                node.constQualifier = new ConstQualifierNode(null);
+            }
+            return node;
+        }
         throw new IllegalArgumentException("Unknown Type " + type);
     }
 

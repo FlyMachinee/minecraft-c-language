@@ -99,9 +99,6 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
     @Override
     public Void visit(ReturnNode node) {
         checkStatementLabel(node);
-        node.exp = checkExpressionAndDecay(node.exp);
-        if (node.exp.expType.isError()) { return null; }
-        node.exp.expType = node.exp.expType.removeConst();
 
         // 有可能经过 merge，需要从符号表获取最终类型
         // e.g.
@@ -109,10 +106,34 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
         // int (**foo(int))[26];
         // int (**foo(int))[] { ... } 类型为 int (**(int))[26]
         Type ft = symbolTable.get(functionContext.id.name).type;
+        if (!(ft instanceof FunctionType funcType)) {
+            // 函数定义的类型不是函数类型，先前已报错
+            if (node.exp != null) {
+                checkExpression(node.exp);
+            }
+            return null;
+        }
 
-        if (ft instanceof FunctionType funcType) {
+        Type retType = funcType.returnType();
+        if (retType.isVoid()) {
+            // 从无返回值的函数返回时，不能返回表达式
+            if (node.exp != null) {
+                String msg = "'" + reporter.white("return") + "' with a value, in function returning void";
+                reporter.error(node.exp.wholeLoc, msg);
+                checkExpression(node.exp);
+            }
+        } else {
+            // 从有返回值的函数返回时，必须返回一个表达式
+            if (node.exp == null) {
+                String msg = "'" + reporter.white("return") + "' with no value, in function returning non-void";
+                reporter.error(node.wholeLoc, msg);
+                return null;
+            }
+
+            node.exp = checkExpressionAndDecay(node.exp);
+            if (node.exp.expType.isError()) { return null; }
+            node.exp.expType = node.exp.expType.removeConst();
             // 若表达式的类型与函数的返回类型不同，则如同赋值给该函数返回类型的对象一般对其值进行转换
-            Type retType = funcType.returnType();
             if (!validConvertAsIfByAssignment(node.exp, retType)) {
                 String msg =
                     "incompatible types when returning type '" + reporter.white(node.exp.expType.typename()) +
@@ -467,9 +488,16 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
                     } else if (isNullPointerConstant(node.rhs)) {
                         commonType = lhsType;
                     } else if (lhsType instanceof PointerType lhsPt && rhsType instanceof PointerType rhsPt) {
-                        // 都是指向兼容类型的对象或函数的指针，忽略所指向类型的限定符
-                        if (lhsPt.referencedType().removeQualifiers()
-                                 .isCompatible(rhsPt.referencedType().removeQualifiers())) {
+                        Type lhsPointee = lhsPt.referencedType().removeQualifiers();
+                        Type rhsPointee = rhsPt.referencedType().removeQualifiers();
+                        // 一个指向对象或不完整类型（即非函数）的指针，另一个指向（可有限定的）void
+                        // 前者将会被转换为后者的类型
+                        if (!lhsPointee.isFunction() && rhsPointee.isVoid()) {
+                            commonType = rhsType;
+                        } else if (!rhsPointee.isFunction() && lhsPointee.isVoid()) {
+                            commonType = lhsType;
+                        } else if (lhsPointee.isCompatible(rhsPointee)) {
+                            // 都是指向兼容类型的指针，忽略所指向类型的限定符
                             commonType = lhsPt;
                         }
                     }
@@ -706,8 +734,7 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
 
         // 检查返回类型
         TypeNode retType = funcType.retType;
-        if (retType instanceof VoidTypeNode || retType instanceof FunctionTypeNode ||
-            retType instanceof ArrayTypeNode) {
+        if (retType instanceof FunctionTypeNode || retType instanceof ArrayTypeNode) {
             // 返回值类型不合法
             String typename = funcType.retType.typename();
             if (id == null) {
@@ -718,7 +745,7 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
                              reporter.white(typename) + "'";
                 reporter.error(id.wholeLoc, msg);
             }
-        } else if (isDefinition && !funcType.retType.getType().isComplete()) {
+        } else if (isDefinition && !(retType instanceof VoidTypeNode) && !retType.getType().isComplete()) {
             // 若函数声明不是定义，则返回类型可以不完整
             // 返回值类型不完整
             String typename = funcType.retType.typename();
@@ -815,15 +842,17 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
             if (storageClass != null && storageClass.storageClass.equals(StorageClassSpecifier.EXTERN)) {
                 // 来自其他编译单元，外部定义，未定义
                 defType = SymbolTable.Entry.StaticAttr.NoDefinition.INSTANCE;
-                // 可要求不完整
-                checkObjectType(typeNode, id, false);
+                // 可要求不完整，但 void 除外（非标准，特别实现）
+                checkObjectType(typeNode, id, typeNode instanceof VoidTypeNode);
             } else {
                 // 本编译单元内定义，试探性定义
                 defType = SymbolTable.Entry.StaticAttr.Tentative.INSTANCE;
                 // 若为试探性定义+内部链接，要求必须完整 (ISO C99 6.9.2.3)
-                checkObjectType(
-                    typeNode, id,
-                    storageClass != null && storageClass.storageClass.equals(StorageClassSpecifier.STATIC));
+                // 同样，void 除外（非标准，特别实现）
+                boolean requireComplete =
+                    typeNode instanceof VoidTypeNode ||
+                    storageClass != null && storageClass.storageClass.equals(StorageClassSpecifier.STATIC);
+                checkObjectType(typeNode, id, requireComplete);
             }
             type = typeNode.getType();
         } else {
@@ -951,7 +980,8 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
             checkObjectType(typeNode, id, true);
         } else {
             // 有链接，可以暂时不完整
-            checkObjectType(typeNode, id, false);
+            // 但 void 除外（非标准，特别实现）
+            checkObjectType(typeNode, id, typeNode instanceof VoidTypeNode);
         }
         Type type = typeNode.getType();
 
@@ -1071,15 +1101,22 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
         if (lhsType.isArithmetic() && rhs.expType.isArithmetic()) {
             return true;
         }
-        // lhs 与 rhs 均拥有指向兼容类型（忽略限定符）的指针类型
-        if (lhsType instanceof PointerType lhsPtrType && rhs.expType instanceof PointerType rhsPtrType &&
-            lhsPtrType.referencedType().removeQualifiers()
-                      .isCompatible(rhsPtrType.referencedType().removeQualifiers())) {
-            // 而该转换不向所指向类型添加限定符
-            int lhsQualifiers = lhsPtrType.referencedType().isConst() ? 1 : 0;
-            int rhsQualifiers = rhsPtrType.referencedType().isConst() ? 1 : 0;
-            if (lhsQualifiers >= rhsQualifiers) {
-                return true;
+        if (lhsType instanceof PointerType lhsPtrType && rhs.expType instanceof PointerType rhsPtrType) {
+            Type lhsPointee = lhsPtrType.referencedType();
+            Type rhsPointee = rhsPtrType.referencedType();
+
+            // lhs 与 rhs 均拥有指向兼容类型（忽略限定符）的指针类型
+            // 一个指向对象或不完整类型（即非函数）的指针，另一个指向（可有限定的）void
+            boolean cond1 = lhsPointee.removeQualifiers().isCompatible(rhsPointee.removeQualifiers());
+            boolean cond2 = !lhsPointee.isFunction() && rhsPointee.isVoid();
+            boolean cond3 = !rhsPointee.isFunction() && lhsPointee.isVoid();
+            if (cond1 || cond2 || cond3) {
+                // 左侧指向的类型至少拥有所有右侧指向类型的限定符
+                int lhsQualifiers = lhsPointee.isConst() ? 1 : 0;
+                int rhsQualifiers = rhsPointee.isConst() ? 1 : 0;
+                if (lhsQualifiers >= rhsQualifiers) {
+                    return true;
+                }
             }
         }
         // lhs 是指针，而 rhs 是空指针常量
@@ -1264,6 +1301,7 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
         // 条件 - 标量类型的表达式
         if (node.cond.expType.isError()) {
             node.expType = ErrorType.INSTANCE;
+            return null;
         } else if (!node.cond.expType.isScalar()) {
             String msg = "condition of conditional operator must have scalar type; have '" +
                          reporter.white(node.cond.expType.typename()) + "'";
@@ -1272,12 +1310,12 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
             return null;
         }
 
-        // 仅允许下列表达式为 表达式真 和 表达式假
-        // 两个任何算术类型的表达式
         if (thenExpType.isError() || elseExpType.isError()) {
             node.expType = ErrorType.INSTANCE;
             return null;
         }
+        // 仅允许下列表达式为 表达式真 和 表达式假
+        // 两个任何算术类型的表达式
         if (thenExpType.isArithmetic() && elseExpType.isArithmetic()) {
             // 若表达式拥有算术类型，则公共类型为一般算术转换后的类型
             BasicType commonType = Type.commonRealType((BasicType) thenExpType, (BasicType) elseExpType);
@@ -1291,7 +1329,6 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
             node.expType = VoidType.INSTANCE;
             return null;
         }
-        // 一个表达式是指针而另一个是空指针常量
         if (thenExpType.isPointer() || elseExpType.isPointer()) {
             Type commonType = ErrorType.INSTANCE;
 
@@ -1301,12 +1338,19 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
             } else if (isNullPointerConstant(node.elseExp)) {
                 commonType = thenExpType;
             } else if (thenExpType instanceof PointerType thenPt && elseExpType instanceof PointerType elsePt) {
-                // 两个指针类型的表达式，指向兼容的类型，忽略 cvr 限定符
-                if (thenPt.referencedType().removeQualifiers()
-                          .isCompatible(elsePt.referencedType().removeQualifiers())) {
+                Type thenPointee = thenPt.referencedType();
+                Type elsePointee = elsePt.referencedType();
+                boolean mergedConst = thenPointee.isConst() || elsePointee.isConst();
+                // 一个是指向对象或不完整类型（即非函数）的指针，一个是指向（可有限定的）void
+                // 若一个表达式是指向 void 指针，则结果为指向具有合并的 cvr 限定符的 void 的指针
+                if (!thenPointee.isFunction() && elsePointee.isVoid()) {
+                    commonType = new PointerType(VoidType.getInstance(mergedConst));
+                } else if (thenPointee.isVoid() && !elsePointee.isFunction()) {
+                    commonType = new PointerType(VoidType.getInstance(mergedConst));
+                } else if (thenPointee.removeQualifiers().isCompatible(elsePointee.removeQualifiers())) {
+                    // 两个指针类型的表达式，指向兼容的类型，忽略 cvr 限定符
                     // 若两个表达式都是指针，则结果为指向合并两个被指向类型的 cvr 限定符的类型的指针
-                    boolean mergedConst = thenPt.referencedType().isConst() || elsePt.referencedType().isConst();
-                    commonType = new PointerType(thenPt.referencedType().setConst(mergedConst));
+                    commonType = new PointerType(thenPointee.removeQualifiers().setConst(mergedConst));
                 }
             }
 
@@ -1575,6 +1619,7 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
             String msg = "cast to non-scalar type other than void is not allowed";
             reporter.error(node.targetType.getWholeLocation(), msg);
             node.expType = ErrorType.INSTANCE;
+            node.exp = checkExpressionAndDecay(node.exp);
             return null;
         }
 
@@ -1663,6 +1708,14 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
             node.expType = ErrorType.INSTANCE;
             return null;
         }
+
+        // 拒绝对指向 void 的指针进行解引用，非标准，特别实现
+        if (pointerType.referencedType().isVoid()) {
+            reporter.error(node.wholeLoc, "dereference of pointer to void type");
+            node.expType = ErrorType.INSTANCE;
+            return null;
+        }
+
         node.expType = pointerType.referencedType();
         return null;
     }
@@ -1720,6 +1773,54 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
     @Override
     public Void visit(StringLiteralNode node) {
         node.expType = new ArrayType(BasicType.CHAR, new ConstantUnsignedLong(node.literal.length + 1));
+        return null;
+    }
+
+    @Override
+    public Void visit(SizeOfNode node) {
+        checkExpression(node.exp);
+        Type t = node.exp.expType;
+        if (t.isError()) {
+            node.expType = ErrorType.INSTANCE;
+            return null;
+        } else if (!t.isComplete()) {
+            String msg = "invalid application of '" + reporter.white("sizeof") +
+                         "' to an incomplete type '" +
+                         reporter.white(t.typename()) + "'";
+            reporter.error(node.exp.wholeLoc, msg);
+            node.expType = ErrorType.INSTANCE;
+            return null;
+        } else if (t instanceof FunctionType) {
+            String msg = "invalid application of '" + reporter.white("sizeof") +
+                         "' to a function type '" +
+                         reporter.white(t.typename()) + "'";
+            reporter.error(node.exp.wholeLoc, msg);
+            node.expType = ErrorType.INSTANCE;
+            return null;
+        }
+        node.expType = BasicType.UNSIGNED_LONG;
+        return null;
+    }
+
+    @Override
+    public Void visit(SizeOfTypeNode node) {
+        checkType(node.type, null, false);
+        if (!node.type.getType().isComplete()) {
+            String msg = "invalid application of '" + reporter.white("sizeof") +
+                         "' to an incomplete type '" +
+                         reporter.white(node.type.typename()) + "'";
+            reporter.error(node.type.wholeLoc, msg);
+            node.expType = ErrorType.INSTANCE;
+            return null;
+        } else if (node.type instanceof FunctionTypeNode) {
+            String msg = "invalid application of '" + reporter.white("sizeof") +
+                         "' to a function type '" +
+                         reporter.white(node.type.typename()) + "'";
+            reporter.error(node.type.wholeLoc, msg);
+            node.expType = ErrorType.INSTANCE;
+            return null;
+        }
+        node.expType = BasicType.UNSIGNED_LONG;
         return null;
     }
 }

@@ -56,4 +56,8 @@ public interface AstVisitor<T> {
     T visit(SubscriptNode node);
 
     T visit(StringLiteralNode node);
+
+    T visit(SizeOfNode node);
+
+    T visit(SizeOfTypeNode node);
 }
