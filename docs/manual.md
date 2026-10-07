@@ -16,6 +16,7 @@
 - 指针
 - 数组
 - 函数、函数指针
+- 字符、字符串
 
 ### 类型限定
 
@@ -168,15 +169,33 @@
     * srai.w
     * srai.d
 
+- 位操作
+    * ext.w.b
+    * bstrpick.d
+
 - 访存
+    * ld.b
+    * ld.h
     * ld.w
     * ld.d
+    * st.b
+    * st.h
     * st.w
     * st.d
+    * ld.bu
+    * ld.hu
+    * ld.wu
+    * ldx.b
+    * ldx.h
     * ldx.w
     * ldx.d
+    * stx.b
+    * stx.h
     * stx.w
     * stx.d
+    * ldx.bu
+    * ldx.hu
+    * ldx.wu
 
 - 转移
     * beqz
