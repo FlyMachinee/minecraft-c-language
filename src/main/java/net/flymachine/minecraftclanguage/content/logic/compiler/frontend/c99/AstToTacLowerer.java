@@ -1059,119 +1059,66 @@ public final class AstToTacLowerer implements
         }
     }
 
+    /**
+     * 短路逻辑运算 lowerBoolean 的统一实现
+     */
+    private BoolGenResult lowerLogicalBoolean(BinaryExpressionNode exp, String jumpTarget, boolean inverse) {
+        boolean isAnd = exp.op.op == BinaryOperator.LOGICAL_AND;
+
+        // && 求真 或 || 求假时，短路时不跳转，需要跳转至末尾生成的标签
+        // if (a && b)  goto target => if (!a) goto and_false ; if (b)  goto target ; and_false:
+        // if !(a || b) goto target => if (a)  goto or_true   ; if (!b) goto target ; or_true:
+        // 其余两种情况，短路时跳转，不需要显式生成标签
+        // if !(a && b) goto target => if (!a) goto target ; if (!b) goto target
+        // if (a || b)  goto target => if (a)  goto target ; if (b)  goto target
+        boolean needsLabel = (isAnd != inverse);
+
+        // 第一个短路分支的跳转目标，根据上述分析
+        // 需要生成标签时用新标签，否则直接跳到 jumpTarget。
+        String shortTarget = needsLabel ? makeLabel(isAnd ? "and_false" : "or_false") : jumpTarget;
+
+        BoolGenResult lhsResult = lowerBoolean(exp.lhs, shortTarget, isAnd);
+        BoolGenResult result = switch (lhsResult) {
+            case ALWAYS_JUMP ->
+                // needsLabel：短路跳到末尾标签，从而不跳到 target，为 NEVER_JUMP
+                // !needsLabel：短路直接跳到 target，等价于整体 ALWAYS_JUMP
+                needsLabel ? BoolGenResult.NEVER_JUMP : BoolGenResult.ALWAYS_JUMP;
+            case NEVER_JUMP ->
+                // 左侧恒不短路，整个表达式的结果完全由右侧决定
+                lowerBoolean(exp.rhs, jumpTarget, inverse);
+            case VARIOUS -> {
+                // 左侧未知，继续求右侧，根据右侧的结果进行后续
+                BoolGenResult rhsResult = lowerBoolean(exp.rhs, jumpTarget, inverse);
+                if (needsLabel) {
+                    if (rhsResult == BoolGenResult.ALWAYS_JUMP) {
+                        // rhs 恒跳转，补一条显式的跳转
+                        // 整体仍有两路径，返回 VARIOUS
+                        emitTacJump(jumpTarget);
+                        yield BoolGenResult.VARIOUS;
+                    } else {
+                        // rhs 从不跳转，从而整体永不跳转，返回 NEVER_JUMP
+                        // rhs 未知，从而整体未知，返回 VARIOUS
+                        yield rhsResult;
+                    }
+                } else {
+                    // rhs 恒跳转，整体 ALWAYS_JUMP
+                    // 其他情况，整体未知，返回 VARIOUS
+                    yield rhsResult == BoolGenResult.ALWAYS_JUMP ? BoolGenResult.ALWAYS_JUMP : BoolGenResult.VARIOUS;
+                }
+            }
+        };
+
+        if (needsLabel) {
+            // 末尾标签生成
+            emitTacLabel(shortTarget);
+        }
+        return result;
+    }
+
     @Override
     public BoolGenResult visit(BinaryExpressionNode binaryExp, String jumpTarget, boolean inverse) {
         switch (binaryExp.op.op) {
-            case LOGICAL_AND -> {
-                if (inverse) {
-                    // if (!(a && b)) jump => if (!a) jump ; if (!b) jump
-                    switch (lowerBoolean(binaryExp.lhs, jumpTarget, true)) {
-                        case VARIOUS -> {
-                            // a 未知
-                            if (lowerBoolean(binaryExp.rhs, jumpTarget, true) == BoolGenResult.ALWAYS_JUMP) {
-                                // b=0 => !(a && b) = 1
-                                return BoolGenResult.ALWAYS_JUMP;
-                            } else {
-                                // 无法断言
-                                return BoolGenResult.VARIOUS;
-                            }
-                        }
-                        case ALWAYS_JUMP -> {
-                            // a=0 => !(a && b) = 1
-                            return BoolGenResult.ALWAYS_JUMP;
-                        }
-                        case NEVER_JUMP -> {
-                            // a=1 => if (!b) jump;
-                            return lowerBoolean(binaryExp.rhs, jumpTarget, true);
-                        }
-                    }
-                } else {
-                    // if (a && b) jump => if (!a) jump false ; if (b) jump; false:
-                    String label = makeLabel("and_false");
-                    BoolGenResult ret = BoolGenResult.VARIOUS;
-                    switch (lowerBoolean(binaryExp.lhs, label, true)) {
-                        case VARIOUS -> {
-                            // a 未知
-                            switch (lowerBoolean(binaryExp.rhs, jumpTarget, false)) {
-                                case NEVER_JUMP -> {
-                                    // b=0 => a && b = 0
-                                    ret = BoolGenResult.NEVER_JUMP;
-                                }
-                                case ALWAYS_JUMP -> {
-                                    // b=1
-                                    emitTacJump(jumpTarget);
-                                }
-                            }
-                        }
-                        case ALWAYS_JUMP -> {
-                            // a=0 => a && b = 0
-                            ret = BoolGenResult.NEVER_JUMP;
-                        }
-                        case NEVER_JUMP -> {
-                            // a=1 => if (b) jump;
-                            ret = lowerBoolean(binaryExp.rhs, jumpTarget, false);
-                        }
-                    }
-                    // 保证标签有定义
-                    emitTacLabel(label);
-                    return ret;
-                }
-            }
-            case LOGICAL_OR -> {
-                if (inverse) {
-                    // if (!(a || b)) jump => if (a) jump false ; if (!b) jump; false:
-                    String label = makeLabel("or_false");
-                    BoolGenResult ret = BoolGenResult.VARIOUS;
-                    switch (lowerBoolean(binaryExp.lhs, label, false)) {
-                        case VARIOUS -> {
-                            // a 未知
-                            switch (lowerBoolean(binaryExp.rhs, jumpTarget, true)) {
-                                case NEVER_JUMP -> {
-                                    // b=1 => !(a || b) = 0
-                                    ret = BoolGenResult.NEVER_JUMP;
-                                }
-                                case ALWAYS_JUMP -> {
-                                    // b=0
-                                    emitTacJump(jumpTarget);
-                                }
-                            }
-                        }
-                        case ALWAYS_JUMP -> {
-                            // a=1 => !(a || b) = 0
-                            ret = BoolGenResult.NEVER_JUMP;
-                        }
-                        case NEVER_JUMP -> {
-                            // a=0 => if (!b) jump;
-                            ret = lowerBoolean(binaryExp.rhs, jumpTarget, true);
-                        }
-                    }
-                    // 保证标签有定义
-                    emitTacLabel(label);
-                    return ret;
-                } else {
-                    // if (a || b) jump => if (a) jump ; if (b) jump
-                    switch (lowerBoolean(binaryExp.lhs, jumpTarget, false)) {
-                        case VARIOUS -> {
-                            // a 未知
-                            if (lowerBoolean(binaryExp.rhs, jumpTarget, false) == BoolGenResult.ALWAYS_JUMP) {
-                                // b=1 => a || b = 1
-                                return BoolGenResult.ALWAYS_JUMP;
-                            } else {
-                                // 无法断言
-                                return BoolGenResult.VARIOUS;
-                            }
-                        }
-                        case ALWAYS_JUMP -> {
-                            // a=1 => a || b = 1
-                            return BoolGenResult.ALWAYS_JUMP;
-                        }
-                        case NEVER_JUMP -> {
-                            // a=0 => if (b) jump;
-                            return lowerBoolean(binaryExp.rhs, jumpTarget, false);
-                        }
-                    }
-                }
-            }
+            case LOGICAL_AND, LOGICAL_OR -> { return lowerLogicalBoolean(binaryExp, jumpTarget, inverse); }
             case EQUAL, NOT_EQUAL, LESS_THAN, LESS_OR_EQUAL, GREATER_THAN, GREATER_OR_EQUAL -> {
                 // 直接生成比较跳转指令，而不是比较置位指令
                 Comparison cond = binaryExp.op.op.toComparison();
