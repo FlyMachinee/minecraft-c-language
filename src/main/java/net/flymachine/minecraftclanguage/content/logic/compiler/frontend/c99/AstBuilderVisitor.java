@@ -292,10 +292,6 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         //   : Star typeQualifier* pointer?
         //   ;
         TerminalNode star = ctx.Star();
-        if (baseType.getType().isVoid()) {
-            reporter.error(getSourceLocation(star), "pointers to void are not supported");
-        }
-
         PointerTypeNode pointerType;
         SourceLocation loc = SourceLocation.concat(baseType.wholeLoc, getSourceLocation(star));
         pointerType = new PointerTypeNode(loc, baseType);
@@ -687,8 +683,12 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         } else if (ctx.Break() != null) {
             return new BreakNode(getSourceLocation(ctx.Break()));
         } else if (ctx.Return() != null) {
+            SourceLocation returnLocation = getSourceLocation(ctx.Return());
+            if (ctx.expression() == null) {
+                return new ReturnNode(returnLocation);
+            }
             ExpressionNode expression = (ExpressionNode) visit(ctx.expression());
-            return new ReturnNode(getSourceLocation(ctx.Return()), expression);
+            return new ReturnNode(returnLocation, expression);
         } else {
             throw new IllegalStateException("Unknown jump statement");
         }
@@ -933,8 +933,19 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
             if (ctx.unaryOperator().Star() != null) {
                 return new DereferenceNode(getSourceLocation(ctx.unaryOperator().Star()), operand);
             }
-            UnaryOperatorNode operator = (UnaryOperatorNode) visit(ctx.unaryOperator());
+            UnaryOperatorNode operator = visitUnaryOperator(ctx.unaryOperator());
             return new UnaryExpressionNode(operator, operand);
+        } else if (ctx.Sizeof() != null) {
+            SourceLocation loc = getSourceLocation(ctx.Sizeof());
+            if (ctx.unaryExpression() != null) {
+                ExpressionNode operand = (ExpressionNode) visit(ctx.unaryExpression());
+                return new SizeOfNode(loc, operand);
+            } else if (ctx.typeName() != null) {
+                TypeNode type = visitTypeName(ctx.typeName());
+                return new SizeOfTypeNode(loc, type);
+            } else {
+                throw new IllegalStateException("Unknown sizeof expression");
+            }
         } else {
             throw new IllegalStateException("Unknown unary operator");
         }
@@ -947,7 +958,8 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         return new UnaryOperatorNode(getSourceLocation(ctx), op);
     }
 
-    private TypeNode parseFromTypeName(C99Parser.TypeNameContext ctx) {
+    @Override
+    public TypeNode visitTypeName(C99Parser.TypeNameContext ctx) {
         TypeCombinationHelper helper = new TypeCombinationHelper();
         ConstQualifierNode constQualifierNode = null;
 
@@ -992,7 +1004,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         if (ctx.unaryExpression() != null) {
             return (ExpressionNode) visit(ctx.unaryExpression());
         } else {
-            TypeNode type = parseFromTypeName(ctx.typeName());
+            TypeNode type = visitTypeName(ctx.typeName());
             ExpressionNode operand = (ExpressionNode) visit(ctx.castExpression());
             return new CastExpressionNode(getSourceLocation(ctx), type, operand);
         }

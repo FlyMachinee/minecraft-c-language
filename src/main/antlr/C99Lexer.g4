@@ -136,6 +136,7 @@ Int: 'int';
 Long: 'long';
 Return: 'return';
 Signed: 'signed';
+Sizeof: 'sizeof';
 Static: 'static';
 Switch: 'switch';
 Unsigned: 'unsigned';

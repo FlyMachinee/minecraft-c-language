@@ -44,6 +44,8 @@ unaryExpression
     | PlusPlus unaryExpression
     | MinusMinus unaryExpression
     | unaryOperator castExpression
+    | Sizeof unaryExpression
+    | Sizeof LeftParen typeName RightParen
     ;
 
 unaryOperator
@@ -342,7 +344,7 @@ jumpStatement
     : Goto Identifier Semicolon
     | Continue Semicolon
     | Break Semicolon
-    | Return expression Semicolon
+    | Return expression? Semicolon
     ;
 
 // ISO 6.9, External Definitions
