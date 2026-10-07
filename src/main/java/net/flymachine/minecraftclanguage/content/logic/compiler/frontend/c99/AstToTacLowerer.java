@@ -574,136 +574,72 @@ public final class AstToTacLowerer implements
         return new PlainOperand(dst);
     }
 
+    /**
+     * 短路逻辑运算的求值
+     * <p>
+     * && 和 || 的结构完全一致，只是：
+     * <ul>
+     *   <li>&&: 遇到 0 短路，短路结果 0，默认结果 1</li>
+     *   <li>||: 遇到 1 短路，短路结果 1，默认结果 0</li>
+     * </ul>
+     */
+    private ExpEvalResult evalLogicalShortCircuit(BinaryExpressionNode exp) {
+        boolean isAnd = exp.op.op == BinaryOperator.LOGICAL_AND;
+        Constant shortResult = isAnd ? ConstantInt.ZERO : ConstantInt.ONE;
+        Constant defaultResult = isAnd ? ConstantInt.ONE : ConstantInt.ZERO;
+        boolean inverse = isAnd;
+        String labelShort = makeLabel(isAnd ? "and_false" : "or_true");
+
+        BoolGenResult lhsResult = lowerBoolean(exp.lhs, labelShort, inverse);
+        switch (lhsResult) {
+            case ALWAYS_JUMP -> {
+                // lhs 短路
+                emitTacLabel(labelShort);
+                return new PlainOperand(shortResult);
+            }
+            case NEVER_JUMP -> {
+                // lhs 不短路，检查 rhs
+                BoolGenResult rhsResult = lowerBoolean(exp.rhs, labelShort, inverse);
+                switch (rhsResult) {
+                    case ALWAYS_JUMP -> {
+                        emitTacLabel(labelShort);
+                        return new PlainOperand(shortResult);
+                    }
+                    case NEVER_JUMP -> {
+                        emitTacLabel(labelShort);
+                        return new PlainOperand(defaultResult);
+                    }
+                    case VARIOUS -> { /* 落入通用路径 */ }
+                }
+            }
+            case VARIOUS -> {
+                // lhs 未知，检查 rhs
+                if (lowerBoolean(exp.rhs, labelShort, inverse) == BoolGenResult.ALWAYS_JUMP) {
+                    emitTacLabel(labelShort);
+                    return new PlainOperand(shortResult);
+                }
+                // 否则落入通用路径
+            }
+        }
+
+        // 通用路径：生成分支赋值
+        String labelEnd = makeLabel("eval_end");
+        TacVariable dst = makeTempVar(exp.expType);
+        emitTacCopy(new TacConstant(defaultResult), dst);
+        emitTacJump(labelEnd);
+        emitTacLabel(labelShort);
+        emitTacCopy(new TacConstant(shortResult), dst);
+        emitTacLabel(labelEnd);
+        return new PlainOperand(dst);
+    }
+
     @Override
     public ExpEvalResult visit(BinaryExpressionNode binaryExp) {
         BinaryOperator op = binaryExp.op.op;
 
         // 短路求值
-        switch (op) {
-            case LOGICAL_AND -> {
-                // 短路与求值
-                // if (a && b) yield 1; else yield 0;
-                // =>
-                // if (!a) goto zero
-                // if (!b) goto zero
-                // tmp = 1
-                // goto end
-                // zero:
-                // tmp = 0
-                // end:
-                // yield tmp
-                String labelFalse = makeLabel("and_false");
-
-                // 注意短路语义，即使右操作数为0，左操作数也要求值
-                // 显然左操作数永远都需要求值
-                switch (lowerBoolean(binaryExp.lhs, labelFalse, true)) {
-                    case VARIOUS -> {
-                        // a 未知
-                        if (lowerBoolean(binaryExp.rhs, labelFalse, true) == BoolGenResult.ALWAYS_JUMP) {
-                            // if (!b) goto zero 始终跳转，即 b=0
-                            // 推导出值为0
-                            emitTacLabel(labelFalse);
-                            return new PlainOperand(ConstantInt.ZERO);
-                        }
-                        // 其他情况都不能断言结果值
-                    }
-                    case ALWAYS_JUMP -> {
-                        // if (!a) goto zero 始终跳转，即 a=0
-                        // 显然值为0，由于短路语义，右操作数永远不求值，可以优化
-                        emitTacLabel(labelFalse);
-                        return new PlainOperand(ConstantInt.ZERO);
-                    }
-                    case NEVER_JUMP -> {
-                        // if (!a) goto zero 永不跳转，即 a=1
-                        // 得继续求值
-                        switch (lowerBoolean(binaryExp.rhs, labelFalse, true)) {
-                            case ALWAYS_JUMP -> {
-                                // b=0 => 推导值为0
-                                emitTacLabel(labelFalse);
-                                return new PlainOperand(ConstantInt.ZERO);
-                            }
-                            case NEVER_JUMP -> {
-                                // b=1 => 推导值为1
-                                emitTacLabel(labelFalse);
-                                return new PlainOperand(ConstantInt.ONE);
-                            }
-                        }
-                        // b 未知，无法断言
-                    }
-                }
-
-                // 无法断言的情况，需要生成指令来进行求值
-                String labelEvalEnd = makeLabel("eval_end");
-                TacVariable dst = makeTempVar(binaryExp.expType);
-                emitTacCopy(new TacConstant(ConstantInt.ONE), dst);
-                emitTacJump(labelEvalEnd);
-                emitTacLabel(labelFalse);
-                emitTacCopy(new TacConstant(ConstantInt.ZERO), dst);
-                emitTacLabel(labelEvalEnd);
-                return new PlainOperand(dst);
-            }
-            case LOGICAL_OR -> {
-                // 短路或求值
-                // if (a || b) yield 1; else yield 0;
-                // =>
-                // if (a) goto one
-                // if (b) goto one
-                // tmp = 0
-                // goto end
-                // one:
-                // tmp = 1
-                // end:
-                // yield tmp
-                String labelTrue = makeLabel("or_true");
-
-                // 注意短路语义，即使右操作数为1，左操作数也要求值
-                // 显然左操作数永远都需要求值
-                switch (lowerBoolean(binaryExp.lhs, labelTrue, false)) {
-                    case VARIOUS -> {
-                        // a 未知
-                        if (lowerBoolean(binaryExp.rhs, labelTrue, false) == BoolGenResult.ALWAYS_JUMP) {
-                            // if (b) goto one 始终跳转，即 b=1
-                            // 推导出值为0
-                            emitTacLabel(labelTrue);
-                            return new PlainOperand(ConstantInt.ONE);
-                        }
-                        // 其他情况都不能断言结果值
-                    }
-                    case ALWAYS_JUMP -> {
-                        // if (a) goto one 始终跳转，即 a=1
-                        // 显然值为1，由于短路语义，右操作数永远不求值，可以优化
-                        emitTacLabel(labelTrue);
-                        return new PlainOperand(ConstantInt.ONE);
-                    }
-                    case NEVER_JUMP -> {
-                        // if (a) goto one 永不跳转，即 a=0
-                        // 得继续求值
-                        switch (lowerBoolean(binaryExp.rhs, labelTrue, false)) {
-                            case ALWAYS_JUMP -> {
-                                // b=1 => 推导值为1
-                                emitTacLabel(labelTrue);
-                                return new PlainOperand(ConstantInt.ONE);
-                            }
-                            case NEVER_JUMP -> {
-                                // b=0 => 推导值为0
-                                emitTacLabel(labelTrue);
-                                return new PlainOperand(ConstantInt.ZERO);
-                            }
-                        }
-                        // b 未知，无法断言
-                    }
-                }
-
-                // 无法断言的情况，需要生成指令来进行求值
-                String labelEvalEnd = makeLabel("eval_end");
-                TacVariable dst = makeTempVar(binaryExp.expType);
-                emitTacCopy(new TacConstant(ConstantInt.ZERO), dst);
-                emitTacJump(labelEvalEnd);
-                emitTacLabel(labelTrue);
-                emitTacCopy(new TacConstant(ConstantInt.ONE), dst);
-                emitTacLabel(labelEvalEnd);
-                return new PlainOperand(dst);
-            }
+        if (op == BinaryOperator.LOGICAL_AND || op == BinaryOperator.LOGICAL_OR) {
+            return evalLogicalShortCircuit(binaryExp);
         }
 
         // 指针运算
