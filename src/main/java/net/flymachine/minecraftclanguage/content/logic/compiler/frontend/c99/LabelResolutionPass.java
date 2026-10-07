@@ -123,7 +123,9 @@ public final class LabelResolutionPass implements StatementVisitor {
             // 需要进行常量转换
             // TODO: 若以后添加枚举，则不能直接转换至 BasicType
             // 在类型检查时已经处理为整数常量了，否则则不会执行该阶段
-            long value = ((ConstantNode) caseLabelInfo.caseValue).value.castTo(switchNode.exp.expType).toLong().value();
+            ConstantNode caseValueNode = (ConstantNode) caseLabelInfo.caseValue;
+            caseValueNode.value = caseValueNode.value.castTo(switchNode.exp.expType);
+            long value = caseValueNode.value.toLong().value();
             StatementNode.CaseLabelInfo definition = switchNode.caseValues.get(value);
             if (definition != null) {
                 // 已定义
