@@ -850,7 +850,8 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
             visit(new Binary(Binary.Operator.ADD, AsmType.DWORD, objMem.gpr(), new Immediate(objMem.offset()), dstReg));
         } else if (obj instanceof Data objData) {
             // 通过宏指令获取
-            emitInst("la.pcrel", dstReg, new LA64AsmSymOperand(objData.name()));
+            boolean isConstant = ((BackendSymbolTable.ObjectEntry) backendSymbolTable.get(objData.name())).isConstant();
+            emitInst("la.pcrel", dstReg, new LA64AsmSymOperand(isConstant ? ".L" + objData.name() : objData.name()));
         } else {
             throw new IllegalStateException("Unknown object HighLevelOperand type: " + obj);
         }
