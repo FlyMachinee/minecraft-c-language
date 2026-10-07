@@ -60,6 +60,11 @@ public record ConstantLong(long value) implements IntegerConstant {
     }
 
     @Override
+    public long toByteRepresentation() {
+        return value;
+    }
+
+    @Override
     public ConstantPointer toPointer(Type referencedType) {
         return new ConstantPointer(value, referencedType);
     }

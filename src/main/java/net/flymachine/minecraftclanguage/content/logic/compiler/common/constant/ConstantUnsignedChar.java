@@ -57,6 +57,11 @@ public record ConstantUnsignedChar(byte value) implements IntegerConstant {
     }
 
     @Override
+    public long toByteRepresentation() {
+        return Byte.toUnsignedLong(value);
+    }
+
+    @Override
     public ConstantPointer toPointer(Type referencedType) {
         return new ConstantPointer(Byte.toUnsignedLong(value), referencedType);
     }

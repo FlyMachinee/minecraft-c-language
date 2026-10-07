@@ -61,6 +61,11 @@ public record ConstantDouble(double value) implements Constant {
     }
 
     @Override
+    public long toByteRepresentation() {
+        return Double.doubleToRawLongBits(value);
+    }
+
+    @Override
     public ConstantPointer toPointer(Type referencedType) {
         throw new UnsupportedOperationException("Invalid cast");
     }

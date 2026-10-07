@@ -52,6 +52,11 @@ public record ConstantSymbolPointer(String symbol, long offset, Type referencedT
     }
 
     @Override
+    public long toByteRepresentation() {
+        throw new UnsupportedOperationException("Cannot determine value in compile time");
+    }
+
+    @Override
     public ConstantSymbolPointer toPointer(Type referencedType) {
         return new ConstantSymbolPointer(symbol, offset, referencedType);
     }

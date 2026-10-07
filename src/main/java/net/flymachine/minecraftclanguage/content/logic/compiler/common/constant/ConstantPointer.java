@@ -55,6 +55,11 @@ public record ConstantPointer(long value, Type referencedType) implements Pointe
     }
 
     @Override
+    public long toByteRepresentation() {
+        return value;
+    }
+
+    @Override
     public ConstantPointer toPointer(Type referencedType) {
         return new ConstantPointer(value, referencedType);
     }

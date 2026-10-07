@@ -60,6 +60,12 @@ public record ConstantUnsignedInt(int value) implements IntegerConstant {
     }
 
     @Override
+    public long toByteRepresentation() {
+        // 特殊情况，32 位无符号数在寄存器中进行符号拓展
+        return value;
+    }
+
+    @Override
     public ConstantPointer toPointer(Type referencedType) {
         return new ConstantPointer(Integer.toUnsignedLong(value), referencedType);
     }

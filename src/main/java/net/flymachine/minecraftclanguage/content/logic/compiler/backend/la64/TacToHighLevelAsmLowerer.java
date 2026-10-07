@@ -88,7 +88,7 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
     private int maxCallStackArgSize;
 
     private Immediate immediate(Constant constant) {
-        return new Immediate(constant.toLong().value());
+        return new Immediate(constant.toByteRepresentation());
     }
 
     private int labelCounter = 0;
@@ -783,8 +783,7 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
         if (tacValue instanceof TacConstant tacConstant) {
             Constant constant = tacConstant.value;
             if (constant instanceof ConstantDouble constDouble) {
-                double doubleValue = constDouble.value();
-                long rawDigits = Double.doubleToLongBits(doubleValue);
+                long rawDigits = constDouble.toByteRepresentation();
 
                 // 如果浮点数可被简易加载 (2条指令内)，则直接使用 Immediate
                 if (LA64Assembler.getExpandLiDSize(rawDigits) <= 2) {
@@ -792,7 +791,7 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
                 }
                 // 否则使用浮点常量池
                 String label = doubleConstants.computeIfAbsent(
-                    doubleValue, k -> "const_double_" + doubleConstants.size());
+                    constDouble.value(), k -> "const_double_" + doubleConstants.size());
                 return new Data(label);
             }
             return immediate(constant);

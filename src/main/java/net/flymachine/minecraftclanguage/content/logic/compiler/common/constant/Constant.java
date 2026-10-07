@@ -30,6 +30,11 @@ public sealed interface Constant permits ConstantDouble, IntegerConstant, Pointe
 
     ConstantUnsignedChar toUnsignedChar();
 
+    /**
+     * 该常量存放于 64 位寄存器中时的字节表示形式
+     */
+    long toByteRepresentation();
+
     PointerConstant toPointer(Type referencedType);
 
     default Constant castTo(Type type) {
