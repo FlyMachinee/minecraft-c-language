@@ -8,8 +8,6 @@ import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocatio
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.io.PrintStream;
-
 public final class ArrayTypeNode extends TypeNode {
     public @NotNull TypeNode elementType;
     public @Nullable ExpressionNode size; // 要求为整数常量表达式
@@ -69,10 +67,5 @@ public final class ArrayTypeNode extends TypeNode {
     @Override
     public <T> T accept(AstVisitor<T> visitor) {
         return null;
-    }
-
-    @Override
-    public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
-        stream.print(typename());
     }
 }

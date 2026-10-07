@@ -15,12 +15,12 @@ public final class VoidType extends Type {
     @Override
     public String format(String declarator) {
         if (declarator.isEmpty()) {
-            return "void";
+            return toString();
         }
         if (declarator.startsWith("[")) {
-            return "void" + declarator;
+            return this + declarator;
         }
-        return "void " + declarator;
+        return this + " " + declarator;
     }
 
     private VoidType(boolean isConst) {
@@ -67,6 +67,6 @@ public final class VoidType extends Type {
 
     @Override
     public @NotNull String toString() {
-        return "void";
+        return isConst ? "const void" : "void";
     }
 }

@@ -4,8 +4,6 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Poin
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
-import java.io.PrintStream;
-
 public final class PointerTypeNode extends TypeNode {
     public TypeNode referencedType;
 
@@ -30,8 +28,4 @@ public final class PointerTypeNode extends TypeNode {
         return null;
     }
 
-    @Override
-    public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
-        stream.print(typename());
-    }
 }

@@ -1,8 +1,9 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node;
 
-import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.ConstantLong;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.*;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
+
+import java.io.PrintStream;
 
 public abstract class TypeNode extends AstNode {
     public ConstQualifierNode constQualifier = null;
@@ -50,5 +51,10 @@ public abstract class TypeNode extends AstNode {
 
     public String typename() {
         return format("");
+    }
+
+    @Override
+    public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        stream.print(typename());
     }
 }

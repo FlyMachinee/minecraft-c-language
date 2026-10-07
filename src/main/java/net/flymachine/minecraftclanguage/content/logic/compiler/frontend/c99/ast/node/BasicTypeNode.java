@@ -4,8 +4,6 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Basi
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
-import java.io.PrintStream;
-
 public final class BasicTypeNode extends TypeNode {
     public BasicType.Primitive primitive;
 
@@ -17,11 +15,6 @@ public final class BasicTypeNode extends TypeNode {
     @Override
     public <T> T accept(AstVisitor<T> visitor) {
         return null;
-    }
-
-    @Override
-    public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
-        stream.print(typename());
     }
 
     @Override
