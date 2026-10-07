@@ -707,23 +707,19 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
             // 源操作数直接在寄存器中
             if (srcType.size() <= dstType.size()) {
                 // 检查是否自然拓展
-                if (srcType.equals(AsmType.UBYTE)) {
-                    // 非自然拓展，需人为进行拓展
-                    // ext.w.b rd, rj
-                    emitInst("ext.w.b", dstReg, srcReg);
-                } else {
-                    // 否则自然拓展，直接将源寄存器的值移动到目标寄存器即可
+                if (!srcType.equals(AsmType.UBYTE)) {
+                    // 自然拓展，直接将源寄存器的值移动到目标寄存器即可
                     storeToDest(dstType, srcReg, dst, T1);
                     return null;
                 }
-            } else {
-                // 截断后拓展
-                switch (dstType.p()) {
-                    case BYTE -> emitInst("ext.w.b", dstReg, srcReg);
-                    case WORD -> emitInst("add.w", dstReg, srcReg, ZERO);
-                    default ->
-                        throw new IllegalArgumentException("Invalid destination type for SignExtend: " + dstType);
-                }
+            }
+            // 否则人为进行符号拓展，或截断后符号拓展
+            // 二者形式相同
+            long minSize = Math.min(srcType.size(), dstType.size());
+            switch ((int) minSize) {
+                case 1 -> emitInst("ext.w.b", dstReg, srcReg);
+                case 4 -> emitInst("add.w", dstReg, srcReg, ZERO);
+                default -> throw new IllegalArgumentException("Control should not reach here");
             }
             storeToDest(dstType, dstReg, dst, T1);
         } else {
