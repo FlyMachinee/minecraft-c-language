@@ -15,6 +15,7 @@ import net.flymachine.minecraftclanguage.content.logic.memory.MemoryLikeDevice;
 import org.apache.commons.lang3.function.TriFunction;
 
 import java.util.*;
+import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
@@ -227,6 +228,21 @@ public final class LA64InstructionSet {
         };
 
     static {
+        add(LA64InstructionInfo.format2Gpr(
+            "ext.w.b",
+            0b0000_0000_0000_0000_0101_11,
+            (emulator, operands) -> {
+                // ext.w.b rd, rj
+                /*
+                    GR[rd] = SignExtend(GR[rj][7:0], GRLEN)
+                 */
+                LA64CpuState cpu = emulator.getCpuState();
+                long rjValue = cpu.getGr(operands[1].value());
+                long result = (byte) rjValue;
+                cpu.setGr(operands[0].value(), result);
+                cpu.pcNext();
+            }
+        ));
         add(LA64InstructionInfo.format3Gpr(
             "add.w",
             0b0000_0000_0001_0000_0,
@@ -1193,109 +1209,298 @@ public final class LA64InstructionSet {
                 cpu.setGr(operands[0].value(), tmp & 0xFFFFFFFFFFFFF000L);
                 cpu.pcNext();
             }));
-        add(LA64InstructionInfo.format2GprSi12(
-            "ld.w",
-            0b0010_1000_10,
-            (emulator, operands) -> {
-                // ld.w rd, rj, si12
-                /*
-                    vaddr = GR[rj] + SignExtend(si12, GRLEN)
-                    AddressComplianceCheck(vaddr)
-                    paddr = AddressTranslation(vaddr)
-                    word = MemoryLoad(paddr, WORD)
-                    GR[rd] = SignExtend(word, GRLEN)
-                 */
-                LA64CpuState cpu = emulator.getCpuState();
-                MemoryLikeDevice memory = emulator.getMemory();
-                LA64MemoryManagementUnit mmu = emulator.getMemoryManagementUnit();
 
-                long rjValue = cpu.getGr(operands[1].value());
-                long offset = operands[2].value();
-                long vaddr = rjValue + offset;
-                if ((vaddr & 0b11) != 0) {
-                    throw new LA64RuntimeException(LA64Exception.ALE);
-                }
-                long paddr = mmu.translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.LOAD);
-                int word = memory.loadWord(paddr);
-                cpu.setGr(operands[0].value(), word);
-                cpu.pcNext();
-            }));
-        add(LA64InstructionInfo.format2GprSi12(
-            "ld.d",
-            0b0010_1000_11,
-            (emulator, operands) -> {
-                // ld.d rd, rj, si12
-                /*
-                    vaddr = GR[rj] + SignExtend(si12, GRLEN)
-                    AddressComplianceCheck(vaddr)
-                    paddr = AddressTranslation(vaddr)
-                    GR[rd] = MemoryLoad(paddr, DOUBLEWORD)
-                 */
-                LA64CpuState cpu = emulator.getCpuState();
-                MemoryLikeDevice memory = emulator.getMemory();
-                LA64MemoryManagementUnit mmu = emulator.getMemoryManagementUnit();
+        // ld.b, ld.h, ld.w, ld.d, st.b, st.h, st.w, st.d, ld.bu, ld.hu, ld.wu
+        for (Access access : Access.values()) {
+            for (Width w : Width.values()) {
+                // 没有 ld.du
+                if (access == Access.LOAD_UNSIGNED && w == Width.D) { continue; }
 
-                long rjValue = cpu.getGr(operands[1].value());
-                long offset = operands[2].value();
-                long vaddr = rjValue + offset;
-                if ((vaddr & 0b111) != 0) {
-                    throw new LA64RuntimeException(LA64Exception.ALE);
-                }
-                long paddr = mmu.translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.LOAD);
-                cpu.setGr(operands[0].value(), memory.loadDoubleWord(paddr));
-                cpu.pcNext();
-            }));
-        add(LA64InstructionInfo.format2GprSi12(
-            "st.w",
-            0b0010_1001_10,
-            (emulator, operands) -> {
-                // st.w rd, rj, si12
-                /*
-                    vaddr = GR[rj] + SignExtend(si12, GRLEN)
-                    AddressComplianceCheck(vaddr)
-                    paddr = AddressTranslation(vaddr)
-                    MemoryStore(GR[rd][31:0], paddr, WORD)
-                 */
-                LA64CpuState cpu = emulator.getCpuState();
-                MemoryLikeDevice memory = emulator.getMemory();
-                LA64MemoryManagementUnit mmu = emulator.getMemoryManagementUnit();
+                String stdName = ldLdxStStxMnemonic(access, w, false);
+                add(LA64InstructionInfo.format2GprSi12(
+                    stdName, ldStOpcode(access, w),
+                    makeHandler(access, w, LA64InstructionSet::addrSi12)));
+            }
+        }
 
-                long rjValue = cpu.getGr(operands[1].value());
-                long offset = operands[2].value();
-                long vaddr = rjValue + offset;
-                if ((vaddr & 0b11) != 0) {
-                    throw new LA64RuntimeException(LA64Exception.ALE);
-                }
-                long paddr = mmu.translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.STORE);
-                memory.storeWord(paddr, cpu.getGrWord(operands[0].value()));
-                cpu.pcNext();
-            }));
-        add(LA64InstructionInfo.format2GprSi12(
-            "st.d",
-            0b0010_1001_11,
-            (emulator, operands) -> {
-                // st.d rd, rj, si12
-                /*
-                    vaddr = GR[rj] + SignExtend(si12, GRLEN)
-                    AddressComplianceCheck(vaddr)
-                    paddr = AddressTranslation(vaddr)
-                    MemoryStore(GR[rd][63:0], paddr, DOUBLEWORD)
-                 */
-                LA64CpuState cpu = emulator.getCpuState();
-                MemoryLikeDevice memory = emulator.getMemory();
-                LA64MemoryManagementUnit mmu = emulator.getMemoryManagementUnit();
-
-                long rjValue = cpu.getGr(operands[1].value());
-                long offset = operands[2].value();
-                long vaddr = rjValue + offset;
-                if ((vaddr & 0b111) != 0) {
-                    throw new LA64RuntimeException(LA64Exception.ALE);
-                }
-                long paddr = mmu.translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.STORE);
-                memory.storeDoubleWord(paddr, cpu.getGr(operands[0].value()));
-                cpu.pcNext();
-            }));
-
+        // add(LA64InstructionInfo.format2GprSi12(
+        //     "ld.b",
+        //     0b0010_1000_00,
+        //     (emulator, operands) -> {
+        //         // ld.b rd, rj, si12
+        //         /*
+        //             vaddr = GR[rj] + SignExtend(si12, GRLEN)
+        //             AddressComplianceCheck(vaddr)
+        //             paddr = AddressTranslation(vaddr)
+        //             byte = MemoryLoad(paddr, BYTE)
+        //             GR[rd] = SignExtend(byte, GRLEN)
+        //          */
+        //         LA64CpuState cpu = emulator.getCpuState();
+        //         MemoryLikeDevice memory = emulator.getMemory();
+        //         LA64MemoryManagementUnit mmu = emulator.getMemoryManagementUnit();
+        //
+        //         long rjValue = cpu.getGr(operands[1].value());
+        //         long offset = operands[2].value();
+        //         long vaddr = rjValue + offset;
+        //         long paddr = mmu.translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.LOAD);
+        //         byte b = memory.loadByte(paddr);
+        //         cpu.setGr(operands[0].value(), b);
+        //         cpu.pcNext();
+        //     }));
+        // add(LA64InstructionInfo.format2GprSi12(
+        //     "ld.h",
+        //     0b0010_1000_01,
+        //     (emulator, operands) -> {
+        //         // ld.h rd, rj, si12
+        //         /*
+        //             vaddr = GR[rj] + SignExtend(si12, GRLEN)
+        //             AddressComplianceCheck(vaddr)
+        //             paddr = AddressTranslation(vaddr)
+        //             halfword = MemoryLoad(paddr, HALFWORD)
+        //             GR[rd] = SignExtend(halfword, GRLEN)
+        //          */
+        //         LA64CpuState cpu = emulator.getCpuState();
+        //         MemoryLikeDevice memory = emulator.getMemory();
+        //         LA64MemoryManagementUnit mmu = emulator.getMemoryManagementUnit();
+        //
+        //         long rjValue = cpu.getGr(operands[1].value());
+        //         long offset = operands[2].value();
+        //         long vaddr = rjValue + offset;
+        //         if ((vaddr & 0b1) != 0) {
+        //             throw new LA64RuntimeException(LA64Exception.ALE);
+        //         }
+        //         long paddr = mmu.translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.LOAD);
+        //         short half = memory.loadHalfWord(paddr);
+        //         cpu.setGr(operands[0].value(), half);
+        //         cpu.pcNext();
+        //     }));
+        // add(LA64InstructionInfo.format2GprSi12(
+        //     "ld.w",
+        //     0b0010_1000_10,
+        //     (emulator, operands) -> {
+        //         // ld.w rd, rj, si12
+        //         /*
+        //             vaddr = GR[rj] + SignExtend(si12, GRLEN)
+        //             AddressComplianceCheck(vaddr)
+        //             paddr = AddressTranslation(vaddr)
+        //             word = MemoryLoad(paddr, WORD)
+        //             GR[rd] = SignExtend(word, GRLEN)
+        //          */
+        //         LA64CpuState cpu = emulator.getCpuState();
+        //         MemoryLikeDevice memory = emulator.getMemory();
+        //         LA64MemoryManagementUnit mmu = emulator.getMemoryManagementUnit();
+        //
+        //         long rjValue = cpu.getGr(operands[1].value());
+        //         long offset = operands[2].value();
+        //         long vaddr = rjValue + offset;
+        //         if ((vaddr & 0b11) != 0) {
+        //             throw new LA64RuntimeException(LA64Exception.ALE);
+        //         }
+        //         long paddr = mmu.translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.LOAD);
+        //         int word = memory.loadWord(paddr);
+        //         cpu.setGr(operands[0].value(), word);
+        //         cpu.pcNext();
+        //     }));
+        // add(LA64InstructionInfo.format2GprSi12(
+        //     "ld.d",
+        //     0b0010_1000_11,
+        //     (emulator, operands) -> {
+        //         // ld.d rd, rj, si12
+        //         /*
+        //             vaddr = GR[rj] + SignExtend(si12, GRLEN)
+        //             AddressComplianceCheck(vaddr)
+        //             paddr = AddressTranslation(vaddr)
+        //             GR[rd] = MemoryLoad(paddr, DOUBLEWORD)
+        //          */
+        //         LA64CpuState cpu = emulator.getCpuState();
+        //         MemoryLikeDevice memory = emulator.getMemory();
+        //         LA64MemoryManagementUnit mmu = emulator.getMemoryManagementUnit();
+        //
+        //         long rjValue = cpu.getGr(operands[1].value());
+        //         long offset = operands[2].value();
+        //         long vaddr = rjValue + offset;
+        //         if ((vaddr & 0b111) != 0) {
+        //             throw new LA64RuntimeException(LA64Exception.ALE);
+        //         }
+        //         long paddr = mmu.translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.LOAD);
+        //         cpu.setGr(operands[0].value(), memory.loadDoubleWord(paddr));
+        //         cpu.pcNext();
+        //     }));
+        // add(LA64InstructionInfo.format2GprSi12(
+        //     "st.b",
+        //     0b0010_1001_00,
+        //     (emulator, operands) -> {
+        //         // st.b rd, rj, si12
+        //         /*
+        //             vaddr = GR[rj] + SignExtend(si12, GRLEN)
+        //             AddressComplianceCheck(vaddr)
+        //             paddr = AddressTranslation(vaddr)
+        //             MemoryStore(GR[rd][7:0], paddr, BYTE)
+        //          */
+        //         LA64CpuState cpu = emulator.getCpuState();
+        //         MemoryLikeDevice memory = emulator.getMemory();
+        //         LA64MemoryManagementUnit mmu = emulator.getMemoryManagementUnit();
+        //
+        //         long rjValue = cpu.getGr(operands[1].value());
+        //         long offset = operands[2].value();
+        //         long vaddr = rjValue + offset;
+        //         long paddr = mmu.translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.STORE);
+        //         memory.storeByte(paddr, (byte) cpu.getGrWord(operands[0].value()));
+        //         cpu.pcNext();
+        //     }));
+        // add(LA64InstructionInfo.format2GprSi12(
+        //     "st.h",
+        //     0b0010_1001_01,
+        //     (emulator, operands) -> {
+        //         // st.h rd, rj, si12
+        //         /*
+        //             vaddr = GR[rj] + SignExtend(si12, GRLEN)
+        //             AddressComplianceCheck(vaddr)
+        //             paddr = AddressTranslation(vaddr)
+        //             MemoryStore(GR[rd][15:0], paddr, HALFWORD)
+        //          */
+        //         LA64CpuState cpu = emulator.getCpuState();
+        //         MemoryLikeDevice memory = emulator.getMemory();
+        //         LA64MemoryManagementUnit mmu = emulator.getMemoryManagementUnit();
+        //
+        //         long rjValue = cpu.getGr(operands[1].value());
+        //         long offset = operands[2].value();
+        //         long vaddr = rjValue + offset;
+        //         if ((vaddr & 0b1) != 0) {
+        //             throw new LA64RuntimeException(LA64Exception.ALE);
+        //         }
+        //         long paddr = mmu.translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.STORE);
+        //         memory.storeHalfWord(paddr, (short) cpu.getGrWord(operands[0].value()));
+        //         cpu.pcNext();
+        //     }));
+        // add(LA64InstructionInfo.format2GprSi12(
+        //     "st.w",
+        //     0b0010_1001_10,
+        //     (emulator, operands) -> {
+        //         // st.w rd, rj, si12
+        //         /*
+        //             vaddr = GR[rj] + SignExtend(si12, GRLEN)
+        //             AddressComplianceCheck(vaddr)
+        //             paddr = AddressTranslation(vaddr)
+        //             MemoryStore(GR[rd][31:0], paddr, WORD)
+        //          */
+        //         LA64CpuState cpu = emulator.getCpuState();
+        //         MemoryLikeDevice memory = emulator.getMemory();
+        //         LA64MemoryManagementUnit mmu = emulator.getMemoryManagementUnit();
+        //
+        //         long rjValue = cpu.getGr(operands[1].value());
+        //         long offset = operands[2].value();
+        //         long vaddr = rjValue + offset;
+        //         if ((vaddr & 0b11) != 0) {
+        //             throw new LA64RuntimeException(LA64Exception.ALE);
+        //         }
+        //         long paddr = mmu.translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.STORE);
+        //         memory.storeWord(paddr, cpu.getGrWord(operands[0].value()));
+        //         cpu.pcNext();
+        //     }));
+        // add(LA64InstructionInfo.format2GprSi12(
+        //     "st.d",
+        //     0b0010_1001_11,
+        //     (emulator, operands) -> {
+        //         // st.d rd, rj, si12
+        //         /*
+        //             vaddr = GR[rj] + SignExtend(si12, GRLEN)
+        //             AddressComplianceCheck(vaddr)
+        //             paddr = AddressTranslation(vaddr)
+        //             MemoryStore(GR[rd][63:0], paddr, DOUBLEWORD)
+        //          */
+        //         LA64CpuState cpu = emulator.getCpuState();
+        //         MemoryLikeDevice memory = emulator.getMemory();
+        //         LA64MemoryManagementUnit mmu = emulator.getMemoryManagementUnit();
+        //
+        //         long rjValue = cpu.getGr(operands[1].value());
+        //         long offset = operands[2].value();
+        //         long vaddr = rjValue + offset;
+        //         if ((vaddr & 0b111) != 0) {
+        //             throw new LA64RuntimeException(LA64Exception.ALE);
+        //         }
+        //         long paddr = mmu.translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.STORE);
+        //         memory.storeDoubleWord(paddr, cpu.getGr(operands[0].value()));
+        //         cpu.pcNext();
+        //     }));
+        // add(LA64InstructionInfo.format2GprSi12(
+        //     "ld.bu",
+        //     0b0010_1010_00,
+        //     (emulator, operands) -> {
+        //         // ld.bu rd, rj, si12
+        //         /*
+        //             vaddr = GR[rj] + SignExtend(si12, GRLEN)
+        //             AddressComplianceCheck(vaddr)
+        //             paddr = AddressTranslation(vaddr)
+        //             byte = MemoryLoad(paddr, BYTE)
+        //             GR[rd] = ZeroExtend(byte, GRLEN)
+        //          */
+        //         LA64CpuState cpu = emulator.getCpuState();
+        //         MemoryLikeDevice memory = emulator.getMemory();
+        //         LA64MemoryManagementUnit mmu = emulator.getMemoryManagementUnit();
+        //
+        //         long rjValue = cpu.getGr(operands[1].value());
+        //         long offset = operands[2].value();
+        //         long vaddr = rjValue + offset;
+        //         long paddr = mmu.translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.LOAD);
+        //         byte b = memory.loadByte(paddr);
+        //         cpu.setGr(operands[0].value(), b & 0xFFL);
+        //         cpu.pcNext();
+        //     }));
+        // add(LA64InstructionInfo.format2GprSi12(
+        //     "ld.hu",
+        //     0b0010_1010_01,
+        //     (emulator, operands) -> {
+        //         // ld.hu rd, rj, si12
+        //         /*
+        //             vaddr = GR[rj] + SignExtend(si12, GRLEN)
+        //             AddressComplianceCheck(vaddr)
+        //             paddr = AddressTranslation(vaddr)
+        //             halfword = MemoryLoad(paddr, HALFWORD)
+        //             GR[rd] = ZeroExtend(halfword, GRLEN)
+        //          */
+        //         LA64CpuState cpu = emulator.getCpuState();
+        //         MemoryLikeDevice memory = emulator.getMemory();
+        //         LA64MemoryManagementUnit mmu = emulator.getMemoryManagementUnit();
+        //
+        //         long rjValue = cpu.getGr(operands[1].value());
+        //         long offset = operands[2].value();
+        //         long vaddr = rjValue + offset;
+        //         if ((vaddr & 0b1) != 0) {
+        //             throw new LA64RuntimeException(LA64Exception.ALE);
+        //         }
+        //         long paddr = mmu.translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.LOAD);
+        //         short half = memory.loadHalfWord(paddr);
+        //         cpu.setGr(operands[0].value(), half & 0xFFFFL);
+        //         cpu.pcNext();
+        //     }));
+        // add(LA64InstructionInfo.format2GprSi12(
+        //     "ld.wu",
+        //     0b0010_1010_10,
+        //     (emulator, operands) -> {
+        //         // ld.wu rd, rj, si12
+        //         /*
+        //             vaddr = GR[rj] + SignExtend(si12, GRLEN)
+        //             AddressComplianceCheck(vaddr)
+        //             paddr = AddressTranslation(vaddr)
+        //             word = MemoryLoad(paddr, WORD)
+        //             GR[rd] = ZeroExtend(word, GRLEN)
+        //          */
+        //         LA64CpuState cpu = emulator.getCpuState();
+        //         MemoryLikeDevice memory = emulator.getMemory();
+        //         LA64MemoryManagementUnit mmu = emulator.getMemoryManagementUnit();
+        //
+        //         long rjValue = cpu.getGr(operands[1].value());
+        //         long offset = operands[2].value();
+        //         long vaddr = rjValue + offset;
+        //         if ((vaddr & 0b11) != 0) {
+        //             throw new LA64RuntimeException(LA64Exception.ALE);
+        //         }
+        //         long paddr = mmu.translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.LOAD);
+        //         int word = memory.loadWord(paddr);
+        //         cpu.setGr(operands[0].value(), word & 0xFFFFFFFFL);
+        //         cpu.pcNext();
+        //     }));
         add(LA64InstructionInfo.formatFprGprSi12(
             "fld.d",
             0b0010_1011_10,
@@ -1351,108 +1556,122 @@ public final class LA64InstructionSet {
                 cpu.pcNext();
             }
         ));
-        add(LA64InstructionInfo.format3Gpr(
-            "ldx.w",
-            0b0011_1000_0000_1000_0,
-            (emulator, operands) -> {
-                // ldx.w rd, rj, rk
-                /*
-                    vaddr = GR[rj] + GR[rk]
-                    AddressComplianceCheck(vaddr)
-                    paddr = AddressTranslation(vaddr)
-                    word = MemoryLoad(paddr, WORD)
-                    GR[rd] = SignExtend(word, GRLEN)
-                 */
-                LA64CpuState cpu = emulator.getCpuState();
-                MemoryLikeDevice memory = emulator.getMemory();
-                LA64MemoryManagementUnit mmu = emulator.getMemoryManagementUnit();
-                long rjValue = cpu.getGr(operands[1].value());
-                long rkValue = cpu.getGr(operands[2].value());
-                long vaddr = rjValue + rkValue;
-                if ((vaddr & 0b11) != 0) {
-                    throw new LA64RuntimeException(LA64Exception.ALE);
-                }
-                long paddr = mmu.translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.LOAD);
-                int word = memory.loadWord(paddr);
-                cpu.setGr(operands[0].value(), word);
-                cpu.pcNext();
+
+
+        for (Access access : Access.values()) {
+            for (Width w : Width.values()) {
+                // 没有 ldx.du
+                if (access == Access.LOAD_UNSIGNED && w == Width.D) { continue; }
+
+                String idxName = ldLdxStStxMnemonic(access, w, true);
+                add(LA64InstructionInfo.format3Gpr(
+                    idxName, ldxStxOpcode(access, w),
+                    makeHandler(access, w, LA64InstructionSet::addrIndexed)));
             }
-        ));
-        add(LA64InstructionInfo.format3Gpr(
-            "ldx.d",
-            0b0011_1000_0000_1100_0,
-            (emulator, operands) -> {
-                // ldx.d rd, rj, rk
-                /*
-                    vaddr = GR[rj] + GR[rk]
-                    AddressComplianceCheck(vaddr)
-                    paddr = AddressTranslation(vaddr)
-                    GR[rd] = MemoryLoad(paddr, DOUBLEWORD)
-                 */
-                LA64CpuState cpu = emulator.getCpuState();
-                MemoryLikeDevice memory = emulator.getMemory();
-                LA64MemoryManagementUnit mmu = emulator.getMemoryManagementUnit();
-                long rjValue = cpu.getGr(operands[1].value());
-                long rkValue = cpu.getGr(operands[2].value());
-                long vaddr = rjValue + rkValue;
-                if ((vaddr & 0b111) != 0) {
-                    throw new LA64RuntimeException(LA64Exception.ALE);
-                }
-                long paddr = mmu.translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.LOAD);
-                cpu.setGr(operands[0].value(), memory.loadDoubleWord(paddr));
-                cpu.pcNext();
-            }
-        ));
-        add(LA64InstructionInfo.format3Gpr(
-            "stx.w",
-            0b0011_1000_0001_1000_0,
-            (emulator, operands) -> {
-                // stx.w rd, rj, rk
-                /*
-                    vaddr = GR[rj] + GR[rk]
-                    AddressComplianceCheck(vaddr)
-                    paddr = AddressTranslation(vaddr)
-                    MemoryStore(GR[rd][31:0], paddr, WORD)
-                 */
-                LA64CpuState cpu = emulator.getCpuState();
-                MemoryLikeDevice memory = emulator.getMemory();
-                LA64MemoryManagementUnit mmu = emulator.getMemoryManagementUnit();
-                long rjValue = cpu.getGr(operands[1].value());
-                long rkValue = cpu.getGr(operands[2].value());
-                long vaddr = rjValue + rkValue;
-                if ((vaddr & 0b11) != 0) {
-                    throw new LA64RuntimeException(LA64Exception.ALE);
-                }
-                long paddr = mmu.translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.STORE);
-                memory.storeWord(paddr, cpu.getGrWord(operands[0].value()));
-                cpu.pcNext();
-            }
-        ));
-        add(LA64InstructionInfo.format3Gpr(
-            "stx.d",
-            0b0011_1000_0001_1100_0,
-            (emulator, operands) -> {
-                // stx.d rd, rj, rk
-                /*
-                    vaddr = GR[rj] + GR[rk]
-                    AddressComplianceCheck(vaddr)
-                    paddr = AddressTranslation(vaddr)
-                    MemoryStore(GR[rd][63:0], paddr, DOUBLEWORD)
-                 */
-                LA64CpuState cpu = emulator.getCpuState();
-                MemoryLikeDevice memory = emulator.getMemory();
-                LA64MemoryManagementUnit mmu = emulator.getMemoryManagementUnit();
-                long rjValue = cpu.getGr(operands[1].value());
-                long rkValue = cpu.getGr(operands[2].value());
-                long vaddr = rjValue + rkValue;
-                if ((vaddr & 0b111) != 0) {
-                    throw new LA64RuntimeException(LA64Exception.ALE);
-                }
-                long paddr = mmu.translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.STORE);
-                memory.storeDoubleWord(paddr, cpu.getGr(operands[0].value()));
-                cpu.pcNext();
-            }
-        ));
+        }
+
+        // add(LA64InstructionInfo.format3Gpr(
+        //     "ldx.w",
+        //     0b0011_1000_0000_1000_0,
+        //     (emulator, operands) -> {
+        //         // ldx.w rd, rj, rk
+        //         /*
+        //             vaddr = GR[rj] + GR[rk]
+        //             AddressComplianceCheck(vaddr)
+        //             paddr = AddressTranslation(vaddr)
+        //             word = MemoryLoad(paddr, WORD)
+        //             GR[rd] = SignExtend(word, GRLEN)
+        //          */
+        //         LA64CpuState cpu = emulator.getCpuState();
+        //         MemoryLikeDevice memory = emulator.getMemory();
+        //         LA64MemoryManagementUnit mmu = emulator.getMemoryManagementUnit();
+        //         long rjValue = cpu.getGr(operands[1].value());
+        //         long rkValue = cpu.getGr(operands[2].value());
+        //         long vaddr = rjValue + rkValue;
+        //         if ((vaddr & 0b11) != 0) {
+        //             throw new LA64RuntimeException(LA64Exception.ALE);
+        //         }
+        //         long paddr = mmu.translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.LOAD);
+        //         int word = memory.loadWord(paddr);
+        //         cpu.setGr(operands[0].value(), word);
+        //         cpu.pcNext();
+        //     }
+        // ));
+        // add(LA64InstructionInfo.format3Gpr(
+        //     "ldx.d",
+        //     0b0011_1000_0000_1100_0,
+        //     (emulator, operands) -> {
+        //         // ldx.d rd, rj, rk
+        //         /*
+        //             vaddr = GR[rj] + GR[rk]
+        //             AddressComplianceCheck(vaddr)
+        //             paddr = AddressTranslation(vaddr)
+        //             GR[rd] = MemoryLoad(paddr, DOUBLEWORD)
+        //          */
+        //         LA64CpuState cpu = emulator.getCpuState();
+        //         MemoryLikeDevice memory = emulator.getMemory();
+        //         LA64MemoryManagementUnit mmu = emulator.getMemoryManagementUnit();
+        //         long rjValue = cpu.getGr(operands[1].value());
+        //         long rkValue = cpu.getGr(operands[2].value());
+        //         long vaddr = rjValue + rkValue;
+        //         if ((vaddr & 0b111) != 0) {
+        //             throw new LA64RuntimeException(LA64Exception.ALE);
+        //         }
+        //         long paddr = mmu.translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.LOAD);
+        //         cpu.setGr(operands[0].value(), memory.loadDoubleWord(paddr));
+        //         cpu.pcNext();
+        //     }
+        // ));
+        // add(LA64InstructionInfo.format3Gpr(
+        //     "stx.w",
+        //     0b0011_1000_0001_1000_0,
+        //     (emulator, operands) -> {
+        //         // stx.w rd, rj, rk
+        //         /*
+        //             vaddr = GR[rj] + GR[rk]
+        //             AddressComplianceCheck(vaddr)
+        //             paddr = AddressTranslation(vaddr)
+        //             MemoryStore(GR[rd][31:0], paddr, WORD)
+        //          */
+        //         LA64CpuState cpu = emulator.getCpuState();
+        //         MemoryLikeDevice memory = emulator.getMemory();
+        //         LA64MemoryManagementUnit mmu = emulator.getMemoryManagementUnit();
+        //         long rjValue = cpu.getGr(operands[1].value());
+        //         long rkValue = cpu.getGr(operands[2].value());
+        //         long vaddr = rjValue + rkValue;
+        //         if ((vaddr & 0b11) != 0) {
+        //             throw new LA64RuntimeException(LA64Exception.ALE);
+        //         }
+        //         long paddr = mmu.translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.STORE);
+        //         memory.storeWord(paddr, cpu.getGrWord(operands[0].value()));
+        //         cpu.pcNext();
+        //     }
+        // ));
+        // add(LA64InstructionInfo.format3Gpr(
+        //     "stx.d",
+        //     0b0011_1000_0001_1100_0,
+        //     (emulator, operands) -> {
+        //         // stx.d rd, rj, rk
+        //         /*
+        //             vaddr = GR[rj] + GR[rk]
+        //             AddressComplianceCheck(vaddr)
+        //             paddr = AddressTranslation(vaddr)
+        //             MemoryStore(GR[rd][63:0], paddr, DOUBLEWORD)
+        //          */
+        //         LA64CpuState cpu = emulator.getCpuState();
+        //         MemoryLikeDevice memory = emulator.getMemory();
+        //         LA64MemoryManagementUnit mmu = emulator.getMemoryManagementUnit();
+        //         long rjValue = cpu.getGr(operands[1].value());
+        //         long rkValue = cpu.getGr(operands[2].value());
+        //         long vaddr = rjValue + rkValue;
+        //         if ((vaddr & 0b111) != 0) {
+        //             throw new LA64RuntimeException(LA64Exception.ALE);
+        //         }
+        //         long paddr = mmu.translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.STORE);
+        //         memory.storeDoubleWord(paddr, cpu.getGr(operands[0].value()));
+        //         cpu.pcNext();
+        //     }
+        // ));
         add(LA64InstructionInfo.formatFpr2Gpr(
             "fldx.d",
             0b0011_1000_0011_0100_0,
@@ -1725,5 +1944,130 @@ public final class LA64InstructionSet {
                     emulator, operands,
                     (rj, rd) -> Long.compareUnsigned(rj, rd) >= 0);
             }));
+    }
+
+    private enum Access {
+        LOAD_SIGNED(0b00, "ld", "ldx", true, true),
+        STORE(0b01, "st", "stx", false, false),
+        LOAD_UNSIGNED(0b10, "ld", "ldx", true, false);
+
+        final int code;
+        final String stdPrefix;   // ld / st
+        final String idxPrefix;   // ldx / stx
+        final boolean isLoad;
+        final boolean signExtend;
+
+        Access(int code, String stdPrefix, String idxPrefix, boolean isLoad, boolean signExtend) {
+            this.code = code;
+            this.stdPrefix = stdPrefix;
+            this.idxPrefix = idxPrefix;
+            this.isLoad = isLoad;
+            this.signExtend = signExtend;
+        }
+    }
+
+    private enum Width {
+        B(0b00, "b", 1),
+        H(0b01, "h", 2),
+        W(0b10, "w", 4),
+        D(0b11, "d", 8);
+
+        final int code;
+        final String suffix;
+        final int bytes;
+
+        Width(int code, String suffix, int bytes) {
+            this.code = code;
+            this.suffix = suffix;
+            this.bytes = bytes;
+        }
+
+        long alignMask() { return bytes - 1; }
+    }
+
+    private static final int LD_ST_PREFIX = 0b001010 << 4;
+    private static final int LDX_STX_PREFIX = 0b0011100000 << 7;
+
+    private static int ldStOpcode(Access a, Width w) {
+        return LD_ST_PREFIX | (a.code << 2) | w.code;
+    }
+
+    private static int ldxStxOpcode(Access a, Width w) {
+        return LDX_STX_PREFIX | (a.code << 5) | (w.code << 3);
+    }
+
+    private static String ldLdxStStxMnemonic(Access a, Width w, boolean indexed) {
+        String base = indexed ? a.idxPrefix : a.stdPrefix;
+        String suffix = (a == Access.LOAD_UNSIGNED) ? w.suffix + "u" : w.suffix;
+        return base + "." + suffix;
+    }
+
+    private static long addrSi12(LA64EmulatorHandler e, LA64Operand[] ops) {
+        return e.getCpuState().getGr(ops[1].value()) + ops[2].value();
+    }
+
+    private static long addrIndexed(LA64EmulatorHandler e, LA64Operand[] ops) {
+        LA64CpuState cpu = e.getCpuState();
+        return cpu.getGr(ops[1].value()) + cpu.getGr(ops[2].value());
+    }
+
+    private static void executeLoad(LA64EmulatorHandler e, int rd, long vaddr, Width w, boolean signExtend) {
+        if ((vaddr & w.alignMask()) != 0) {
+            throw new LA64RuntimeException(LA64Exception.ALE);
+        }
+        LA64CpuState cpu = e.getCpuState();
+        long paddr = e.getMemoryManagementUnit()
+                      .translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.LOAD);
+        MemoryLikeDevice mem = e.getMemory();
+
+        long value = switch (w) {
+            case B -> {
+                byte b = mem.loadByte(paddr);
+                yield signExtend ? b : (b & 0xFFL);
+            }
+            case H -> {
+                short h = mem.loadHalfWord(paddr);
+                yield signExtend ? h : (h & 0xFFFFL);
+            }
+            case W -> {
+                int i = mem.loadWord(paddr);
+                yield signExtend ? i : (i & 0xFFFFFFFFL);
+            }
+            case D -> mem.loadDoubleWord(paddr);
+        };
+
+        cpu.setGr(rd, value);
+        cpu.pcNext();
+    }
+
+    private static void executeStore(LA64EmulatorHandler e, int rd, long vaddr, Width w) {
+        if ((vaddr & w.alignMask()) != 0) {
+            throw new LA64RuntimeException(LA64Exception.ALE);
+        }
+        LA64CpuState cpu = e.getCpuState();
+        long paddr = e.getMemoryManagementUnit()
+                      .translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.STORE);
+        MemoryLikeDevice mem = e.getMemory();
+        long value = cpu.getGr(rd);
+
+        switch (w) {
+            case B -> mem.storeByte(paddr, (byte) value);
+            case H -> mem.storeHalfWord(paddr, (short) value);
+            case W -> mem.storeWord(paddr, (int) value);
+            case D -> mem.storeDoubleWord(paddr, value);
+        }
+        cpu.pcNext();
+    }
+
+    private static BiConsumer<LA64EmulatorHandler, LA64Operand[]> makeHandler(
+        Access access, Width w, BiFunction<LA64EmulatorHandler, LA64Operand[], Long> addrCalc) {
+        return (e, ops) -> {
+            long vaddr = addrCalc.apply(e, ops);
+            if (access.isLoad) {
+                executeLoad(e, ops[0].value(), vaddr, w, access.signExtend);
+            } else {
+                executeStore(e, ops[0].value(), vaddr, w);
+            }
+        };
     }
 }

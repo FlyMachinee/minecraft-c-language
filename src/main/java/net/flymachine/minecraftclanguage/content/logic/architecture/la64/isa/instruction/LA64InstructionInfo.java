@@ -41,6 +41,20 @@ public record LA64InstructionInfo(
         this(mnemonic, opcode, mask, format, operandTypes, null, null, executor);
     }
 
+    public static LA64InstructionInfo format2Gpr(
+        @NotBlank String mnemonic,
+        int opcode,
+        @NotNull BiConsumer<LA64EmulatorHandler, LA64Operand[]> executor) {
+        return new LA64InstructionInfo(
+            mnemonic,
+            opcode << 10,
+            ((1 << 22) - 1) << 10,
+            LA64InstructionFormat.FORMAT_2R,
+            LA64OperandType.FORMAT_2GPR_OPTYPE,
+            executor
+        );
+    }
+
     public static LA64InstructionInfo format2Fpr(
         @NotBlank String mnemonic,
         int opcode,

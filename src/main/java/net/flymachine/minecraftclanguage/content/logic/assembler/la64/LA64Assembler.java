@@ -14,6 +14,7 @@ import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.o
 import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.operand.LA64AsmOperand;
 import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.operand.LA64AsmSymOperand;
 import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.operand.LA64DirectiveArgument;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.util.EscapeUnescapeHelper;
 import net.flymachine.minecraftclanguage.content.logic.object.*;
 import net.flymachine.minecraftclanguage.content.logic.object.la64.LA64Object;
 
@@ -48,6 +49,7 @@ public final class LA64Assembler {
 
     private final Map<String, SymbolLocation> symbolTable = new HashMap<>();
     private final Set<String> globalSymbols = new HashSet<>();
+    private final EscapeUnescapeHelper escapeHelper = new EscapeUnescapeHelper(null);
 
     // 用于查询寄存器名
     private final LA64RegisterResolver resolver = LA64RegisterResolver.getInstance();
@@ -92,6 +94,22 @@ public final class LA64Assembler {
                                 directive.args().get(0));
                         }
                     }
+                    case "byte" -> {
+                        if (directive.argCount() != 1) {
+                            throw new IllegalArgumentException(
+                                "Expected one argument for byte directive, but got: " + directive.args());
+                        } else if (!directive.arg(0).isNum()) {
+                            throw new IllegalArgumentException(
+                                "Expected numeric argument for byte directive, but got: " +
+                                directive.args().get(0));
+                        } else {
+                            long data = directive.arg(0).asNum();
+                            if (Byte.MIN_VALUE > data || data > Byte.MAX_VALUE) {
+                                // 非 8 位数值
+                                throw new IllegalArgumentException("Byte value out of range: " + data);
+                            }
+                        }
+                    }
                     case "long", "word" -> {
                         if (directive.argCount() != 1) {
                             throw new IllegalArgumentException(
@@ -126,6 +144,16 @@ public final class LA64Assembler {
                             if (count < 0 || count > Integer.MAX_VALUE) {
                                 throw new IllegalArgumentException("Zero size out of range: " + count);
                             }
+                        }
+                    }
+                    case "ascii", "asciz" -> {
+                        if (directive.argCount() != 1) {
+                            throw new IllegalArgumentException(
+                                "Expected one argument for ascii/asciz directive, but got: " + directive.args());
+                        } else if (!directive.arg(0).isStr()) {
+                            throw new IllegalArgumentException(
+                                "Expected string argument for ascii/asciz directive, but got: " +
+                                directive.args().get(0));
                         }
                     }
                     default -> throw new UnsupportedOperationException("Unsupported directive: " + directive.name());
@@ -314,6 +342,12 @@ public final class LA64Assembler {
                         long alignment = directive.arg(0).asNum();
                         offsets.put(currentSectionType, BitMath.alignUp(offset, (int) alignment));
                     }
+                    case "byte" -> {
+                        if (currentSectionType == SectionType.BSS) {
+                            throw new IllegalArgumentException(".byte directive cannot be used in .bss section");
+                        }
+                        offsets.put(currentSectionType, offset + 1);
+                    }
                     case "long", "word" -> {
                         if (currentSectionType == SectionType.BSS) {
                             throw new IllegalArgumentException(".word directive cannot be used in .bss section");
@@ -329,6 +363,22 @@ public final class LA64Assembler {
                     case "zero" -> {
                         long count = directive.arg(0).asNum();
                         offsets.put(currentSectionType, offset + (int) count);
+                    }
+                    case "ascii" -> {
+                        if (currentSectionType == SectionType.BSS) {
+                            throw new IllegalArgumentException(".ascii directive cannot be used in .bss section");
+                        }
+                        String str = directive.arg(0).asStr();
+                        byte[] bytes = escapeHelper.unescapeBytes(str);
+                        offsets.put(currentSectionType, offset + bytes.length);
+                    }
+                    case "asciz" -> {
+                        if (currentSectionType == SectionType.BSS) {
+                            throw new IllegalArgumentException(".asciz directive cannot be used in .bss section");
+                        }
+                        String str = directive.arg(0).asStr();
+                        byte[] bytes = escapeHelper.unescapeBytes(str);
+                        offsets.put(currentSectionType, offset + bytes.length + 1); // +1 for null terminator
                     }
                     default -> throw new UnsupportedOperationException("Unsupported directive: " + directive.name());
                 }
@@ -464,6 +514,7 @@ public final class LA64Assembler {
                             currentSectionType,
                             (k, currentMaxAlign) -> Math.max(currentMaxAlign, align));
                     }
+                    case "byte" -> out.write((byte) directive.arg(0).asNum());
                     case "long", "word" -> writeIntLittleEndian(out, (int) directive.arg(0).asNum());
                     case "quad", "dword" -> {
                         LA64DirectiveArgument arg = directive.arg(0);
@@ -486,6 +537,15 @@ public final class LA64Assembler {
                         } else {
                             bssSize += count;
                         }
+                    }
+                    case "ascii" -> {
+                        String str = directive.arg(0).asStr();
+                        escapeHelper.unescapeBytes(str, out);
+                    }
+                    case "asciz" -> {
+                        String str = directive.arg(0).asStr();
+                        escapeHelper.unescapeBytes(str, out);
+                        out.write(0); // null terminator
                     }
                     default -> throw new UnsupportedOperationException("Unsupported directive: " + directive.name());
                 }

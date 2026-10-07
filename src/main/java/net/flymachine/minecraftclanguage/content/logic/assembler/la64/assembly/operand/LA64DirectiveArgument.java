@@ -16,4 +16,12 @@ public sealed interface LA64DirectiveArgument permits LA64DirectiveNumArg, LA64D
     default LA64DirectiveSymArg asSym() {
         return (LA64DirectiveSymArg) this;
     }
+
+    default boolean isStr() {
+        return this instanceof LA64DirectiveStrArg;
+    }
+
+    default String asStr() {
+        return ((LA64DirectiveStrArg) this).str();
+    }
 }
