@@ -867,6 +867,7 @@ public final class AstToTacLowerer implements
         return new PlainOperand(new TacVariable(variable));
     }
 
+
     @Override
     public ExpEvalResult visit(IncrementDecrementNode incrementDecrement) {
         // 自增自减表达式
@@ -888,78 +889,46 @@ public final class AstToTacLowerer implements
             step = new TacConstant(new ConstantLong(scale));
         }
 
-        if (incrementDecrement.isPrefix) {
-            if (dst instanceof PlainOperand objDst) {
-                // ++/--a => a = a +/- 1; yield a;
-                TacValue original = objDst.object();
-                if (operandType.isCharacter()) {
-                    // 整数提升
-                    // tmp = (int) a; tmp2 = tmp +/- 1; a = (char) tmp2; yield a;
-                    original = cast(original, BasicType.INT, operandType);
-                    TacVariable res = makeTempVar(BasicType.INT);
-                    emitTac(new TacBinaryOperation(op, original, step, res));
-                    emitTac(new TacTruncate(res, objDst.object()));
-                    return dst;
-                }
-                emitTac(new TacBinaryOperation(op, original, step, objDst.object()));
-                return dst;
-            }
-            if (dst instanceof DereferencedPointer derefPointer) {
-                // ++/--(*ptr)
-                // *ptr = *ptr +/- 1; yield *ptr;
-                // tmp = *ptr; tmp = tmp +/- 1; *ptr = tmp; yield tmp;
-                TacVariable tmp = makeTempVar(operandType);
-                emitTacLoad(derefPointer.addr(), tmp);
-                if (operandType.isCharacter()) {
-                    // 整数提升
-                    // tmp = *ptr; tmp2 = (int) tmp; tmp2 = tmp2 +/- 1; tmp3 = (char) tmp2; *ptr = tmp3; yield tmp3;
-                    TacValue tmp2 = cast(tmp, BasicType.INT, operandType);
-                    emitTac(new TacBinaryOperation(op, tmp2, step, tmp2));
-                    tmp = (TacVariable) cast(tmp2, operandType, BasicType.INT);
-                } else {
-                    emitTac(new TacBinaryOperation(op, tmp, step, tmp));
-                }
-                emitTacStore(tmp, derefPointer.addr());
-                return new PlainOperand(tmp);
-            }
+        TacVariable storage;
+        TacAddressDescriptor derefAddr = null;
+
+        // 加载操作数
+        if (dst instanceof PlainOperand objDst) {
+            storage = (TacVariable) objDst.object(); // 直接获取
+        } else if (dst instanceof DereferencedPointer derefPtr) {
+            storage = makeTempVar(operandType);
+            emitTacLoad(derefPtr.addr(), storage); // 进行 Load
+            derefAddr = derefPtr.addr();
         } else {
-            if (dst instanceof PlainOperand objDst) {
-                // a++/-- => temp = a; a = a +/- 1; yield temp;
-                TacVariable temp = makeTempVar(operandType);
-                emitTacCopy(objDst.object(), temp);
-                if (operandType.isCharacter()) {
-                    // 整数提升
-                    // tmp = (int) a; tmp = tmp +/- 1; a = (char) tmp;
-                    TacValue tmp = cast(objDst.object(), BasicType.INT, operandType);
-                    emitTac(new TacBinaryOperation(op, tmp, step, tmp));
-                    emitTac(new TacTruncate(tmp, objDst.object()));
-                } else {
-                    emitTac(new TacBinaryOperation(op, objDst.object(), step, objDst.object()));
-                }
-                return new PlainOperand(temp);
-            }
-            if (dst instanceof DereferencedPointer derefPointer) {
-                // (*ptr)++/--
-                // old = *ptr; *ptr = old +/- 1; yield old;
-                // tmp = *ptr; old = tmp; tmp = tmp +/- 1; *ptr = tmp; yield old;
-                TacVariable tmp = makeTempVar(operandType);
-                TacVariable old = makeTempVar(operandType);
-                emitTacLoad(derefPointer.addr(), tmp);
-                emitTacCopy(tmp, old);
-                if (operandType.isCharacter()) {
-                    // 整数提升
-                    // tmp2 = (int) tmp; tmp2 = tmp2 +/- 1; tmp3 = (char) tmp2; *ptr = tmp3; yield old;
-                    TacValue tmp2 = cast(tmp, BasicType.INT, operandType);
-                    emitTac(new TacBinaryOperation(op, tmp2, step, tmp2));
-                    tmp = (TacVariable) cast(tmp2, operandType, BasicType.INT);
-                } else {
-                    emitTac(new TacBinaryOperation(op, tmp, step, tmp));
-                }
-                emitTacStore(tmp, derefPointer.addr());
-                return new PlainOperand(old);
-            }
+            throw new IllegalStateException("Control should never reach here");
         }
-        throw new IllegalStateException("Control should never reach here");
+
+        // 后缀保留旧值
+        TacVariable oldValue = null;
+        if (!incrementDecrement.isPrefix) {
+            oldValue = makeTempVar(operandType);
+            emitTacCopy(storage, oldValue);
+        }
+
+        // 进行自增自减操作
+        if (operandType.isCharacter()) {
+            // 整数提升
+            // tmp = (int) storage; tmp = tmp +/- 1; storage = (char) tmp
+            TacValue promoted = cast(storage, BasicType.INT, operandType);
+            emitTac(new TacBinaryOperation(op, promoted, step, promoted));
+            emitTac(new TacTruncate(promoted, storage));
+        } else {
+            // 直接操作
+            emitTac(new TacBinaryOperation(op, storage, step, storage));
+        }
+
+        // 如果是内存位置，写回
+        if (derefAddr != null) {
+            emitTacStore(storage, derefAddr);
+        }
+
+        // 前缀返回新值，后缀返回旧值
+        return new PlainOperand(incrementDecrement.isPrefix ? storage : oldValue);
     }
 
     @Override
