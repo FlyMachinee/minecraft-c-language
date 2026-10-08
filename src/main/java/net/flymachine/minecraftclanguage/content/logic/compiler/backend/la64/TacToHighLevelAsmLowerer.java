@@ -18,6 +18,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Poin
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.SymbolTable;
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.*;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -171,12 +172,14 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
 
     @Override
     public Void visit(TacReturn inst) {
-        HighLevelOperand src = lowerValue(inst.value);
-        AsmType asmType = getType(inst.value).toAsmType();
-        if (asmType.equals(AsmType.DOUBLE)) {
-            target.add(new Move(AsmType.DOUBLE, src, FA0));
-        } else {
-            target.add(new Move(asmType, src, A0));
+        if (inst.value != null) {
+            HighLevelOperand src = lowerValue(inst.value);
+            AsmType asmType = getType(inst.value).toAsmType();
+            if (asmType.equals(AsmType.DOUBLE)) {
+                target.add(new Move(AsmType.DOUBLE, src, FA0));
+            } else {
+                target.add(new Move(asmType, src, A0));
+            }
         }
         target.add(new Ret());
         return null;
@@ -468,7 +471,7 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
         maxCallStackArgSize = Math.max(maxCallStackArgSize, stackOffset);
     }
 
-    private void getReturnValue(TacValue dst) {
+    private void getReturnValue(@NotNull TacValue dst) {
         HighLevelOperand dstOp = lowerValue(dst);
         AsmType asmType = getType(dst).toAsmType();
         if (asmType.equals(AsmType.DOUBLE)) {
@@ -482,7 +485,9 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
     public Void visit(TacDirectCall inst) {
         passArguments(inst.args);
         target.add(new Call(inst.funcDesignator));
-        getReturnValue(inst.dst);
+        if (inst.dst != null) {
+            getReturnValue(inst.dst);
+        }
         return null;
     }
 
@@ -766,7 +771,9 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
     public Void visit(TacIndirectCall inst) {
         passArguments(inst.args);
         target.add(new CallIndirect(lowerValue(inst.funcPtr)));
-        getReturnValue(inst.dst);
+        if (inst.dst != null) {
+            getReturnValue(inst.dst);
+        }
         return null;
     }
 
