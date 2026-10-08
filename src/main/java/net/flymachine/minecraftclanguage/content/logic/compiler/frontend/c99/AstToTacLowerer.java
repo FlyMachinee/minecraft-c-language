@@ -19,6 +19,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.helper.initHelper.InitializerHelper;
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.*;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.DiagnosticReporter;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -93,9 +94,13 @@ public final class AstToTacLowerer implements
     private TacFunction lowerFunc(FunctionDefinitionNode funcDef) {
         instructions = new ArrayList<>();
         funcDef.body.accept(this);
-        emitTacReturn(new TacConstant(ConstantInt.ZERO));
         boolean global = symbolTable.get(funcDef.id.name).attr.isGlobal();
         FunctionTypeNode functionType = (FunctionTypeNode) funcDef.funcType;
+        if (functionType.retType instanceof VoidTypeNode) {
+            emitTacReturn();
+        } else {
+            emitTacReturn(new TacConstant(ConstantInt.ZERO));
+        }
         if (functionType.hasNoParameters()) {
             return new TacFunction(funcDef.id.name, global, List.of(), instructions);
         } else {
@@ -198,8 +203,12 @@ public final class AstToTacLowerer implements
 
     @Override
     public void visit(ReturnNode ret) {
-        TacValue returnValue = evalAndLvalueConvert(ret.exp);
-        emitTacReturn(returnValue);
+        if (ret.exp == null) {
+            emitTacReturn(null);
+        } else {
+            TacValue returnValue = evalAndLvalueConvert(ret.exp);
+            emitTacReturn(returnValue);
+        }
     }
 
     @Override
@@ -886,25 +895,31 @@ public final class AstToTacLowerer implements
             case ALWAYS_JUMP -> {
                 // cond=0，只需求假分支即可
                 emitTacLabel(labelCondFalse);
-                return eval(condExp.elseExp);
+                return new PlainOperand(evalAndLvalueConvert(condExp.elseExp));
             }
             case NEVER_JUMP -> {
                 // cond=1，只需求真分支即可
-                ExpEvalResult ret = eval(condExp.thenExp);
+                ExpEvalResult ret = new PlainOperand(evalAndLvalueConvert(condExp.thenExp));
                 emitTacLabel(labelCondFalse);
                 return ret;
             }
         }
+        // 默认情况
+        boolean isVoid = condExp.expType.isVoid();
         String labelCondEnd = makeLabel("cond_end");
         TacValue thenValue = evalAndLvalueConvert(condExp.thenExp);
-        TacVariable dst = makeTempVar(condExp.expType);
-        emitTacCopy(thenValue, dst);
+        TacVariable dst = isVoid ? null : makeTempVar(condExp.expType);
+        if (!isVoid) {
+            emitTacCopy(thenValue, dst);
+        }
         emitTacJump(labelCondEnd);
         emitTacLabel(labelCondFalse);
         TacValue elseValue = evalAndLvalueConvert(condExp.elseExp);
-        emitTacCopy(elseValue, dst);
+        if (!isVoid) {
+            emitTacCopy(elseValue, dst);
+        }
         emitTacLabel(labelCondEnd);
-        return new PlainOperand(dst);
+        return new PlainOperand(isVoid ? new TacVariable("DUMMY") : dst);
     }
 
     @Override
@@ -922,7 +937,9 @@ public final class AstToTacLowerer implements
         for (ExpressionNode arg : funcCall.args) {
             args.add(evalAndLvalueConvert(arg));
         }
-        TacVariable dst = makeTempVar(funcCall.expType);
+
+        Type returnType = funcCall.expType;
+        TacVariable dst = returnType.isVoid() ? null : makeTempVar(returnType);
 
         ExpEvalResult func = eval(funcCall.func);
         if (func instanceof PlainFunctionPointer funcPtr) {
@@ -931,13 +948,18 @@ public final class AstToTacLowerer implements
             TacValue funcVal = toPlainValue(func, funcCall.func.expType);
             emitTac(new TacIndirectCall(funcVal, args, dst));
         }
-        return new PlainOperand(dst);
+        return new PlainOperand(dst == null ? new TacVariable("DUMMY") : dst);
     }
 
     private TacValue cast(TacValue toCast, Type targetType, Type originType) {
         if (targetType.isCompatible(originType)) {
             return toCast;
         }
+
+        if (targetType.isVoid()) {
+            return new TacVariable("DUMMY");
+        }
+
         if (toCast instanceof TacConstant constant) {
             return new TacConstant(constant.value.castTo(targetType));
         }
@@ -1047,6 +1069,22 @@ public final class AstToTacLowerer implements
                             new IdentifierNode(null, name), TypeNode.fromType(t), t,
                             new SymbolTable.Entry.ConstantAttr(new StringInit(string.literal, true))));
         return new PlainOperand(new TacVariable(name));
+    }
+
+    @Override
+    public ExpEvalResult visit(SizeOfNode sizeof) {
+        return new PlainOperand(new ConstantUnsignedLong(sizeof.exp.expType.sizeof()));
+    }
+
+    @Override
+    public ExpEvalResult visit(SizeOfTypeNode sizeofType) {
+        return new PlainOperand(new ConstantUnsignedLong(sizeofType.type.getType().sizeof()));
+    }
+
+    @Override
+    public ExpEvalResult visit(CommaExpressionNode commaExp) {
+        evalAndLvalueConvert(commaExp.lhs);
+        return new PlainOperand(evalAndLvalueConvert(commaExp.rhs));
     }
 
     @Override
@@ -1216,6 +1254,21 @@ public final class AstToTacLowerer implements
         return visitFallback(string, jumpTarget, inverse);
     }
 
+    @Override
+    public BoolGenResult visit(SizeOfNode sizeof, String jumpTarget, boolean inverse) {
+        return visitFallback(sizeof, jumpTarget, inverse);
+    }
+
+    @Override
+    public BoolGenResult visit(SizeOfTypeNode sizeofType, String jumpTarget, boolean inverse) {
+        return visitFallback(sizeofType, jumpTarget, inverse);
+    }
+
+    @Override
+    public BoolGenResult visit(CommaExpressionNode commaExp, String jumpTarget, boolean inverse) {
+        return visitFallback(commaExp, jumpTarget, inverse);
+    }
+
     private void emitTacNeg(TacValue src, TacValue dst) {
         emitTac(new TacUnaryOperation(UnaryOperator.NEGATE, src, dst));
     }
@@ -1268,8 +1321,12 @@ public final class AstToTacLowerer implements
         emitTac(new TacJumpIfComparison(cond, lhs, rhs, label, inverse));
     }
 
-    private void emitTacReturn(TacValue value) {
+    private void emitTacReturn(@Nullable TacValue value) {
         emitTac(new TacReturn(value));
+    }
+
+    private void emitTacReturn() {
+        emitTac(new TacReturn());
     }
 
     private void emitTacGetAddress(TacValue obj, TacValue dst) {

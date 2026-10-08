@@ -1,17 +1,25 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.ir;
 
+import org.jetbrains.annotations.Nullable;
+
 import java.io.PrintStream;
 import java.util.List;
 
 public class TacDirectCall implements TacInstruction {
     public String funcDesignator;
     public List<TacValue> args;
-    public TacValue dst;
+    public @Nullable TacValue dst;
 
-    public TacDirectCall(String funcDesignator, List<TacValue> args, TacValue dst) {
+    public TacDirectCall(String funcDesignator, List<TacValue> args, @Nullable TacValue dst) {
         this.funcDesignator = funcDesignator;
         this.args = args;
         this.dst = dst;
+    }
+
+    public TacDirectCall(String funcDesignator, List<TacValue> args) {
+        this.funcDesignator = funcDesignator;
+        this.args = args;
+        this.dst = null;
     }
 
     @Override
@@ -33,7 +41,11 @@ public class TacDirectCall implements TacInstruction {
             arg.dump(stream);
         }
         stream.print("], dst=");
-        dst.dump(stream);
+        if (dst != null) {
+            dst.dump(stream);
+        } else {
+            stream.print("null");
+        }
         stream.print(")");
     }
 
@@ -42,9 +54,12 @@ public class TacDirectCall implements TacInstruction {
         if (indentFirstLine) {
             stream.print("  ".repeat(indentLevel));
         }
-        // dst = funcDesignator(args)
-        dst.dumpPretty(stream);
-        stream.print(" = &");
+        // dst = @funcDesignator(args)
+        if (dst != null) {
+            dst.dumpPretty(stream);
+            stream.print(" = ");
+        }
+        stream.print('@');
         stream.print(funcDesignator);
         stream.print("(");
         for (int i = 0; i < this.args.size(); i++) {

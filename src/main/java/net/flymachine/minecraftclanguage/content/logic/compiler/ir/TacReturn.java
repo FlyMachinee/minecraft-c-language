@@ -1,12 +1,18 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.ir;
 
+import org.jetbrains.annotations.Nullable;
+
 import java.io.PrintStream;
 
 public class TacReturn implements TacInstruction {
-    public TacValue value;
+    public @Nullable TacValue value;
 
-    public TacReturn(TacValue value) {
+    public TacReturn(@Nullable TacValue value) {
         this.value = value;
+    }
+
+    public TacReturn() {
+        this.value = null;
     }
 
     @Override
