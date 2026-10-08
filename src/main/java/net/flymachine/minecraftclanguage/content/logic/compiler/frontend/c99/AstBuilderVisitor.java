@@ -1219,4 +1219,15 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         AssignmentOperator op = AssignmentOperator.fromSymbol(operator);
         return new AssignmentOperatorNode(getSourceLocation(ctx), op);
     }
+
+    @Override
+    public ExpressionNode visitExpression(C99Parser.ExpressionContext ctx) {
+        if (ctx.Comma() != null) {
+            ExpressionNode lhs = (ExpressionNode) visit(ctx.expression());
+            ExpressionNode rhs = visitAssignmentExpression(ctx.assignmentExpression());
+            return new CommaExpressionNode(getSourceLocation(ctx.Comma()), lhs, rhs);
+        } else {
+            return visitAssignmentExpression(ctx.assignmentExpression());
+        }
+    }
 }
