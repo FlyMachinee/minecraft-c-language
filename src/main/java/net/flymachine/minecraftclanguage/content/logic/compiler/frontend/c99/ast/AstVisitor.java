@@ -60,4 +60,6 @@ public interface AstVisitor<T> {
     T visit(SizeOfNode node);
 
     T visit(SizeOfTypeNode node);
+
+    T visit(CommaExpressionNode node);
 }

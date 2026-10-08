@@ -1823,4 +1823,12 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
         node.expType = BasicType.UNSIGNED_LONG;
         return null;
     }
+
+    @Override
+    public Void visit(CommaExpressionNode node) {
+        node.lhs = checkExpressionAndDecay(node.lhs);
+        node.rhs = checkExpressionAndDecay(node.rhs);
+        node.expType = node.rhs.expType;
+        return null;
+    }
 }

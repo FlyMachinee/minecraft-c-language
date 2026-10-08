@@ -177,8 +177,9 @@ assignmentOperator
     ;
 
 // ISO 6.5.17, Comma Operator
-expression:
-    assignmentExpression
+expression
+    : assignmentExpression
+    | expression Comma assignmentExpression
     ;
 
 // ISO 6.6, Constant Expressions

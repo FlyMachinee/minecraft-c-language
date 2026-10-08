@@ -512,4 +512,11 @@ public final class IdentifierResolutionPass implements AstVisitor<Void> {
         visitTypeNode(node.type);
         return null;
     }
+
+    @Override
+    public Void visit(CommaExpressionNode node) {
+        node.lhs.accept(this);
+        node.rhs.accept(this);
+        return null;
+    }
 }
