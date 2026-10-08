@@ -100,6 +100,21 @@ public final class LValuePathEvaluator implements ExpressionVisitor<Optional<LVa
     }
 
     @Override
+    public Optional<LValuePath> visit(SizeOfNode sizeof) {
+        return Optional.empty();
+    }
+
+    @Override
+    public Optional<LValuePath> visit(SizeOfTypeNode sizeofType) {
+        return Optional.empty();
+    }
+
+    @Override
+    public Optional<LValuePath> visit(CommaExpressionNode commaExp) {
+        return Optional.empty();
+    }
+
+    @Override
     public Optional<LValuePath> visit(ConstantNode constant) {
         return Optional.empty();
     }

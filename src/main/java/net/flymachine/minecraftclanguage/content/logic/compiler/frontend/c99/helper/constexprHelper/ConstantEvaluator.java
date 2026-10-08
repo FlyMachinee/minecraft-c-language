@@ -2,10 +2,7 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.he
 
 import com.mojang.datafixers.util.Either;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.BinaryOperator;
-import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.Constant;
-import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.ConstantDouble;
-import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.ConstantInt;
-import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.ConstantSymbolPointer;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.*;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.PointerType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.SymbolTable;
@@ -334,5 +331,24 @@ public final class ConstantEvaluator implements ConstantEvalVisitor {
     @Override
     public Either<Constant, SourceLocation> visit(StringLiteralNode node, ConstantCategory category) {
         return Either.right(node.wholeLoc);
+    }
+
+    @Override
+    public Either<Constant, SourceLocation> visit(SizeOfNode node, ConstantCategory category) {
+        if (category == ConstantCategory.ADDRESS) {
+            return Either.right(node.wholeLoc);
+        }
+        return node.expType.isError() ?
+            Either.right(node.wholeLoc) :
+            Either.left(new ConstantUnsignedLong(node.expType.sizeof()));
+    }
+
+    @Override
+    public Either<Constant, SourceLocation> visit(SizeOfTypeNode node, ConstantCategory category) {
+        if (category == ConstantCategory.ADDRESS) {
+            return Either.right(node.wholeLoc);
+        }
+        Type t = node.type.getType();
+        return t.isError() ? Either.right(node.wholeLoc) : Either.left(new ConstantUnsignedLong(t.sizeof()));
     }
 }

@@ -29,4 +29,10 @@ public interface ExpressionVisitor<T> {
     T visit(SubscriptNode subscript);
 
     T visit(StringLiteralNode string);
+
+    T visit(SizeOfNode sizeof);
+
+    T visit(SizeOfTypeNode sizeofType);
+
+    T visit(CommaExpressionNode commaExp);
 }
