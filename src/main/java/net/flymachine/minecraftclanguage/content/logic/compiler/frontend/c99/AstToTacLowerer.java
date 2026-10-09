@@ -7,10 +7,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.Compariso
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.UnaryOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.*;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.StringInit;
-import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.ArrayType;
-import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.BasicType;
-import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.PointerType;
-import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.*;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.util.UndefinedBehaviourUtil;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.ExpressionBoolVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.ExpressionVisitor;
@@ -148,15 +145,22 @@ public final class AstToTacLowerer implements
         }
 
         // 初始化聚合类型
-        // 特殊情况检查，字符串字面量初始化数组
-        // 由先前的类型检查保证
         if (init instanceof SingleInitializerNode sin) {
-            ArrayType at = (ArrayType) t;
-            StringLiteralNode str = (StringLiteralNode) sin.exp;
-            byte[] data = new byte[(int) at.size().value()];
-            System.arraycopy(str.literal, 0, data, 0, Math.min(data.length, str.literal.length));
-            emitTac(new TacCopyByteArrayToOffset(data, target, offset));
-            return;
+            if (t instanceof ArrayType at) {
+                // 字符串字面量初始化数组
+                StringLiteralNode str = (StringLiteralNode) sin.exp;
+                byte[] data = new byte[(int) at.size().value()];
+                System.arraycopy(str.literal, 0, data, 0, Math.min(data.length, str.literal.length));
+                emitTac(new TacCopyByteArrayToOffset(data, target, offset));
+                return;
+            } else if (t instanceof StructType) {
+                // 单结构体变量对结构体进行整体初始化
+                TacValue val = evalAndLvalueConvert(sin.exp);
+                emitTac(new TacCopyToOffset(val, target, offset));
+                return;
+            } else {
+                throw new IllegalStateException("Control should never reach here");
+            }
         }
 
         CompoundInitializerNode compoundInit = (CompoundInitializerNode) init;
@@ -165,6 +169,15 @@ public final class AstToTacLowerer implements
             for (DesignationInitializerNode designatedInit : compoundInit.inits) {
                 initializeBlockScopeObject(target, at.elementType(), designatedInit.initializer, offset);
                 offset += size;
+            }
+            return;
+        }
+        if (t instanceof StructType st) {
+            int index = 0;
+            for (DesignationInitializerNode designatedInit : compoundInit.inits) {
+                Field f = st.fields().get(index);
+                initializeBlockScopeObject(target, f.type, designatedInit.initializer, offset + f.offset);
+                ++index;
             }
             return;
         }
@@ -472,6 +485,9 @@ public final class AstToTacLowerer implements
     // 不可能是左值
     record PlainFunctionPointer(String name) implements ExpEvalResult { }
 
+    // 左值
+    record SubObject(String base, long offset) implements ExpEvalResult { }
+
     private ExpEvalResult eval(ExpressionNode exp) {
         return exp.accept(this);
     }
@@ -501,6 +517,11 @@ public final class AstToTacLowerer implements
             emitTacGetAddress(new TacVariable(funcPtr.name), funcPtrVal);
             return funcPtrVal;
         }
+        if (res instanceof SubObject subObj) {
+            TacVariable dst = makeTempVar(expType);
+            emitTac(new TacCopyFromOffset(subObj.base(), subObj.offset(), dst));
+            return dst;
+        }
         throw new IllegalStateException("control should never reach here");
     }
 
@@ -515,6 +536,11 @@ public final class AstToTacLowerer implements
         }
         if (res instanceof PointerValue ptrVal) {
             return ptrVal.addr();
+        }
+        if (res instanceof SubObject subObj) {
+            TacVariable dst = makeTempVar(expType);
+            emitTac(new TacCopyFromOffset(subObj.base(), subObj.offset(), dst));
+            return new TacAddressDescriptor(dst);
         }
         throw new IllegalStateException("control should never reach here");
     }
@@ -804,6 +830,10 @@ public final class AstToTacLowerer implements
             emitTacStore(res, derefPtr.addr());
             return new PlainOperand(res);
         }
+        if (dst instanceof SubObject subObj) {
+            emitTac(new TacCopyToOffset(res, subObj.base(), subObj.offset()));
+            return new PlainOperand(res);
+        }
         throw new IllegalStateException("Control should never reach here");
     }
 
@@ -1022,6 +1052,12 @@ public final class AstToTacLowerer implements
             // &*ptr => ptr
             return new PointerValue(expPtr.addr());
         }
+        if (exp instanceof SubObject subObj) {
+            // &obj + offset
+            TacVariable addr = makeTempVar(addrOf.expType);
+            emitTacGetAddress(new TacVariable(subObj.base()), addr);
+            return new PointerValue(new TacAddressDescriptor(addr, null, 0, subObj.offset()));
+        }
         throw new IllegalStateException("Control should never reach here");
     }
 
@@ -1085,6 +1121,45 @@ public final class AstToTacLowerer implements
     public ExpEvalResult visit(CommaExpressionNode commaExp) {
         evalAndLvalueConvert(commaExp.lhs);
         return new PlainOperand(evalAndLvalueConvert(commaExp.rhs));
+    }
+
+    @Override
+    public ExpEvalResult visit(MemberAccessNode memberAccess) {
+        // s.x
+        // 左侧为结构体对象
+        ExpEvalResult lhs = eval(memberAccess.base);
+        StructType structType = (StructType) memberAccess.base.expType;
+        String fieldName = memberAccess.member.name;
+        long offset = structType.getField(fieldName).orElseThrow().offset;
+
+        if (lhs instanceof PlainOperand obj) {
+            // 直接访问结构体对象
+            return new SubObject(((TacVariable) obj.object()).name, offset);
+        } else if (lhs instanceof SubObject subObj) {
+            // 访问结构体子对象
+            return new SubObject(subObj.base(), subObj.offset() + offset);
+        } else if (lhs instanceof DereferencedPointer deref) {
+            // 通过结构体指针访问对象
+            PointerType pt = new PointerType(memberAccess.base.expType);
+            TacAddressDescriptor addr = pointerAdd(deref.addr(), pt, new TacConstant(new ConstantLong(offset)), 1);
+            return new DereferencedPointer(addr);
+        } else {
+            throw new IllegalStateException("Control should never reach here");
+        }
+    }
+
+    @Override
+    public ExpEvalResult visit(PointerMemberAccessNode ptrMemberAccess) {
+        // s->x
+        // 左侧为指向结构体指针
+        TacAddressDescriptor addrDesc = evalAsAddressDescriptor(ptrMemberAccess.pointer);
+        StructType structType = (StructType) ((PointerType) ptrMemberAccess.pointer.expType).referencedType();
+        String fieldName = ptrMemberAccess.member.name;
+        long offset = structType.getField(fieldName).orElseThrow().offset;
+
+        PointerType pt = new PointerType(structType);
+        TacAddressDescriptor addr = pointerAdd(addrDesc, pt, new TacConstant(new ConstantLong(offset)), 1);
+        return new DereferencedPointer(addr);
     }
 
     @Override
@@ -1267,6 +1342,16 @@ public final class AstToTacLowerer implements
     @Override
     public BoolGenResult visit(CommaExpressionNode commaExp, String jumpTarget, boolean inverse) {
         return visitFallback(commaExp, jumpTarget, inverse);
+    }
+
+    @Override
+    public BoolGenResult visit(MemberAccessNode memberAccess, String jumpTarget, boolean inverse) {
+        return visitFallback(memberAccess, jumpTarget, inverse);
+    }
+
+    @Override
+    public BoolGenResult visit(PointerMemberAccessNode ptrMemberAccess, String jumpTarget, boolean inverse) {
+        return visitFallback(ptrMemberAccess, jumpTarget, inverse);
     }
 
     private void emitTacNeg(TacValue src, TacValue dst) {

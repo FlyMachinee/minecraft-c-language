@@ -48,4 +48,6 @@ public interface TacVisitor<T> {
     T visit(TacIndirectCall inst);
 
     T visit(TacCopyByteArrayToOffset inst);
+
+    T visit(TacCopyFromOffset inst);
 }
