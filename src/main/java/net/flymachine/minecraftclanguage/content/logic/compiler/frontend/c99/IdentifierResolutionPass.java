@@ -58,11 +58,9 @@ public final class IdentifierResolutionPass implements AstVisitor<Void> {
 
     @Override
     public Void visit(ProgramNode node) {
-        enterScope();
         for (ExternalDeclarationNode externalDeclaration : node.extDecls) {
             externalDeclaration.accept(this);
         }
-        exitScope();
         return null;
     }
 
