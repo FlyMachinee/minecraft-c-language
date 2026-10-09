@@ -8,6 +8,12 @@ public final class Field {
     public Field(String name, Type type) {
         this.name = name;
         this.type = type;
-        this.offset = 0;
+        this.offset = -1;
+    }
+
+    public Field(String name, Type type, long offset) {
+        this.name = name;
+        this.type = type;
+        this.offset = offset;
     }
 }

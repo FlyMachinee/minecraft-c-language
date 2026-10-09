@@ -16,6 +16,10 @@ import net.flymachine.minecraftclanguage.content.logic.errorHandle.DiagnosticRep
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 
 /**
@@ -42,12 +46,13 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
         return symbolTable;
     }
 
+    private final Map<String, SourceLocation> tagDefLocation = new HashMap<>();
+
     @Override
     public Void visit(ProgramNode node) {
         for (ExternalDeclarationNode externalDeclaration : node.extDecls) {
             externalDeclaration.accept(this);
         }
-        // 处理未知长度数组
         for (SymbolTable.Entry entry : symbolTable.getEntries()) {
             if (!(entry.attr instanceof SymbolTable.Entry.StaticAttr staticAttr)) {
                 continue;
@@ -55,9 +60,14 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
 
             if (staticAttr.defType instanceof SymbolTable.Entry.StaticAttr.Tentative && staticAttr.global) {
                 if (entry.type instanceof ArrayType arrayType && arrayType.size().isZero()) {
+                    // 处理未知长度数组
                     entry.type = arrayType.withSize(ConstantUnsignedLong.ONE);
                     String msg = "array '" + reporter.white(entry.id.name) + "' assumed to have one element";
                     reporter.warning(entry.id.wholeLoc, msg);
+                } else if (!entry.type.isComplete()) {
+                    // 处理其他不完整类型
+                    String msg = "storage size of '" + reporter.white(entry.id.wholeLoc) + "' isn't known";
+                    reporter.error(entry.id.wholeLoc, msg);
                 }
             }
         }
@@ -109,7 +119,7 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
         if (!(ft instanceof FunctionType funcType)) {
             // 函数定义的类型不是函数类型，先前已报错
             if (node.exp != null) {
-                checkExpression(node.exp);
+                node.exp = checkExpressionAndDecay(node.exp);
             }
             return null;
         }
@@ -120,7 +130,7 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
             if (node.exp != null) {
                 String msg = "'" + reporter.white("return") + "' with a value, in function returning void";
                 reporter.error(node.exp.wholeLoc, msg);
-                checkExpression(node.exp);
+                node.exp = checkExpressionAndDecay(node.exp);
             }
         } else {
             // 从有返回值的函数返回时，必须返回一个表达式
@@ -208,6 +218,15 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
             addrExp.expType = new PointerType(ft);
             return addrExp;
         }
+
+        if (exp.expType instanceof StructType st) {
+            if (!st.isComplete()) {
+                String msg = "invalid use of incomplete struct type '" + reporter.white(st.typename()) + "'";
+                reporter.error(exp.wholeLoc, msg);
+                exp.expType = ErrorType.INSTANCE;
+            }
+        }
+
         return exp;
     }
 
@@ -604,6 +623,10 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
             }
         }
 
+        if (t instanceof StructTypeNode st) {
+            checkStructType(st);
+        }
+
         // 检查自身类型是否完整
         if (requireCompleteItself && !t.getType().isComplete()) {
             // 不完整类型
@@ -621,6 +644,64 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
         }
     }
 
+    private void checkStructType(StructTypeNode t) {
+        // 检查是否有定义体
+        if (t.memberDeclarations != null) {
+            // 如果先前有定义，则先前将 populate，从而使类型完整
+            boolean isDefined = t.getType().isComplete();
+            if (isDefined) {
+                assert t.tag != null; // 先前有定义，从而不可能是匿名结构体
+                String msg = "redefinition of '" + reporter.white(t.tag.name) + "'";
+                reporter.error(t.tag.wholeLoc, msg);
+                reporter.note(tagDefLocation.get(t.tag.name), "previous definition is here");
+            }
+
+            List<Field> fields = new ArrayList<>();
+            Map<String, SourceLocation> fieldLoc = new HashMap<>();
+            for (MemberDeclarationNode memberDecl : t.memberDeclarations) {
+                for (MemberDeclaratorNode decl : memberDecl.memberDeclarators) {
+                    TypeNode fieldType = decl.finalType;
+                    IdentifierNode fieldName = decl.id;
+
+                    // 检查成员是否重复
+                    boolean duplicated = fieldLoc.containsKey(fieldName.name);
+                    if (duplicated) {
+                        String msg = "duplicate member '" + reporter.white(fieldName.name) + "'";
+                        reporter.error(fieldName.wholeLoc, msg);
+                        msg = "previous member '" + reporter.white(fieldName.name) + "' declared here";
+                        reporter.note(fieldLoc.get(fieldName.name), msg);
+                    } else {
+                        fieldLoc.put(fieldName.name, fieldName.wholeLoc);
+                    }
+
+                    // 检查成员类型
+                    checkType(fieldType, fieldName, false);
+                    // 不能是函数类型
+                    if (fieldType instanceof FunctionTypeNode) {
+                        String msg = "field '" + reporter.white(fieldName.name) + "' declared as a function";
+                        reporter.error(fieldName.wholeLoc, msg);
+                    } else if (!fieldType.getType().isComplete()) {
+                        String msg = "field '" + reporter.white(fieldName.name) + "' has incomplete type '" +
+                                     reporter.white(fieldType.typename()) + "'";
+                        reporter.error(fieldName.wholeLoc, msg);
+                    } else if (!duplicated) {
+                        // 成员合法，添加到结构体中
+                        fields.add(new Field(fieldName.name, fieldType.getType()));
+                    }
+                }
+            }
+
+            // 进行 populate
+            if (!isDefined) {
+                t.getType().populate(fields);
+                if (t.tag != null) {
+                    // 非匿名结构体，添加至定义表中
+                    tagDefLocation.put(t.tag.name, t.tag.wholeLoc);
+                }
+            }
+        }
+    }
+
     private void checkType(TypeNode t, @Nullable IdentifierNode id, boolean requireCompleteItself) {
         if (t instanceof FunctionTypeNode ft) {
             checkFunctionType(ft, id, false);
@@ -632,6 +713,11 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
 
     @Override
     public Void visit(DeclarationNode node) {
+        if (node.initDeclarators.isEmpty()) {
+            checkType(node.baseType, null, false);
+            return null;
+        }
+
         for (InitDeclaratorNode initDecl : node.initDeclarators) {
             if (initDecl.finalType instanceof FunctionTypeNode funcType) {
                 // 函数声明
@@ -1074,7 +1160,7 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
     @Override
     public Void visit(ExpressionStatementNode node) {
         checkStatementLabel(node);
-        checkExpression(node.exp);
+        node.exp = checkExpressionAndDecay(node.exp);
         node.exp.expType = node.exp.expType.removeConst();
         return null;
     }
@@ -1096,6 +1182,11 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
     public boolean validConvertAsIfByAssignment(ExpressionNode rhs, Type lhsType) {
         // rhs 与 lhs 必须满足下列条件之一
         // lhs 与 rhs 拥有兼容的 struct 或 union 类型，或……
+        if (lhsType instanceof StructType lhsStructType) {
+            if (lhsStructType.isCompatible(rhs.expType)) {
+                return true;
+            }
+        }
         // rhs 必须可隐式转换成 lhs，这表示
         // lhs 与 rhs 均拥有算术类型
         if (lhsType.isArithmetic() && rhs.expType.isArithmetic()) {
@@ -1136,6 +1227,14 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
         if (exp instanceof StringLiteralNode) {
             return true;
         }
+        // 成员访问（点）运算符的结果，若其左参数是左值
+        if (exp instanceof MemberAccessNode memberAccess && isLvalueExpression(memberAccess.base)) {
+            return true;
+        }
+        // 通过指针访问成员（->）运算符的结果
+        if (exp instanceof PointerMemberAccessNode) {
+            return true;
+        }
         // 对指向对象指针运用间接使用（一元 *）运算符的结果
         if (exp instanceof DereferenceNode deref && deref.exp.expType instanceof PointerType pt
             && pt.referencedType().isObject()) {
@@ -1156,7 +1255,17 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
         if (exp.expType.isArray()) {
             return false;
         }
-        return !exp.expType.isConst() && isLvalueExpression(exp);
+        if (exp.expType.isConst()) {
+            return false;
+        }
+        if (!isLvalueExpression(exp)) {
+            return false;
+        }
+        // 而且若它是结构体/联合体，则递归地没有任何成员为 const 限定
+        if (exp.expType instanceof StructType st) {
+            return st.modifiable();
+        }
+        return true;
     }
 
     @Override
@@ -1324,6 +1433,13 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
             node.expType = commonType;
             return null;
         }
+        // 两个相同结构体或联合体类型的表达式
+        if (thenExpType instanceof StructType thenStruct) {
+            if (thenStruct.isCompatible(elseExpType)) {
+                node.expType = thenStruct;
+                return null;
+            }
+        }
         // 两个 void 类型的表达式
         if (thenExpType.isVoid() && elseExpType.isVoid()) {
             node.expType = VoidType.INSTANCE;
@@ -1442,9 +1558,11 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
                     }
                 }
             }
-            node.init.accept(this);
             if (node.init instanceof ForInitExpressionNode exp) {
+                exp.exp = checkExpressionAndDecay(exp.exp);
                 exp.exp.expType = exp.exp.expType.removeConst();
+            } else {
+                node.init.accept(this);
             }
         }
         if (node.cond != null) {
@@ -1457,7 +1575,7 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
             }
         }
         if (node.step != null) {
-            checkExpression(node.step);
+            node.step = checkExpressionAndDecay(node.step);
             node.step.expType = node.step.expType.removeConst();
         }
         node.body.accept(this);
@@ -1503,6 +1621,19 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
                 msg = "declared here";
                 reporter.note(entry.id.wholeLoc, msg);
             }
+            node.expType = ErrorType.INSTANCE;
+            // 检查参数
+            node.args = node.args.stream().map(this::checkExpressionAndDecay).toList();
+            return null;
+        }
+
+        // 检查返回类型
+        // 不能是除 void 外的不完整类型
+        Type retType = funcType.returnType();
+        if (!retType.isVoid() && !retType.isComplete()) {
+            String msg = "invalid function call which returns incomplete type '" +
+                         reporter.white(retType.typename()) + "'";
+            reporter.error(node.func.wholeLoc, msg);
             node.expType = ErrorType.INSTANCE;
             // 检查参数
             node.args = node.args.stream().map(this::checkExpressionAndDecay).toList();
@@ -1830,5 +1961,65 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
         node.rhs = checkExpressionAndDecay(node.rhs);
         node.expType = node.rhs.expType;
         return null;
+    }
+
+    @Override
+    public Void visit(MemberAccessNode node) {
+        node.base = checkExpressionAndDecay(node.base);
+        if (node.base.expType.isError()) {
+            node.expType = ErrorType.INSTANCE;
+            return null;
+        }
+
+        String memberName = node.member.name;
+
+        if (!(node.base.expType instanceof StructType st)) {
+            String msg = "request for member '" + reporter.white(memberName) +
+                         "' in something not a structure or union";
+            reporter.error(node.wholeLoc, msg);
+            node.expType = ErrorType.INSTANCE;
+            return null;
+        }
+
+        node.expType = getMemberType(st, memberName, node.wholeLoc);
+        return null;
+    }
+
+    @Override
+    public Void visit(PointerMemberAccessNode node) {
+        node.pointer = checkExpressionAndDecay(node.pointer);
+        if (node.pointer.expType.isError()) {
+            node.expType = ErrorType.INSTANCE;
+            return null;
+        }
+
+        String memberName = node.member.name;
+
+        if (!(node.pointer.expType instanceof PointerType pt && pt.referencedType() instanceof StructType st)) {
+            String msg = "request for member '" + reporter.white(memberName) +
+                         "' in something not a pointer to structure or union";
+            reporter.error(node.wholeLoc, msg);
+            node.expType = ErrorType.INSTANCE;
+            return null;
+        }
+
+        node.expType = getMemberType(st, memberName, node.wholeLoc);
+        return null;
+    }
+
+    private Type getMemberType(StructType st, String member, SourceLocation loc) {
+        if (!st.isComplete()) {
+            String msg = "invalid use of incomplete type '" + reporter.white(st.typename()) + "'";
+            reporter.error(loc, msg);
+            return ErrorType.INSTANCE;
+        }
+
+        if (!st.hasField(member)) {
+            String msg = "'" + reporter.white(st.typename()) + "' has no member named '" +
+                         reporter.white(member) + "'";
+            reporter.error(loc, msg);
+            return ErrorType.INSTANCE;
+        }
+        return st.getField(member).orElseThrow().type;
     }
 }

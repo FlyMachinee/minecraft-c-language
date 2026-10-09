@@ -47,6 +47,14 @@ public abstract class TypeNode extends AstNode {
             }
             return node;
         }
+        if (type instanceof StructType st) {
+            StructTypeNode node = new StructTypeNode(null, new IdentifierNode(null, st.tag()), null);
+            if (st.isConst()) {
+                node.constQualifier = new ConstQualifierNode(null);
+            }
+            node.resolve(st.info());
+            return node;
+        }
         throw new IllegalArgumentException("Unknown Type " + type);
     }
 

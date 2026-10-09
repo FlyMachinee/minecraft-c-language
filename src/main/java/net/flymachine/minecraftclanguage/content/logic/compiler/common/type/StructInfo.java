@@ -5,6 +5,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 public final class StructInfo {
     private final @Nullable String tag;
@@ -28,17 +29,29 @@ public final class StructInfo {
 
     public boolean isComplete() { return complete; }
 
-    public void populate(List<Field> fields, long size, long alignment) {
+    public void populate(List<Field> fields) {
         if (complete) {
             throw new IllegalStateException("struct is already complete");
         }
         this.fields = fields;
-        this.size = size;
-        this.alignment = alignment;
         for (Field field : fields) {
             fieldMap.put(field.name, field);
         }
         complete = true;
+
+        // 进行布局计算
+        long structSize = 0;
+        long structAlignment = 1;
+        for (Field field : fields) {
+            long fieldAlignment = field.type.alignof();
+            long fieldOffset = (structSize + fieldAlignment - 1) / fieldAlignment * fieldAlignment;
+            field.offset = fieldOffset;
+            structSize = fieldOffset + field.type.sizeof();
+            structAlignment = Math.max(structAlignment, fieldAlignment);
+        }
+        structSize = (structSize + structAlignment - 1) / structAlignment * structAlignment;
+        this.size = structSize;
+        this.alignment = structAlignment;
     }
 
     public List<Field> fields() {
@@ -48,11 +61,18 @@ public final class StructInfo {
         return fields;
     }
 
-    public Field getField(String fieldName) {
+    public boolean hasField(String fieldName) {
         if (!complete) {
             throw new IllegalStateException("struct is not complete yet");
         }
-        return fieldMap.get(fieldName);
+        return fieldMap.containsKey(fieldName);
+    }
+
+    public Optional<Field> getField(String fieldName) {
+        if (!complete) {
+            throw new IllegalStateException("struct is not complete yet");
+        }
+        return Optional.ofNullable(fieldMap.get(fieldName));
     }
 
     public long sizeof() {

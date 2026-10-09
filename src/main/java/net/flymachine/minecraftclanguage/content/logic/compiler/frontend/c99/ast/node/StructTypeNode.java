@@ -2,7 +2,6 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.as
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.StructInfo;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.StructType;
-import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 import org.jetbrains.annotations.Nullable;
@@ -35,7 +34,7 @@ public final class StructTypeNode extends TypeNode {
     }
 
     @Override
-    public Type getType() {
+    public StructType getType() {
         if (resolvedType == null) {
             throw new IllegalStateException("StructTypeNode is not resolved yet");
         }
