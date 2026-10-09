@@ -298,13 +298,35 @@ public final class InitializerHelper {
 
             // 处理初始化器
             if (initializer instanceof SingleInitializerNode sin) {
+                Type subtype = cursor.subtype();
+                sin.exp = typeChecker.checkExpressionAndDecay(sin.exp);
+
+                // 特例检查，若是聚合类型的初始化器，且类型兼容，则直接使用该聚合类型的初始化器来初始化
+                if (subtype.isAggregate() && !(sin.exp.expType instanceof ErrorType)) {
+                    sin.exp.expType = sin.exp.expType.removeConst();
+                    Type exprType = sin.exp.expType;
+
+                    boolean compatible;
+                    if (subtype.isStruct()) {
+                        // 结构体/联合体：类型必须兼容
+                        compatible = subtype.removeQualifiers().isCompatible(exprType.removeQualifiers());
+                    } else {
+                        compatible = false; // 数组不允许通过赋值来初始化
+                    }
+
+                    if (compatible) {
+                        checkOverwrite(cursor.fetch(full), sin, new MutableBoolean(false));
+                        cursor.store(full, sin);
+                        cursor.next();
+                        continue;
+                    }
+                }
+
                 // 普通初始化器
                 cursor.expand();
                 // 覆盖检查
                 checkOverwrite(cursor.fetch(full), sin, new MutableBoolean(false));
                 // 类型检查
-                Type subtype = cursor.subtype();
-                sin.exp = typeChecker.checkExpressionAndDecay(sin.exp);
                 if (!(sin.exp.expType instanceof ErrorType)) {
                     sin.exp.expType = sin.exp.expType.removeConst();
                     if (!typeChecker.validConvertAsIfByAssignment(sin.exp, subtype)) {
