@@ -1,10 +1,12 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.helper.constexprHelper;
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.BinaryOperator;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.ConstantPointer;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.ConstantSymbolPointer;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.PointerConstant;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.StringInit;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.ArrayType;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.StructType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.SymbolTable;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.ExpressionVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.*;
@@ -35,7 +37,21 @@ public final class LValuePathEvaluator implements ExpressionVisitor<Optional<LVa
         if (path instanceof LValuePath.Dereference deref) {
             return deref.addr();
         }
+        if (path instanceof LValuePath.Member member) {
+            PointerConstant baseAddr = pathToAddress(member.base());
+            return withOffset(baseAddr, member.member().offset).toPointer(member.member().type);
+        }
         throw new IllegalStateException("Unknown LValuePath type: " + path.getClass().getName());
+    }
+
+    private PointerConstant withOffset(PointerConstant base, long extra) {
+        if (base instanceof ConstantSymbolPointer sp) {
+            return new ConstantSymbolPointer(sp.symbol(), sp.offset() + extra, sp.referencedType());
+        }
+        if (base instanceof ConstantPointer cp) {
+            return new ConstantPointer(cp.value() + extra, cp.referencedType());
+        }
+        throw new IllegalStateException("Unknown PointerConstant: " + base.getClass().getName());
     }
 
     @Override
@@ -112,6 +128,45 @@ public final class LValuePathEvaluator implements ExpressionVisitor<Optional<LVa
     @Override
     public Optional<LValuePath> visit(CommaExpressionNode commaExp) {
         return Optional.empty();
+    }
+
+    @Override
+    public Optional<LValuePath> visit(MemberAccessNode memberAccess) {
+        Optional<LValuePath> basePath = tryEvalPath(memberAccess.base);
+        if (basePath.isEmpty()) {
+            return Optional.empty();
+        }
+
+        if (!(memberAccess.base.expType instanceof StructType st)) {
+            return Optional.empty();
+        }
+
+        String memberName = memberAccess.member.name;
+        if (!st.hasField(memberName)) {
+            return Optional.empty();
+        }
+        return Optional.of(new LValuePath.Member(basePath.get(), st.getField(memberName).orElseThrow()));
+    }
+
+    @Override
+    public Optional<LValuePath> visit(PointerMemberAccessNode ptrMemberAccess) {
+        var addrRes = constantEvaluator.tryEvalAddressConstant(ptrMemberAccess.pointer);
+        if (addrRes.right().isPresent()) {
+            return Optional.empty();
+        }
+
+        PointerConstant addr = (PointerConstant) addrRes.orThrow();
+        if (!(addr.referencedType() instanceof StructType st)) {
+            return Optional.empty();
+        }
+
+        String memberName = ptrMemberAccess.member.name;
+        if (!st.hasField(memberName)) {
+            return Optional.empty();
+        }
+
+        return Optional.of(
+            new LValuePath.Member(new LValuePath.Dereference(addr), st.getField(memberName).orElseThrow()));
     }
 
     @Override
