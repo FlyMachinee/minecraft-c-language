@@ -485,7 +485,7 @@ public final class InitializerHelper {
             // char[6] <- "hello" = "hello\0"
             // char[8] <- "hello" = "hello\0" + [0]*2
 
-            result.add(new StringInit(str.literal, literalLength < arraySize));
+            result.add(new StringInit(truncatedLiteral, literalLength < arraySize));
 
             long nullBytes = arraySize - literalLength - 1;
             if (nullBytes > 0) {
