@@ -10,14 +10,16 @@ import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocatio
 
 import java.io.PrintStream;
 
-public final class DereferenceNode extends ExpressionNode {
-    public ExpressionNode exp;
-    public SourceLocation operatorLoc;
+public final class PointerMemberAccessNode extends ExpressionNode {
+    public ExpressionNode pointer;
+    public IdentifierNode member;
+    public SourceLocation arrowLocation;
 
-    public DereferenceNode(SourceLocation operatorLoc, ExpressionNode exp) {
-        super(SourceLocation.concat(operatorLoc, exp.getWholeLocation()));
-        this.operatorLoc = operatorLoc;
-        this.exp = exp;
+    public PointerMemberAccessNode(ExpressionNode pointer, SourceLocation arrowLocation, IdentifierNode member) {
+        super(SourceLocation.concat(pointer.wholeLoc, member.wholeLoc));
+        this.pointer = pointer;
+        this.arrowLocation = arrowLocation;
+        this.member = member;
     }
 
     @Override
@@ -48,11 +50,16 @@ public final class DereferenceNode extends ExpressionNode {
             indent(stream, indentLevel);
         }
 
-        stream.println("DereferenceNode(");
+        stream.println("PointerMemberAccessNode(");
 
         indent(stream, indentLevel + 1);
-        stream.print("exp=");
-        exp.dump(stream, indentLevel + 1, false);
+        stream.print("pointer=");
+        pointer.dump(stream, indentLevel + 1, false);
+        stream.println(',');
+
+        indent(stream, indentLevel + 1);
+        stream.print("member=");
+        member.dump(stream, indentLevel + 1, false);
         stream.println(',');
 
         dumpExpType(stream, indentLevel + 1);

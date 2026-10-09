@@ -97,6 +97,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
 
     private class TypeCombinationHelper {
         private Type t;
+        private TypeNode structOrUnion;
         private SourceLocation loc;
         private int nonLongCount = 0;
         private int longCount = 0;
@@ -113,6 +114,11 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         }
 
         void append(String typeSpecifierName, SourceLocation loc) {
+            if (structOrUnion != null) {
+                reporter.error(loc, "two or more data types in declaration specifiers");
+                return;
+            }
+
             if (t == null) {
                 this.loc = loc;
                 switch (typeSpecifierName) {
@@ -232,6 +238,48 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
                 }
             }
         }
+
+        void appendStructOrUnion(TypeNode structOrUnion) {
+            if (t != null || this.structOrUnion != null) {
+                reporter.error(loc, "two or more data types in declaration specifiers");
+                return;
+            }
+            this.loc = structOrUnion.wholeLoc;
+            this.structOrUnion = structOrUnion;
+        }
+
+        TypeNode toTypeNode() {
+            if (structOrUnion != null) {
+                return structOrUnion;
+            }
+            if (t == null) {
+                return null;
+            }
+            if (t instanceof BasicType bt) {
+                return new BasicTypeNode(loc, bt.primitive());
+            }
+            return new VoidTypeNode(loc);
+        }
+    }
+
+    private void processTypeSpecifier(C99Parser.TypeSpecifierContext typeSpecCtx, TypeCombinationHelper helper) {
+        SourceLocation specLoc = getSourceLocation(typeSpecCtx);
+        if (typeSpecCtx.structOrUnionSpecifier() != null) {
+            TypeNode structOrUnion = visitStructOrUnionSpecifier(typeSpecCtx.structOrUnionSpecifier());
+            helper.appendStructOrUnion(structOrUnion);
+        } else {
+            String typeSpecifierText = typeSpecCtx.getText();
+            helper.append(typeSpecifierText, specLoc);
+        }
+    }
+
+    private ConstQualifierNode accumulateConstQualifier(ConstQualifierNode current,
+        C99Parser.TypeQualifierContext qualifierCtx) {
+        SourceLocation loc = getSourceLocation(qualifierCtx);
+        if (current == null) {
+            return new ConstQualifierNode(loc);
+        }
+        return new ConstQualifierNode(SourceLocation.concat(current.wholeLoc, loc));
     }
 
     private TypeAndSpecifiers parseDeclarationSpecifiers(C99Parser.DeclarationSpecifiersContext ctx) {
@@ -241,6 +289,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         // declarationSpecifier // added
         //     : storageClassSpecifier
         //     | typeSpecifier
+        //     | typeQualifier
         //     ;
         boolean reportedMultipleStorageClasses = false;
         StorageClassSpecifierNode storageClassNode = null;
@@ -251,8 +300,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
 
         for (var specifierCtx : ctx.declarationSpecifier()) {
             if (specifierCtx.typeSpecifier() != null) {
-                String typeSpecifierText = specifierCtx.typeSpecifier().getText();
-                helper.append(typeSpecifierText, getSourceLocation(specifierCtx.typeSpecifier()));
+                processTypeSpecifier(specifierCtx.typeSpecifier(), helper);
             } else if (specifierCtx.storageClassSpecifier() != null) {
                 if (storageClassNode == null) {
                     StorageClassSpecifier storageClass =
@@ -265,26 +313,58 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
                     reportedMultipleStorageClasses = true;
                 }
             } else if (specifierCtx.typeQualifier() != null) {
-                if (constQualifierNode == null) {
-
-                    constQualifierNode = new ConstQualifierNode(getSourceLocation(specifierCtx.typeQualifier()));
-                } else {
-                    constQualifierNode = new ConstQualifierNode(
-                        SourceLocation.concat(constQualifierNode.wholeLoc,
-                                              getSourceLocation(specifierCtx.typeQualifier())));
-                }
+                constQualifierNode = accumulateConstQualifier(constQualifierNode, specifierCtx.typeQualifier());
             }
         }
 
-        TypeNode finalTypeNode;
-        if (helper.t == null) {
-            finalTypeNode = null;
-        } else if (helper.t instanceof BasicType bt) {
-            finalTypeNode = new BasicTypeNode(helper.loc, bt.primitive());
-        } else {
-            finalTypeNode = new VoidTypeNode(helper.loc);
-        }
+        TypeNode finalTypeNode = helper.toTypeNode();
         return new TypeAndSpecifiers(finalTypeNode, storageClassNode, constQualifierNode);
+    }
+
+    @Override
+    public TypeNode visitStructOrUnionSpecifier(C99Parser.StructOrUnionSpecifierContext ctx) {
+        IdentifierNode tag = null;
+        if (ctx.Identifier() != null) {
+            tag = new IdentifierNode(getSourceLocation(ctx.Identifier()), ctx.Identifier().getText());
+        }
+        List<MemberDeclarationNode> memberDeclarations = null;
+        if (!ctx.structDeclaration().isEmpty()) {
+            memberDeclarations = new ArrayList<>();
+            for (C99Parser.StructDeclarationContext structDeclCtx : ctx.structDeclaration()) {
+                memberDeclarations.add(visitStructDeclaration(structDeclCtx));
+            }
+        }
+        return new StructTypeNode(getSourceLocation(ctx), tag, memberDeclarations);
+    }
+
+    @Override
+    public MemberDeclarationNode visitStructDeclaration(C99Parser.StructDeclarationContext ctx) {
+        // -> specifierQualifierList structDeclarator (Comma structDeclarator)* Semicolon
+        TypeAndSpecifiers spec = parseSpecifierQualifierList(ctx.specifierQualifierList());
+        TypeNode baseType = spec.t;
+
+        boolean isBaseTypeError = baseType == null;
+        if (isBaseTypeError) {
+            // 没有类型，默认 int
+            baseType = new BasicTypeNode(null, BasicType.Primitive.INT);
+        }
+        // 应用 const （struct S { const int a; }）
+        baseType.constQualifier = spec.constQualifier;
+
+        List<MemberDeclaratorNode> structDeclarators = new ArrayList<>();
+        for (C99Parser.StructDeclaratorContext declaratorCtx : ctx.structDeclarator()) {
+            // structDeclarator
+            // -> declarator
+            DeclarationLikeResult res = parseFromDeclarator(baseType, declaratorCtx.declarator());
+
+            if (isBaseTypeError) {
+                String msg = "type defaults to '" + reporter.white("int") + "' in declaration of '" +
+                             reporter.white(res.id.name) + "'";
+                reporter.error(res.id.wholeLoc, msg);
+            }
+            structDeclarators.add(new MemberDeclaratorNode(getSourceLocation(declaratorCtx), res.t, res.id));
+        }
+        return new MemberDeclarationNode(getSourceLocation(ctx), baseType, structDeclarators);
     }
 
     private PointerTypeNode parsePointer(TypeNode baseType, C99Parser.PointerContext ctx) {
@@ -565,7 +645,18 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
     @Override
     public AstNode visitDesignator(C99Parser.DesignatorContext ctx) {
         // -> LeftBracket constantExpression RightBracket
-        return new ArrayDesignatorNode(getSourceLocation(ctx), (ExpressionNode) visit(ctx.constantExpression()));
+        // -> Dot Identifier
+        SourceLocation loc = getSourceLocation(ctx);
+        if (ctx.LeftBracket() != null) {
+            ExpressionNode index = (ExpressionNode) visit(ctx.constantExpression());
+            return new ArrayDesignatorNode(loc, index);
+        } else if (ctx.Dot() != null) {
+            String fieldName = ctx.Identifier().getText();
+            SourceLocation fieldLoc = getSourceLocation(ctx.Identifier());
+            return new MemberDesignatorNode(loc, new IdentifierNode(fieldLoc, fieldName));
+        } else {
+            throw new IllegalStateException("Unknown designator");
+        }
     }
 
     @Override
@@ -894,6 +985,21 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
             return new IncrementDecrementNode(getSourceLocation(ctx.MinusMinus()), false, false, operand);
         }
 
+        if (ctx.Dot() != null) {
+            ExpressionNode base = visitPostfixExpression(ctx.postfixExpression());
+            String fieldName = ctx.Identifier().getText();
+            SourceLocation fieldLoc = getSourceLocation(ctx.Identifier());
+            return new MemberAccessNode(base, getSourceLocation(ctx.Dot()), new IdentifierNode(fieldLoc, fieldName));
+        }
+
+        if (ctx.Arrow() != null) {
+            ExpressionNode ptr = visitPostfixExpression(ctx.postfixExpression());
+            String fieldName = ctx.Identifier().getText();
+            SourceLocation fieldLoc = getSourceLocation(ctx.Identifier());
+            return new PointerMemberAccessNode(
+                ptr, getSourceLocation(ctx.Arrow()), new IdentifierNode(fieldLoc, fieldName));
+        }
+
         if (ctx.LeftParen() != null) {
             ExpressionNode function = (ExpressionNode) visit(ctx.postfixExpression());
             List<ExpressionNode> arguments = new ArrayList<>();
@@ -960,43 +1066,38 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
 
     @Override
     public TypeNode visitTypeName(C99Parser.TypeNameContext ctx) {
-        TypeCombinationHelper helper = new TypeCombinationHelper();
-        ConstQualifierNode constQualifierNode = null;
+        TypeAndSpecifiers typeAndSpecifiers = parseSpecifierQualifierList(ctx.specifierQualifierList());
+        TypeNode finalTypeNode = typeAndSpecifiers.t();
+        ConstQualifierNode constQualifierNode = typeAndSpecifiers.constQualifier();
 
-        for (var specifierCtx : ctx.specifierQualifierList().specifierQualifier()) {
-            if (specifierCtx.typeSpecifier() != null) {
-                String typeSpecifierText = specifierCtx.typeSpecifier().getText();
-                helper.append(typeSpecifierText, getSourceLocation(specifierCtx.typeSpecifier()));
-            } else if (specifierCtx.typeQualifier() != null) {
-                if (constQualifierNode == null) {
-
-                    constQualifierNode = new ConstQualifierNode(getSourceLocation(specifierCtx.typeQualifier()));
-                } else {
-                    constQualifierNode = new ConstQualifierNode(
-                        SourceLocation.concat(constQualifierNode.wholeLoc,
-                                              getSourceLocation(specifierCtx.typeQualifier())));
-                }
-            }
-        }
-
-        TypeNode finalTypeNode;
-        SourceLocation finalLoc =
-            constQualifierNode == null ? helper.loc :
-                SourceLocation.concat(helper.loc, constQualifierNode.wholeLoc);
-        if (helper.t == null) {
+        SourceLocation location = getSourceLocation(ctx);
+        if (finalTypeNode == null) {
             String msg = "type defaults to '" + reporter.white("int") + "' in typename";
-            reporter.error(finalLoc, msg);
-            finalTypeNode = new BasicTypeNode(finalLoc, BasicType.Primitive.INT);
-        } else if (helper.t instanceof BasicType bt) {
-            finalTypeNode = new BasicTypeNode(helper.loc, bt.primitive());
-        } else {
-            finalTypeNode = new VoidTypeNode(helper.loc);
+            reporter.error(location, msg);
+            finalTypeNode = new BasicTypeNode(null, BasicType.Primitive.INT);
         }
         finalTypeNode.constQualifier = constQualifierNode;
         if (ctx.abstractDeclarator() != null) {
             finalTypeNode = parseFromAbstractDeclarator(finalTypeNode, ctx.abstractDeclarator());
         }
         return finalTypeNode;
+    }
+
+    private TypeAndSpecifiers parseSpecifierQualifierList(C99Parser.SpecifierQualifierListContext ctx) {
+        TypeCombinationHelper helper = new TypeCombinationHelper();
+        ConstQualifierNode constQualifierNode = null;
+
+        for (var specifierCtx : ctx.specifierQualifier()) {
+            if (specifierCtx.typeSpecifier() != null) {
+                processTypeSpecifier(specifierCtx.typeSpecifier(), helper);
+            } else if (specifierCtx.typeQualifier() != null) {
+                constQualifierNode = accumulateConstQualifier(
+                    constQualifierNode, specifierCtx.typeQualifier());
+            }
+        }
+
+        TypeNode finalTypeNode = helper.toTypeNode();
+        return new TypeAndSpecifiers(finalTypeNode, null, constQualifierNode);
     }
 
     @Override

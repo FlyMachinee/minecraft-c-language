@@ -4,6 +4,12 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.hig
 
 public abstract class Type {
 
+    private static int tagIdCounter = 0;
+
+    public static int nextTagId() {
+        return tagIdCounter++;
+    }
+
     abstract TypeKind kind();
 
     public final boolean isBasic() {
@@ -24,6 +30,10 @@ public abstract class Type {
 
     public final boolean isArray() {
         return kind() == TypeKind.ARRAY;
+    }
+
+    public final boolean isStruct() {
+        return kind() == TypeKind.STRUCT;
     }
 
     public final boolean isError() {
@@ -110,7 +120,7 @@ public abstract class Type {
      * 聚合类型：数组类型、结构体类型
      */
     public final boolean isAggregate() {
-        return isArray();
+        return isArray() || isStruct();
     }
 
 

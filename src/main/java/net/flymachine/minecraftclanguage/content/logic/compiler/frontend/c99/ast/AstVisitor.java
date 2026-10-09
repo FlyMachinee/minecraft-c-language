@@ -62,4 +62,8 @@ public interface AstVisitor<T> {
     T visit(SizeOfTypeNode node);
 
     T visit(CommaExpressionNode node);
+
+    T visit(MemberAccessNode node);
+
+    T visit(PointerMemberAccessNode node);
 }

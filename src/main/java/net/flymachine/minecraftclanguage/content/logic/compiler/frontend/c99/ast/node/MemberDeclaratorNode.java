@@ -2,28 +2,17 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.as
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
-import org.jetbrains.annotations.Nullable;
 
 import java.io.PrintStream;
 
-public final class InitDeclaratorNode extends AstNode {
+public final class MemberDeclaratorNode extends AstNode {
     public final TypeNode finalType;
     public IdentifierNode id;
-    public @Nullable InitializerNode init;
 
-    public InitDeclaratorNode(
-        SourceLocation wholeLocation, TypeNode finalType, IdentifierNode id, @Nullable InitializerNode init) {
+    public MemberDeclaratorNode(SourceLocation wholeLocation, TypeNode finalType, IdentifierNode id) {
         super(wholeLocation);
         this.finalType = finalType;
         this.id = id;
-        this.init = init;
-    }
-
-    public InitDeclaratorNode(SourceLocation wholeLocation, TypeNode finalType, IdentifierNode id) {
-        super(wholeLocation);
-        this.finalType = finalType;
-        this.id = id;
-        this.init = null;
     }
 
     @Override

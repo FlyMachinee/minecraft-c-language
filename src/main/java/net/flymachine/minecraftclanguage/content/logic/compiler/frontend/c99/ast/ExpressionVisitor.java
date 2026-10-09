@@ -35,4 +35,8 @@ public interface ExpressionVisitor<T> {
     T visit(SizeOfTypeNode sizeofType);
 
     T visit(CommaExpressionNode commaExp);
+
+    T visit(MemberAccessNode memberAccess);
+
+    T visit(PointerMemberAccessNode ptrMemberAccess);
 }

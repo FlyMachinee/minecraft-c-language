@@ -8,8 +8,6 @@ import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocatio
 public interface ConstantEvalVisitor {
     Either<Constant, SourceLocation> visit(ConstantNode node, ConstantCategory category);
 
-    Either<Constant, SourceLocation> visit(VariableNode node, ConstantCategory category);
-
     Either<Constant, SourceLocation> visit(UnaryExpressionNode node, ConstantCategory category);
 
     Either<Constant, SourceLocation> visit(BinaryExpressionNode node, ConstantCategory category);
@@ -19,12 +17,6 @@ public interface ConstantEvalVisitor {
     Either<Constant, SourceLocation> visit(ConditionalExpressionNode node, ConstantCategory category);
 
     Either<Constant, SourceLocation> visit(AddressOfNode node, ConstantCategory category);
-
-    Either<Constant, SourceLocation> visit(DereferenceNode node, ConstantCategory category);
-
-    Either<Constant, SourceLocation> visit(SubscriptNode node, ConstantCategory category);
-
-    Either<Constant, SourceLocation> visit(StringLiteralNode node, ConstantCategory category);
 
     Either<Constant, SourceLocation> visit(SizeOfNode node, ConstantCategory category);
 

@@ -10,14 +10,16 @@ import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocatio
 
 import java.io.PrintStream;
 
-public final class DereferenceNode extends ExpressionNode {
-    public ExpressionNode exp;
-    public SourceLocation operatorLoc;
+public final class MemberAccessNode extends ExpressionNode {
+    public ExpressionNode base;
+    public IdentifierNode member;
+    public SourceLocation dotLocation;
 
-    public DereferenceNode(SourceLocation operatorLoc, ExpressionNode exp) {
-        super(SourceLocation.concat(operatorLoc, exp.getWholeLocation()));
-        this.operatorLoc = operatorLoc;
-        this.exp = exp;
+    public MemberAccessNode(ExpressionNode base, SourceLocation dotLocation, IdentifierNode member) {
+        super(SourceLocation.concat(base.wholeLoc, member.wholeLoc));
+        this.base = base;
+        this.dotLocation = dotLocation;
+        this.member = member;
     }
 
     @Override
@@ -32,8 +34,8 @@ public final class DereferenceNode extends ExpressionNode {
     }
 
     @Override
-    public Either<Constant, SourceLocation> accept(ConstantEvalVisitor visitor,
-        ConstantEvalVisitor.ConstantCategory category) {
+    public Either<Constant, SourceLocation> accept(
+        ConstantEvalVisitor visitor, ConstantEvalVisitor.ConstantCategory category) {
         return Either.right(wholeLoc);
     }
 
@@ -48,11 +50,16 @@ public final class DereferenceNode extends ExpressionNode {
             indent(stream, indentLevel);
         }
 
-        stream.println("DereferenceNode(");
+        stream.println("MemberAccessNode(");
 
         indent(stream, indentLevel + 1);
-        stream.print("exp=");
-        exp.dump(stream, indentLevel + 1, false);
+        stream.print("base=");
+        base.dump(stream, indentLevel + 1, false);
+        stream.println(',');
+
+        indent(stream, indentLevel + 1);
+        stream.print("member=");
+        member.dump(stream, indentLevel + 1, false);
         stream.println(',');
 
         dumpExpType(stream, indentLevel + 1);

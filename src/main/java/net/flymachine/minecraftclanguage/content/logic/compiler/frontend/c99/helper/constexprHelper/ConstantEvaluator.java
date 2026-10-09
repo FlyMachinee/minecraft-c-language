@@ -90,11 +90,6 @@ public final class ConstantEvaluator implements ConstantEvalVisitor {
         } ? Either.left(node.value) : Either.right(node.wholeLoc);
     }
 
-    @Override
-    public Either<Constant, SourceLocation> visit(VariableNode node, ConstantCategory category) {
-        return Either.right(node.wholeLoc);
-    }
-
     private boolean typeAllowed(ConstantCategory category, Type type) {
         return switch (category) {
             case INTEGER -> type.isInteger();
@@ -316,21 +311,6 @@ public final class ConstantEvaluator implements ConstantEvalVisitor {
                        lValuePath -> Either.left(
                            lValuePathEvaluator.pathToAddress(lValuePath).toPointer(pt.referencedType())))
                    .orElseGet(() -> Either.right(node.exp.wholeLoc));
-    }
-
-    @Override
-    public Either<Constant, SourceLocation> visit(DereferenceNode node, ConstantCategory category) {
-        return Either.right(node.wholeLoc);
-    }
-
-    @Override
-    public Either<Constant, SourceLocation> visit(SubscriptNode node, ConstantCategory category) {
-        return Either.right(node.wholeLoc);
-    }
-
-    @Override
-    public Either<Constant, SourceLocation> visit(StringLiteralNode node, ConstantCategory category) {
-        return Either.right(node.wholeLoc);
     }
 
     @Override

@@ -40,7 +40,7 @@ public final class SubscriptNode extends ExpressionNode {
     @Override
     public Either<Constant, SourceLocation> accept(ConstantEvalVisitor visitor,
         ConstantEvalVisitor.ConstantCategory category) {
-        return visitor.visit(this, category);
+        return Either.right(wholeLoc);
     }
 
     @Override

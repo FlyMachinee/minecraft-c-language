@@ -51,6 +51,10 @@ public interface ExpressionBoolVisitor {
 
     BoolGenResult visit(CommaExpressionNode commaExp, String jumpTarget, boolean inverse);
 
+    BoolGenResult visit(MemberAccessNode memberAccess, String jumpTarget, boolean inverse);
+
+    BoolGenResult visit(PointerMemberAccessNode ptrMemberAccess, String jumpTarget, boolean inverse);
+
     /**
      * 作为该 visitor 的返回值
      */
