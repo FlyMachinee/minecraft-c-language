@@ -961,14 +961,8 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
             type = typeNode.getType();
 
             if (type.isComplete()) {
-                InitializerNode fullInit = initializerHelper.normalize(type, initDecl.init);
-                if (fullInit != null) {
-                    initDecl.init = fullInit;
-                    defType = new SymbolTable.Entry.StaticAttr.Defined(initializerHelper.toStaticInit(type, fullInit));
-                } else {
-                    // 初始化器错误，给一个 dummy 类型以继续后续检查
-                    defType = SymbolTable.Entry.StaticAttr.NoDefinition.INSTANCE;
-                }
+                initDecl.init = initializerHelper.normalize(type, initDecl.init);
+                defType = new SymbolTable.Entry.StaticAttr.Defined(initializerHelper.toStaticInit(type, initDecl.init));
             } else {
                 // 类型不完整，给一个 dummy 类型以继续后续检查
                 defType = SymbolTable.Entry.StaticAttr.NoDefinition.INSTANCE;
@@ -1081,10 +1075,7 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
 
             // 初始化器处理
             if (type.isComplete()) {
-                InitializerNode newInit = initializerHelper.normalize(type, initDecl.init);
-                if (newInit != null) {
-                    initDecl.init = newInit;
-                }
+                initDecl.init = initializerHelper.normalize(type, initDecl.init);
             } else {
                 initDecl.init.accept(this);
             }
@@ -1133,11 +1124,9 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
             // 拥有静态及线程局域存储期的对象被空初始化
             initialValue = new SymbolTable.Entry.StaticAttr.Defined(InitializerHelper.zeroStaticInit(type));
         } else if (type.isComplete()) {
-            InitializerNode fullInit = initializerHelper.normalize(type, initDecl.init);
-            if (fullInit != null) {
-                initDecl.init = fullInit;
-                initialValue = new SymbolTable.Entry.StaticAttr.Defined(initializerHelper.toStaticInit(type, fullInit));
-            }
+            initDecl.init = initializerHelper.normalize(type, initDecl.init);
+            initialValue = new SymbolTable.Entry.StaticAttr.Defined(
+                initializerHelper.toStaticInit(type, initDecl.init));
         }
 
         // static 块作用域变量为 No Linkage，不可能重复定义（在 Identifier Resolution 中已检查）
@@ -1183,7 +1172,7 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
         // rhs 与 lhs 必须满足下列条件之一
         // lhs 与 rhs 拥有兼容的 struct 或 union 类型，或……
         if (lhsType instanceof StructType lhsStructType) {
-            if (lhsStructType.isCompatible(rhs.expType)) {
+            if (lhsStructType.removeQualifiers().isCompatible(rhs.expType.removeQualifiers())) {
                 return true;
             }
         }

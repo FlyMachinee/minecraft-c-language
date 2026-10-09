@@ -12,6 +12,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.hel
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.DiagnosticReporter;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 import org.apache.commons.lang3.mutable.MutableBoolean;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -45,7 +46,7 @@ public final class InitializerHelper {
      * @param init       要规范的初始化器
      * @return 规范后的初始化器
      */
-    public InitializerNode normalize(Type typeToInit, InitializerNode init) {
+    public @NotNull InitializerNode normalize(Type typeToInit, InitializerNode init) {
         // 字符串字面量初始化特例
         if (typeToInit instanceof ArrayType at) {
             StringLiteralNode str = extractStringLiteral(init);
@@ -61,32 +62,37 @@ public final class InitializerHelper {
         }
 
         SingleInitializerNode sin = (SingleInitializerNode) init;
+        sin.exp = typeChecker.checkExpressionAndDecay(sin.exp);
         if (typeToInit.isAggregate()) {
             // 聚合类型初始化
-            String msg = "invalid initializer";
-            reporter.error(init.getWholeLocation(), msg);
-            return null;
-        } else {
-            // 标量初始化
-            // 标量的初始化式必须是单个表达式，可选地以花括号环绕
-            sin.exp = typeChecker.checkExpressionAndDecay(sin.exp);
-            if (!sin.exp.expType.isError()) {
-                sin.exp.expType = sin.exp.expType.removeConst();
-
-                if (!typeChecker.validConvertAsIfByAssignment(sin.exp, typeToInit)) {
-                    String msg = "incompatible types when initializing type '" +
-                                 reporter.white(typeToInit.typename()) +
-                                 "' using type '" + reporter.white(sin.exp.expType.typename()) + "'";
-                    reporter.error(sin.exp.wholeLoc, msg);
-                } else {
-                    sin.exp = typeChecker.convertTo(sin.exp, typeToInit);
+            // 对于结构体，可使用对应类型的结构体来初始化
+            if (!typeToInit.isStruct()) {
+                if (!sin.exp.expType.isError()) { // 避免级联报错
+                    String msg = "invalid initializer";
+                    reporter.error(init.getWholeLocation(), msg);
                 }
+                return zeroInitializer(typeToInit);
             }
-            return sin;
         }
+        // 标量初始化
+        if (!sin.exp.expType.isError()) {
+            sin.exp.expType = sin.exp.expType.removeConst();
+
+            if (!typeChecker.validConvertAsIfByAssignment(sin.exp, typeToInit)) {
+                String msg = "incompatible types when initializing type '" +
+                             reporter.white(typeToInit.typename()) +
+                             "' using type '" + reporter.white(sin.exp.expType.typename()) + "'";
+                reporter.error(sin.exp.wholeLoc, msg);
+            } else {
+                sin.exp = typeChecker.convertTo(sin.exp, typeToInit);
+                return sin;
+            }
+        }
+        return zeroInitializer(typeToInit);
     }
 
-    private SingleInitializerNode normalizeStringInit(ArrayType at, StringLiteralNode str, InitializerNode original) {
+    private @NotNull InitializerNode normalizeStringInit(
+        ArrayType at, StringLiteralNode str, InitializerNode original) {
         if (!at.elementType().isCharacter()) {
             typeChecker.checkExpression(str);
             String msg = "cannot initialize array of '" +
@@ -94,7 +100,7 @@ public final class InitializerHelper {
                          "' from a string literal with type array of '" +
                          reporter.white("char") + "'";
             reporter.error(str.getWholeLocation(), msg);
-            return new SingleInitializerNode(str);
+            return zeroInitializer(at);
         }
 
         long size = at.size().value();
@@ -103,6 +109,7 @@ public final class InitializerHelper {
                            "initializer-string for array of '" +
                            reporter.white(at.elementType().removeQualifiers().typename()) +
                            "' is too long");
+            return zeroInitializer(at);
         }
         SingleInitializerNode sin = new SingleInitializerNode(str);
         sin.exp.expType = at;
@@ -252,7 +259,8 @@ public final class InitializerHelper {
 
             // 溢出检查
             if (cursor.isEmpty()) {
-                String msg = "excess elements in array initializer";
+                String type = typeToInit.isArray() ? "array" : "struct";
+                String msg = "excess elements in " + type + " initializer";
                 reporter.error(din.initializer.getWholeLocation(), msg);
                 continue;
             }
@@ -356,41 +364,55 @@ public final class InitializerHelper {
 
         // 遍历列表
         for (DesignatorNode designator : designators) {
-            if (currentType instanceof ArrayType at) {
+            if (currentType instanceof ArrayType at && designator instanceof ArrayDesignatorNode adn) {
                 // 数组中只允许出现数组指代符
-                if (designator instanceof ArrayDesignatorNode adn) {
-                    typeChecker.checkExpression(adn.index);
+                typeChecker.checkExpression(adn.index);
 
-                    // 要求为整数常量
-                    Either<Constant, SourceLocation> evalResult = constantEvaluator.tryEvalIntegerConstant(adn.index);
-                    long indexValue;
-                    if (evalResult.right().isPresent()) {
-                        String msg = "array index in initializer must be a constant integer expression";
-                        reporter.error(evalResult.right().get(), msg);
-                        indexValue = 0;
-                    } else {
-                        indexValue = evalResult.orThrow().toLong().value();
-                    }
-                    adn.index = new ConstantNode(adn.index.wholeLoc, new ConstantLong(indexValue));
-
-                    // 检查是否越界
-                    long size = at.size().value();
-                    if (indexValue < 0 || (size > 0 && indexValue >= size)) {
-                        String msg = "array index in initializer exceeds array bounds";
-                        reporter.error(adn.index.wholeLoc, msg);
-                        indexValue = 0;
-                    }
-
-                    currentDesignators.add(new ArrayDesignator(indexValue, at));
-                    currentType = at.elementType();
-                    continue;
+                // 要求为整数常量
+                Either<Constant, SourceLocation> evalResult = constantEvaluator.tryEvalIntegerConstant(adn.index);
+                long indexValue;
+                if (evalResult.right().isPresent()) {
+                    String msg = "array index in initializer must be a constant integer expression";
+                    reporter.error(evalResult.right().get(), msg);
+                    indexValue = 0;
+                } else {
+                    indexValue = evalResult.orThrow().toLong().value();
                 }
+                adn.index = new ConstantNode(adn.index.wholeLoc, new ConstantLong(indexValue));
+
+                // 检查是否越界
+                long size = at.size().value();
+                if (indexValue < 0 || (size > 0 && indexValue >= size)) {
+                    String msg = "array index in initializer exceeds array bounds";
+                    reporter.error(adn.index.wholeLoc, msg);
+                    indexValue = 0;
+                }
+
+                currentDesignators.add(new ArrayDesignator(indexValue, at));
+                currentType = at.elementType();
+                continue;
+            }
+            if (currentType instanceof StructType st && designator instanceof MemberDesignatorNode mdn) {
+                // 结构体中只允许出现成员指代符
+                String memberName = mdn.member.name;
+                if (!st.hasField(memberName)) {
+                    String msg = "'" + reporter.white(st.typename()) + "' has no member named '"
+                                 + reporter.white(memberName) + "'";
+                    reporter.error(mdn.member.wholeLoc, msg);
+                    memberName = st.info().fields().get(0).name;
+                }
+
+                currentDesignators.add(new MemberDesignator(memberName, st));
+                currentType = st.info().getField(memberName).orElseThrow().type;
+                continue;
             }
 
             // 错误处理
             String msg;
             if (designator instanceof ArrayDesignatorNode) {
                 msg = "array index in non-array initializer";
+            } else if (designator instanceof MemberDesignatorNode) {
+                msg = "field name not in record or union initializer";
             } else {
                 throw new IllegalStateException("unexpected designator type: " + designator.getClass().getName());
             }
@@ -430,6 +452,13 @@ public final class InitializerHelper {
             long size = at.size().value();
             for (long i = 0; i < size; ++i) {
                 list.add(new DesignationInitializerNode(null, List.of(), zeroInitializer(at.elementType())));
+            }
+            return new CompoundInitializerNode(null, list);
+        }
+        if (t instanceof StructType st) {
+            List<DesignationInitializerNode> list = new ArrayList<>();
+            for (Field field : st.info().fields()) {
+                list.add(new DesignationInitializerNode(null, List.of(), zeroInitializer(field.type)));
             }
             return new CompoundInitializerNode(null, list);
         }
@@ -525,20 +554,14 @@ public final class InitializerHelper {
                     toAppend = evalResult.orThrow().toStaticInitOrZero();
                 }
             } else {
-                throw new UnsupportedOperationException(
-                    "type '" + type.typename() + "' cannot be converted to static init");
+                reporter.error(init.getWholeLocation(), "initializer element is not constant");
+                toAppend = new ZeroInit(type.sizeof());
             }
 
-            if (result.isEmpty()) {
-                result.add(toAppend);
+            if (toAppend instanceof ZeroInit zi) {
+                appendZeroInit(result, zi.bytes());
             } else {
-                StaticInit last = result.get(result.size() - 1);
-                if (last instanceof ZeroInit zi && toAppend instanceof ZeroInit zi2) {
-                    // 合并连续的零初始化
-                    zi.expand(zi2.bytes());
-                } else {
-                    result.add(toAppend);
-                }
+                result.add(toAppend);
             }
             return;
         }
@@ -549,8 +572,48 @@ public final class InitializerHelper {
                 }
                 return;
             }
+            if (type instanceof StructType st) {
+                long offset = 0;
+                List<Field> fields = st.info().fields();
+                int index = 0;
+                for (DesignationInitializerNode din : cin.inits) {
+                    Field f = fields.get(index);
+                    // 当前初始化器填充该字段
+                    // 先进行 padding
+                    long fieldOffset = f.offset;
+                    if (fieldOffset > offset) {
+                        appendZeroInit(result, fieldOffset - offset);
+                        offset = fieldOffset;
+                    }
+                    // 再进行字段初始化
+                    toStaticInitHelper(f.type, din.initializer, result);
+                    offset += f.type.sizeof();
+                    // 初始化下一个字段
+                    index++;
+                }
+                // 尾部 padding
+                long structSize = st.info().sizeof();
+                if (structSize > offset) {
+                    appendZeroInit(result, structSize - offset);
+                }
+                return;
+            }
         }
         throw new UnsupportedOperationException("type '" + type.toString() + "' cannot be converted to static init");
+    }
+
+    private void appendZeroInit(List<StaticInit> result, long bytes) {
+        if (bytes <= 0) {
+            return;
+        }
+        if (!result.isEmpty()) {
+            StaticInit last = result.get(result.size() - 1);
+            if (last instanceof ZeroInit zi) {
+                zi.expand(bytes);
+                return;
+            }
+        }
+        result.add(new ZeroInit(bytes));
     }
 
 }

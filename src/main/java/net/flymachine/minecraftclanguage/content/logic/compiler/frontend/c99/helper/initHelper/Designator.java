@@ -4,7 +4,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.CompoundInitializerNode;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.InitializerNode;
 
-sealed interface Designator permits ArrayDesignator {
+sealed interface Designator permits ArrayDesignator, MemberDesignator {
     /**
      * 获取该指代符所管理的聚合类型
      *

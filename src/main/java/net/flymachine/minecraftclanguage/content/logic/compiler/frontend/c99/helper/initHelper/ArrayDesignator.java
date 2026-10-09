@@ -11,14 +11,22 @@ import java.util.List;
 final class ArrayDesignator implements Designator {
     private long index;
     private final ArrayType type;
+    private boolean oob = false;
 
     public ArrayDesignator(long index, ArrayType type) {
-        this.index = index;
         this.type = type;
+        long size = type.size().value();
+        if (index < 0) {
+            oob = true;
+        } else if (size > 0 && index >= size) {
+            oob = true;
+        }
+        this.index = index;
     }
 
     public ArrayDesignator(ArrayType type) {
-        this(0, type);
+        this.type = type;
+        this.index = 0;
     }
 
     @Override
@@ -33,11 +41,16 @@ final class ArrayDesignator implements Designator {
 
     @Override
     public boolean next() {
+        if (oob) {
+            throw new IndexOutOfBoundsException();
+        }
+
         long size = type.size().value();
         if (size <= 0 || index + 1 < size) {
             index++;
             return true;
         }
+        oob = true;
         return false;
     }
 

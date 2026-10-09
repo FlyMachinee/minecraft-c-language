@@ -1,6 +1,7 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.helper.initHelper;
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.ArrayType;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.StructType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.CompoundInitializerNode;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.InitializerNode;
@@ -26,6 +27,10 @@ final class Designation {
             List<Designator> designators = new ArrayList<>();
             if (type instanceof ArrayType arrayType) {
                 designators.add(new ArrayDesignator(arrayType));
+            } else if (type instanceof StructType structType) {
+                designators.add(new MemberDesignator(structType));
+            } else {
+                throw new IllegalArgumentException("Unknown aggregate type: " + type);
             }
             return designators;
         }
@@ -41,6 +46,11 @@ final class Designation {
                 if (currentType instanceof ArrayType arrayType) {
                     designators.add(new ArrayDesignator(arrayType));
                     currentType = arrayType.elementType();
+                } else if (currentType instanceof StructType structType) {
+                    designators.add(new MemberDesignator(structType));
+                    currentType = structType.info().fields().get(0).type;
+                } else {
+                    throw new IllegalArgumentException("Unknown aggregate type: " + currentType);
                 }
             }
             return designators;
@@ -59,7 +69,7 @@ final class Designation {
 
     public void expand() {
         if (designators.isEmpty()) {
-            return;
+            throw new IllegalStateException("Cannot expand an empty designation");
         }
         Designator last = designators.get(designators.size() - 1);
         if (last.subtype().isAggregate()) {
