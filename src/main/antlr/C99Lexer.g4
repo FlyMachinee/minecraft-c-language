@@ -138,6 +138,7 @@ Return: 'return';
 Signed: 'signed';
 Sizeof: 'sizeof';
 Static: 'static';
+Struct: 'struct';
 Switch: 'switch';
 Unsigned: 'unsigned';
 Void: 'void';
@@ -245,6 +246,8 @@ CaretAssign: '^=';
 OrAssign: '|=';
 Equal: '==';
 NotEqual: '!=';
+Arrow: '->';
+Dot: '.';
 
 // Parentheses
 

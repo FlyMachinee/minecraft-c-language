@@ -31,6 +31,8 @@ postfixExpression
     : primaryExpression
     | postfixExpression LeftBracket expression RightBracket
     | postfixExpression LeftParen argumentExpressionList? RightParen
+    | postfixExpression Dot Identifier
+    | postfixExpression Arrow Identifier
     | postfixExpression PlusPlus
     | postfixExpression MinusMinus
     ;
@@ -221,9 +223,23 @@ typeSpecifier
     | Double
     | Signed
     | Unsigned
+    | structOrUnionSpecifier
     ;
 
 // ISO 6.7.2.1, Structure And Union Specifiers
+structOrUnionSpecifier
+    : structOrUnion Identifier? LeftBrace structDeclaration+ RightBrace
+    | structOrUnion Identifier
+    ;
+structOrUnion
+    : Struct
+    ;
+structDeclaration
+    : specifierQualifierList structDeclarator (Comma structDeclarator)* Semicolon
+    ;
+structDeclarator
+    : declarator
+    ;
 specifierQualifierList // rewrote
     : specifierQualifier+
     ;
@@ -290,6 +306,7 @@ designationInitializer // rewrote
     ;
 designator
     : LeftBracket constantExpression RightBracket
+    | Dot Identifier
     ;
 
 // ISO 6.8, Statements and Blocks
