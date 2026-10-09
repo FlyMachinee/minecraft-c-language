@@ -515,17 +515,14 @@ public final class InitializerHelper {
                     toAppend = evalResult.orThrow().toStaticInitOrZero();
                 }
             } else if (type.isPointer()) {
-                if (typeChecker.isNullPointerConstant(init)) {
+                // 省去了空指针常量的检查，因为在类型检查时都被 cast 到了对应的指针类型
+                var evalResult = constantEvaluator.tryEvalAddressConstant(init);
+                if (evalResult.right().isPresent()) {
+                    String msg = "initializer element is not constant";
+                    reporter.error(evalResult.right().get(), msg);
                     toAppend = new ZeroInit(8);
                 } else {
-                    var evalResult = constantEvaluator.tryEvalAddressConstant(init);
-                    if (evalResult.right().isPresent()) {
-                        String msg = "initializer element is not constant";
-                        reporter.error(evalResult.right().get(), msg);
-                        toAppend = new ZeroInit(8);
-                    } else {
-                        toAppend = evalResult.orThrow().toStaticInitOrZero();
-                    }
+                    toAppend = evalResult.orThrow().toStaticInitOrZero();
                 }
             } else {
                 throw new UnsupportedOperationException(
