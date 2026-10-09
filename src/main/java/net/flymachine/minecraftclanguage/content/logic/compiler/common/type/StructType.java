@@ -9,10 +9,10 @@ public final class StructType extends Type {
 
     public StructType(@Nullable String tag, boolean isConst) {
         super(isConst);
-        this.info = new StructInfo(tag, Type.nextTagId());
+        this.info = new StructInfo(tag);
     }
 
-    private StructType(StructInfo info, boolean isConst) {
+    public StructType(StructInfo info, boolean isConst) {
         super(isConst);
         this.info = info;
     }
@@ -30,7 +30,20 @@ public final class StructType extends Type {
 
     @Override
     public String format(String declarator) {
-        return "";
+        String name = isConst ? "const struct " : "struct ";
+        if (info.tag() != null) {
+            name += info.tag();
+        } else {
+            name += " <anonymous>";
+        }
+
+        if (declarator.isEmpty()) {
+            return name;
+        }
+        if (declarator.startsWith("[")) {
+            return name + declarator;
+        }
+        return name + " " + declarator;
     }
 
     @Override

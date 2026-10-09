@@ -44,6 +44,6 @@ public final class FunctionTypeNode extends TypeNode {
 
     public boolean hasNoParameters() {
         if (paramTypes.isEmpty()) { return true; }
-        return paramTypes.size() == 1 && paramTypes.get(0).getType().isVoid() && params.get(0) == null;
+        return paramTypes.size() == 1 && paramTypes.get(0) instanceof VoidTypeNode && params.get(0) == null;
     }
 }

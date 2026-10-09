@@ -10,9 +10,9 @@ public final class StructInfo {
     private final @Nullable String tag;
     private final int id;
 
-    StructInfo(@Nullable String tag, int id) {
+    public StructInfo(@Nullable String tag) {
         this.tag = tag;
-        this.id = id;
+        this.id = Type.nextTagId();
     }
 
     // populate 后进行填充

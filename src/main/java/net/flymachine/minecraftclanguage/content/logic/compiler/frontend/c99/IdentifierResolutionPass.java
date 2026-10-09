@@ -1,14 +1,12 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99;
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.StorageClassSpecifier;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.StructInfo;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.*;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.helper.scope.ScopeStack;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.DiagnosticReporter;
 import org.jetbrains.annotations.Nullable;
-
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Stack;
 
 /**
  * 将变量的名字替换为唯一的名字，并检查变量的重复定义和未定义使用
@@ -27,7 +25,8 @@ public final class IdentifierResolutionPass implements AstVisitor<Void> {
         return base + ".." + (renameCounter++);
     }
 
-    private final Stack<Map<String, IdentifierEntry>> scopeStack = new Stack<>();
+    private final ScopeStack<String, IdentifierEntry> scopeStack = new ScopeStack<>();
+    private final ScopeStack<String, StructInfo> tagScopeStack = new ScopeStack<>();
 
     private static class IdentifierEntry {
         public IdentifierNode id;
@@ -44,49 +43,17 @@ public final class IdentifierResolutionPass implements AstVisitor<Void> {
     }
 
     private void enterScope() {
-        scopeStack.push(new HashMap<>());
+        scopeStack.enterScope();
+        tagScopeStack.enterScope();
     }
 
     private void exitScope() {
-        scopeStack.pop();
-    }
-
-    private void pushScope(Map<String, IdentifierEntry> scope) {
-        scopeStack.push(scope);
-    }
-
-    private Map<String, IdentifierEntry> popScope() {
-        return scopeStack.pop();
-    }
-
-    private boolean definedInCurrentScope(String identifier) {
-        return scopeStack.peek().containsKey(identifier);
-    }
-
-    private boolean definedInScope(String identifier, Map<String, IdentifierEntry> scope) {
-        return scope.containsKey(identifier);
+        scopeStack.exitScope();
+        tagScopeStack.exitScope();
     }
 
     private boolean inGlobalScope() {
-        return scopeStack.size() == 1;
-    }
-
-    private IdentifierEntry definitionInCurrentScope(String identifier) {
-        return scopeStack.peek().get(identifier);
-    }
-
-    private IdentifierEntry definitionOf(String identifier) {
-        for (int i = scopeStack.size() - 1; i >= 0; i--) {
-            Map<String, IdentifierEntry> scope = scopeStack.get(i);
-            if (definedInScope(identifier, scope)) {
-                return scope.get(identifier);
-            }
-        }
-        return null;
-    }
-
-    private void define(String identifier, IdentifierEntry definition) {
-        scopeStack.peek().put(identifier, definition);
+        return scopeStack.inGlobalScope();
     }
 
     @Override
@@ -115,6 +82,7 @@ public final class IdentifierResolutionPass implements AstVisitor<Void> {
 
     private void visitTypeNode(TypeNode type) {
         if (type instanceof FunctionTypeNode funcType) {
+            visitTypeNode(funcType.retType);
             visitFunctionTypeNode(funcType, false);
         }
 
@@ -128,12 +96,62 @@ public final class IdentifierResolutionPass implements AstVisitor<Void> {
         if (type instanceof PointerTypeNode pointerType) {
             visitTypeNode(pointerType.referencedType);
         }
+
+        if (type instanceof StructTypeNode structType) {
+            if (structType.resolved()) {
+                return;
+            }
+            if (structType.memberDeclarations != null) {
+                // struct tag? { ... } ...?
+                // 结构体定义，仅在当前作用域中查找
+                if (structType.tag == null) {
+                    // 匿名结构体
+                    StructInfo info = new StructInfo(null);
+                    structType.resolve(info);
+                } else {
+                    String tag = structType.tag.name;
+                    if (tagScopeStack.declaredInCurrentScope(tag)) {
+                        // 当前作用域已有声明，进行引用
+                        StructInfo previous = tagScopeStack.declarationInCurrentScope(tag).orElseThrow();
+                        structType.resolve(previous);
+                    } else {
+                        // 当前作用域无定义，添加声明
+                        StructInfo info = new StructInfo(tag);
+                        structType.resolve(info);
+                        tagScopeStack.declare(tag, info);
+                    }
+                }
+                for (MemberDeclarationNode memberDecl : structType.memberDeclarations) {
+                    visitMemberDeclaration(memberDecl);
+                }
+            } else {
+                // struct tag
+                assert structType.tag != null;
+                String tag = structType.tag.name;
+                // 查找先前声明
+                if (tagScopeStack.declaredInScope(tag)) {
+                    // 先前已有声明，进行引用
+                    StructInfo previous = tagScopeStack.declarationOf(tag).orElseThrow();
+                    structType.resolve(previous);
+                } else {
+                    // 无声明，在当前作用域添加声明
+                    StructInfo info = new StructInfo(tag);
+                    structType.resolve(info);
+                    tagScopeStack.declare(tag, info);
+                }
+            }
+        }
+    }
+
+    private void visitMemberDeclaration(MemberDeclarationNode memberDecl) {
+        // 结构体成员声明中，每行都至少声明了一个标识符
+        // 故这里我们不处理其基类型
+        for (MemberDeclaratorNode memberDeclarator : memberDecl.memberDeclarators) {
+            visitTypeNode(memberDeclarator.finalType);
+        }
     }
 
     private void visitFunctionTypeNode(FunctionTypeNode funcType, boolean isDefinition) {
-        // 处理返回类型
-        visitTypeNode(funcType.retType);
-
         if (funcType.hasNoParameters()) {
             // 参数列表为单独的 void
             return;
@@ -168,18 +186,37 @@ public final class IdentifierResolutionPass implements AstVisitor<Void> {
 
     @Override
     public Void visit(FunctionDefinitionNode node) {
-        enterScope();
         if (node.funcType instanceof FunctionTypeNode funcType) {
-            visitFunctionTypeNode(funcType, true);
+            // 先处理其返回类型
+            visitTypeNode(funcType.retType);
         } else {
+            // 函数定义不是函数类型，将在类型检查中报错，这里先递归处理其类型
             visitTypeNode(node.funcType);
         }
-        var bodyScope = popScope();
+
+        // 函数体作用域
+        enterScope();
+        // 再处理形参列表
+        if (node.funcType instanceof FunctionTypeNode funcType) {
+            visitFunctionTypeNode(funcType, true);
+        }
+
+        // 声明结束，回过头来定义函数名本身
+        // 回到全局作用域
+        var bodyScope = scopeStack.popScope();
+        var tagBodyScope = tagScopeStack.popScope();
         visitDeclarationLike(node.id, node.funcType, node.storageClass, true);
-        pushScope(bodyScope);
+
+        // 回到函数体作用域
+        scopeStack.pushScope(bodyScope);
+        tagScopeStack.pushScope(tagBodyScope);
+
+        // 处理函数体
         for (BlockItemNode item : node.body.blockItems) {
             item.accept(this);
         }
+
+        // 退出函数体作用域
         exitScope();
         return null;
     }
@@ -208,6 +245,36 @@ public final class IdentifierResolutionPass implements AstVisitor<Void> {
 
     @Override
     public Void visit(DeclarationNode node) {
+        if (node.initDeclarators.isEmpty()) {
+            if (node.baseType instanceof StructTypeNode structType) {
+                if (structType.memberDeclarations == null) {
+                    // struct S;
+                    assert structType.tag != null;
+                    String tag = structType.tag.name;
+                    // 检查当前作用域是否有声明
+                    if (tagScopeStack.declaredInCurrentScope(tag)) {
+                        // 当前作用域已有声明，进行引用
+                        StructInfo previous = tagScopeStack.declarationInCurrentScope(tag).orElseThrow();
+                        structType.resolve(previous);
+                    } else {
+                        // 当前作用域无定义，添加声明
+                        StructInfo info = new StructInfo(tag);
+                        structType.resolve(info);
+                        tagScopeStack.declare(tag, info);
+                    }
+                    return null;
+                } else {
+                    // struct tag? { ... };
+                    if (structType.tag == null) {
+                        // 匿名结构体，且没有相关联的标识符
+                        String msg = "unnamed struct/union that defines no instances";
+                        reporter.warning(structType.wholeLoc, msg);
+                    }
+                    visitTypeNode(structType);
+                }
+            }
+        }
+
         for (InitDeclaratorNode initDecl : node.initDeclarators) {
             visitTypeNode(initDecl.finalType);
             visitDeclarationLike(
@@ -224,10 +291,10 @@ public final class IdentifierResolutionPass implements AstVisitor<Void> {
         IdentifierNode id, TypeNode type, @Nullable StorageClassSpecifierNode storageClass, boolean defined) {
 
         String name = id.name;
-        IdentifierEntry previous = definitionOf(name);
+        IdentifierEntry previous = scopeStack.declarationOf(name).orElse(null);
         if (type instanceof FunctionTypeNode) {
             // 函数声明，始终有链接
-            if (previous != null && definedInCurrentScope(name) && !previous.hasLinkage) {
+            if (previous != null && scopeStack.declaredInCurrentScope(name) && !previous.hasLinkage) {
                 // 当前作用域先前的声明无链接，肯定是变量，当前声明是函数声明，有链接，冲突
                 String msg = "'" + reporter.white(name) + "' redeclared as different kind of symbol";
                 panicWithPreviousRef(msg, id, previous);
@@ -243,11 +310,11 @@ public final class IdentifierResolutionPass implements AstVisitor<Void> {
             // 函数声明不需要重命名
             if (previous != null && previous.defined && previous.hasLinkage) {
                 // 先前有声明、有链接且为定义，引用先前的定义
-                define(name, new IdentifierEntry(previous.id, previous.t, true, true));
+                scopeStack.declare(name, new IdentifierEntry(previous.id, previous.t, true, true));
             } else {
                 // 先前无声明，或先前声明不是定义，或先前声明无链接
                 // 引入新符号
-                define(name, new IdentifierEntry(id, type, true, defined));
+                scopeStack.declare(name, new IdentifierEntry(id, type, true, defined));
             }
         } else {
             // 变量声明，如果在全局作用域则有链接，否则没有链接
@@ -256,14 +323,14 @@ public final class IdentifierResolutionPass implements AstVisitor<Void> {
                 // 这里不考虑可能的定义冲突，随后在类型检查中处理
                 if (previous == null || !previous.defined) {
                     // 先前无声明，或先前声明不是定义
-                    define(name, new IdentifierEntry(id, type, true, defined));
+                    scopeStack.declare(name, new IdentifierEntry(id, type, true, defined));
                 }
                 // 否则采用先前的定义，目前在全局作用域，那么我们不需要再次定义，使用先前的即可
             } else {
                 // 块作用域变量
                 if (previous != null) {
                     // 先前有声明，而且是当前作用域的
-                    if (definedInCurrentScope(name) &&
+                    if (scopeStack.declaredInCurrentScope(name) &&
                         !(previous.hasLinkage && storageClass != null &&
                           storageClass.storageClass.equals(StorageClassSpecifier.EXTERN))) {
                         // 当前作用域之前的声明有链接，并且当前声明是 extern，则允许重定义
@@ -300,16 +367,16 @@ public final class IdentifierResolutionPass implements AstVisitor<Void> {
                     // 当前声明是 extern，有链接，不需要重命名
                     if (previous != null && previous.defined && previous.hasLinkage) {
                         // 先前有声明、有链接且为定义，引用先前的定义
-                        define(name, new IdentifierEntry(previous.id, previous.t, true, true));
+                        scopeStack.declare(name, new IdentifierEntry(previous.id, previous.t, true, true));
                     } else {
                         // 先前无声明，或先前声明不是定义，或先前声明无链接
                         // 引入新符号
-                        define(name, new IdentifierEntry(id, type, true, defined));
+                        scopeStack.declare(name, new IdentifierEntry(id, type, true, defined));
                     }
                 } else {
                     // 无链接，需要重命名
                     id.name = makeUniqueName(name);
-                    define(name, new IdentifierEntry(id, type, false, defined));
+                    scopeStack.declare(name, new IdentifierEntry(id, type, false, defined));
                 }
             }
         }
@@ -331,7 +398,7 @@ public final class IdentifierResolutionPass implements AstVisitor<Void> {
     @Override
     public Void visit(VariableNode node) {
         String name = node.id.name;
-        IdentifierEntry renamed = definitionOf(name);
+        IdentifierEntry renamed = scopeStack.declarationOf(name).orElse(null);
         if (renamed == null) {
             reporter.error(node.wholeLoc, "'" + reporter.white(name) + "' undeclared");
         } else {
@@ -517,6 +584,18 @@ public final class IdentifierResolutionPass implements AstVisitor<Void> {
     public Void visit(CommaExpressionNode node) {
         node.lhs.accept(this);
         node.rhs.accept(this);
+        return null;
+    }
+
+    @Override
+    public Void visit(MemberAccessNode node) {
+        node.base.accept(this);
+        return null;
+    }
+
+    @Override
+    public Void visit(PointerMemberAccessNode node) {
+        node.pointer.accept(this);
         return null;
     }
 }
