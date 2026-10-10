@@ -41,7 +41,7 @@ public interface LA64AsmOperand {
         return ((LA64AsmImmOperand) this).value();
     }
 
-    default String asSym() {
-        return ((LA64AsmSymOperand) this).name();
+    default LA64AsmSymOperand asSym() {
+        return (LA64AsmSymOperand) this;
     }
 }

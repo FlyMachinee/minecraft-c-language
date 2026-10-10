@@ -217,6 +217,10 @@ public final class LA64Assembler {
                             throw new IllegalArgumentException(
                                 "Expected operands: reg, sym for la.abs, but got: " + ops);
                         }
+                        if (ops.get(1).asSym().offset() != 0) {
+                            throw new IllegalArgumentException(
+                                "Expected pure symbol for la.abs, but got: " + ops.get(1));
+                        }
                     }
                     case "la.local", "la.pcrel" -> {
                         // la.pcrel rd, sym
@@ -842,7 +846,7 @@ public final class LA64Assembler {
         // lu52i.d   rd, rd, %abs64_hi12(sym) # R_LARCH_ABS64_HI12      si12
 
         LA64Register rd = ops.get(0).asGpr();
-        String sym = ops.get(1).asSym();
+        String sym = ops.get(1).asSym().name();
 
         int symbolNameIndex = getSymbolNameIndexOrAdd(sym);
 
@@ -865,15 +869,16 @@ public final class LA64Assembler {
         // addi.d     $rd, $rd, %pc_lo12(sym)   # R_LARCH_PCALA_LO12       si12
 
         LA64Register rd = ops.get(0).asGpr();
-        String sym = ops.get(1).asSym();
+        String sym = ops.get(1).asSym().name();
+        long addend = ops.get(1).asSym().offset();
 
         int symbolNameIndex = getSymbolNameIndexOrAdd(sym);
 
         writeFormat1RSi20(out, "pcalau12i", rd, 0);
         writeFormat2RSi12(out, "addi.d", rd, rd, 0);
 
-        relocList.add(new RelocationEntry(offset, symbolNameIndex, RelocationType.R_LARCH_PCALA_HI20));
-        relocList.add(new RelocationEntry(offset + 4, symbolNameIndex, RelocationType.R_LARCH_PCALA_LO12));
+        relocList.add(new RelocationEntry(offset, symbolNameIndex, RelocationType.R_LARCH_PCALA_HI20, addend));
+        relocList.add(new RelocationEntry(offset + 4, symbolNameIndex, RelocationType.R_LARCH_PCALA_LO12, addend));
     }
 
     private int getPcRelOffset(

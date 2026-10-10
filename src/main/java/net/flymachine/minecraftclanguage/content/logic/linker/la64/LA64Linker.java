@@ -447,10 +447,11 @@ public final class LA64Linker {
                         "Cannot apply PC-relative relocation to an absolute symbol: " + targetVA);
                 }
                 // https://github.com/llvm/llvm-project/blob/main/llvm/lib/ExecutionEngine/RuntimeDyld/RuntimeDyldELF.cpp#L818
-                long pageDelta = getPageDelta(targetVA, addr, relocationEntry.relocationType());
+                long target = targetVA + relocationEntry.addend();
+                long pageDelta = getPageDelta(target, addr, relocationEntry.relocationType());
                 yield switch (relocationEntry.relocationType()) {
                     case R_LARCH_PCALA_HI20 -> (int) ((pageDelta >> 12) & 0xFFFFF);
-                    case R_LARCH_PCALA_LO12 -> (int) (targetVA & 0xFFF);
+                    case R_LARCH_PCALA_LO12 -> (int) (target & 0xFFF);
                     case R_LARCH_PCALA64_LO20 -> (int) ((pageDelta >> 32) & 0xFFFFF);
                     case R_LARCH_PCALA64_HI12 -> (int) ((pageDelta >> 52) & 0xFFF);
                     default -> 0; // 不可能
