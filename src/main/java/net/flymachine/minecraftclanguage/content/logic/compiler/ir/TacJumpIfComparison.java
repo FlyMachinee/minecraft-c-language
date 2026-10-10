@@ -40,6 +40,9 @@ public class TacJumpIfComparison implements TacInstruction {
         stream.append("if (");
         lhs.dumpPretty(stream);
         stream.print(" ");
+        if (inverse) {
+            stream.print("!");
+        }
         stream.print(cond.toBinaryOperator().getSymbol());
         stream.print(" ");
         rhs.dumpPretty(stream);
