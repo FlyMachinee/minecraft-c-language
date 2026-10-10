@@ -858,7 +858,6 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
 
     @Override
     public Void visit(Load inst) {
-        testInnerType(inst.dstAsmType);
         lowerLoad(inst.dstAsmType, inst.ptr, inst.offset, inst.dst);
         return null;
     }
@@ -882,7 +881,6 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
 
     @Override
     public Void visit(Store inst) {
-        testInnerType(inst.srcAsmType);
         lowerStore(inst.srcAsmType, inst.src, inst.ptr, inst.offset);
         return null;
     }

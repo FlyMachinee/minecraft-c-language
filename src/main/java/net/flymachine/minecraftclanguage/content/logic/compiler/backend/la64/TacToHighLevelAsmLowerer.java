@@ -911,15 +911,24 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
     }
 
     private void lowerStructTransfer(AsmType.ByteArray byteArray, AddrSpec src, AddrSpec dst) {
-        AsmType unitType = switch ((int) byteArray.alignment()) {
-            case 1 -> AsmType.BYTE;
-            case 4 -> AsmType.WORD;
-            case 8 -> AsmType.DWORD;
-            default -> throw new IllegalStateException("Unexpected alignment: " + byteArray.alignment());
-        };
-        for (long offset = 0; offset < byteArray.size(); offset += byteArray.alignment()) {
-            emitRead(unitType, src, offset, T1);
-            emitWrite(unitType, T1, dst, offset);
+        for (long offset = 0; offset < byteArray.size(); ) {
+            if (offset + 8 <= byteArray.size()) {
+                emitRead(AsmType.DWORD, src, offset, T1);
+                emitWrite(AsmType.DWORD, T1, dst, offset);
+                offset += 8;
+            } else if (offset + 4 <= byteArray.size()) {
+                emitRead(AsmType.WORD, src, offset, T1);
+                emitWrite(AsmType.WORD, T1, dst, offset);
+                offset += 4;
+            } else if (offset + 2 <= byteArray.size()) {
+                emitRead(AsmType.HALF, src, offset, T1);
+                emitWrite(AsmType.HALF, T1, dst, offset);
+                offset += 2;
+            } else {
+                emitRead(AsmType.BYTE, src, offset, T1);
+                emitWrite(AsmType.BYTE, T1, dst, offset);
+                ++offset;
+            }
         }
     }
 
