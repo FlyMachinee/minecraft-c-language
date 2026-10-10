@@ -22,7 +22,7 @@ public final class LA64Emulator {
 
     private final LA64CpuState cpuState = new LA64CpuState();
     private final LA64FpuState fpuState = new LA64FpuState();
-    private final SimpleRam ram = new SimpleRam(256 * SimpleRam.PAGE_SIZE); // 1 MB
+    private final SimpleRam ram = new SimpleRam(1024 * SimpleRam.PAGE_SIZE); // 4 MB
     private final MemoryCrossbar memoryCrossbar = new MemoryCrossbar(ram);
     private final LA64MemoryManagementUnit mmu = new LA64MemoryManagementUnit();
 
