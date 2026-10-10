@@ -270,8 +270,7 @@ public final class ReplacePseudoOperandPass implements HighLevelVisitor<Void> {
                 }
                 BackendSymbolTable.ObjectEntry objectEntry = (BackendSymbolTable.ObjectEntry) entry;
                 if (objectEntry.isStatic()) {
-                    assert offset == 0 : "Static object should not have offset: " + id;
-                    return new Data(id);
+                    return new Data(id, offset);
                 } else {
                     allocateStack(id, objectEntry.asmType());
                     return new Memory(GeneralPurposeRegister.FP, stackOffset + offset);

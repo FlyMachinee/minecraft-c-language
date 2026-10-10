@@ -136,6 +136,6 @@ public final class StructType extends Type {
 
     @Override
     public AsmType toAsmType() {
-        return null;
+        return isComplete() ? new AsmType.ByteArray(sizeof(), alignof()) : AsmType.DUMMY;
     }
 }

@@ -847,7 +847,8 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
         } else if (obj instanceof Data objData) {
             // 通过宏指令获取
             boolean isConstant = ((BackendSymbolTable.ObjectEntry) backendSymbolTable.get(objData.name())).isConstant();
-            emitInst("la.pcrel", dstReg, new LA64AsmSymOperand(isConstant ? ".L" + objData.name() : objData.name()));
+            var symOp = new LA64AsmSymOperand(isConstant ? ".L" + objData.name() : objData.name(), objData.offset());
+            emitInst("la.pcrel", dstReg, symOp);
         } else {
             throw new IllegalStateException("Unknown object HighLevelOperand type: " + obj);
         }
@@ -1213,7 +1214,8 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
     private void loadData(AsmType asmType, LA64Register dst, Data sym, GeneralPurposeRegister tmpAddr) {
         // 先加载符号地址
         boolean isConstant = ((BackendSymbolTable.ObjectEntry) backendSymbolTable.get(sym.name())).isConstant();
-        emitInst("la.pcrel", tmpAddr, new LA64AsmSymOperand(isConstant ? ".L" + sym.name() : sym.name()));
+        var symOp = new LA64AsmSymOperand(isConstant ? ".L" + sym.name() : sym.name(), sym.offset());
+        emitInst("la.pcrel", tmpAddr, symOp);
         // 再对符号地址访存
         if (dst instanceof GeneralPurposeRegister dstGpr) {
             if (!(asmType instanceof AsmType.PrimitiveType t)) {
@@ -1242,7 +1244,8 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
     private void storeData(AsmType asmType, LA64Register val, Data sym, GeneralPurposeRegister tmpAddr) {
         // 先加载符号地址
         boolean isConstant = ((BackendSymbolTable.ObjectEntry) backendSymbolTable.get(sym.name())).isConstant();
-        emitInst("la.pcrel", tmpAddr, new LA64AsmSymOperand(isConstant ? ".L" + sym.name() : sym.name()));
+        var symOp = new LA64AsmSymOperand(isConstant ? ".L" + sym.name() : sym.name(), sym.offset());
+        emitInst("la.pcrel", tmpAddr, symOp);
         // 再将值写入符号地址
         if (val instanceof GeneralPurposeRegister srcGpr) {
             if (!(asmType instanceof AsmType.PrimitiveType t)) {

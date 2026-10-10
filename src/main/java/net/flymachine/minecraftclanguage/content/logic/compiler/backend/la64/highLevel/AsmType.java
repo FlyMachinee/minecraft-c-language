@@ -1,6 +1,6 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel;
 
-public sealed interface AsmType permits AsmType.ByteArray, AsmType.PrimitiveType {
+public sealed interface AsmType permits AsmType.ByteArray, AsmType.Dummy, AsmType.PrimitiveType {
 
     /**
      * 合理的有符号 8 位数，有符号数为符号拓展
@@ -41,6 +41,11 @@ public sealed interface AsmType permits AsmType.ByteArray, AsmType.PrimitiveType
      * 合理的 64 位浮点数
      */
     AsmType DOUBLE = new PrimitiveType(Primitive.DOUBLE);
+
+    /**
+     * 关联至不完整的结构体类型
+     */
+    AsmType DUMMY = new Dummy();
 
     record PrimitiveType(Primitive p) implements AsmType {
         @Override
@@ -86,6 +91,18 @@ public sealed interface AsmType permits AsmType.ByteArray, AsmType.PrimitiveType
     }
 
     record ByteArray(long size, long alignment) implements AsmType { }
+
+    record Dummy() implements AsmType {
+        @Override
+        public long size() {
+            throw new UnsupportedOperationException("Dummy type has no size");
+        }
+
+        @Override
+        public long alignment() {
+            throw new UnsupportedOperationException("Dummy type has no alignment");
+        }
+    }
 
     long size();
 

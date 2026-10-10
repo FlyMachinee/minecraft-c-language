@@ -301,6 +301,17 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
         // 如 (signed) char 拷贝至 unsigned char，二者都是 8 位，所以使用 TacCopy
         // 但存放在寄存器中时，(signed) char 是符号拓展的，而 unsigned char 是零拓展的，此时就不能使用 Move 指令，而是相应的拓展指令了
 
+        if (srcType instanceof AsmType.ByteArray byteArray) {
+            // 结构体拷贝
+            assert byteArray.equals(dstType);
+            PseudoMemory srcMem = (PseudoMemory) src;
+            PseudoMemory dstMem = (PseudoMemory) dst;
+            lowerStructTransfer(byteArray,
+                                new AddrSpec.Static(srcMem.name(), srcMem.offset()),
+                                new AddrSpec.Static(dstMem.name(), dstMem.offset()));
+            return null;
+        }
+
         if (srcType.equals(dstType)) {
             target.add(new Move(srcType, src, dst));
         } else {
@@ -662,6 +673,16 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
 
         HighLevelOperand base = lowerValue(addr.base());
 
+        if (asmType instanceof AsmType.ByteArray byteArray) {
+            // 结构体加载
+            PseudoMemory dstMem = (PseudoMemory) dst;
+            GeneralPurposeRegister ptr = resolvePtrToT3(addr);
+            lowerStructTransfer(byteArray,
+                                new AddrSpec.Dynamic(ptr, addr.offset()),
+                                new AddrSpec.Static(dstMem.name(), dstMem.offset()));
+            return null;
+        }
+
         if (addr.index() == null) {
             // 没有索引
             if (base instanceof Immediate imm) {
@@ -700,6 +721,16 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
         AsmType asmType = getType(inst.src).toAsmType();
 
         HighLevelOperand base = lowerValue(addr.base());
+
+        if (asmType instanceof AsmType.ByteArray byteArray) {
+            // 结构体存储
+            PseudoMemory srcMem = (PseudoMemory) src;
+            GeneralPurposeRegister ptr = resolvePtrToT3(addr);
+            lowerStructTransfer(byteArray,
+                                new AddrSpec.Static(srcMem.name(), srcMem.offset()),
+                                new AddrSpec.Dynamic(ptr, addr.offset()));
+            return null;
+        }
 
         if (addr.index() == null) {
             // 没有索引
@@ -763,6 +794,16 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
     @Override
     public Void visit(TacCopyToOffset inst) {
         AsmType asmType = getType(inst.src).toAsmType();
+
+        if (asmType instanceof AsmType.ByteArray byteArray) {
+            // 结构体拷贝
+            PseudoMemory srcMem = (PseudoMemory) lowerValue(inst.src);
+            lowerStructTransfer(byteArray,
+                                new AddrSpec.Static(srcMem.name(), srcMem.offset()),
+                                new AddrSpec.Static(inst.dst, inst.offset));
+            return null;
+        }
+
         target.add(new Move(asmType, lowerValue(inst.src), new PseudoMemory(inst.dst, inst.offset)));
         return null;
     }
@@ -780,6 +821,23 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
     @Override
     public Void visit(TacCopyByteArrayToOffset inst) {
         target.add(new CopyByteArray(inst.data, new PseudoMemory(inst.dst, inst.offset)));
+        return null;
+    }
+
+    @Override
+    public Void visit(TacCopyFromOffset inst) {
+        AsmType asmType = getType(inst.dst).toAsmType();
+
+        if (asmType instanceof AsmType.ByteArray byteArray) {
+            // 结构体拷贝
+            PseudoMemory dstMem = (PseudoMemory) lowerValue(inst.dst);
+            lowerStructTransfer(byteArray,
+                                new AddrSpec.Static(inst.src, inst.offset),
+                                new AddrSpec.Static(dstMem.name(), dstMem.offset()));
+            return null;
+        }
+
+        target.add(new Move(asmType, new PseudoMemory(inst.src, inst.offset), lowerValue(inst.dst)));
         return null;
     }
 
@@ -819,5 +877,54 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
             return symbolTable.get(tacVariable.name).type;
         }
         throw new UnsupportedOperationException("Unsupported value type: " + tacValue.getClass().getSimpleName());
+    }
+
+    private sealed interface AddrSpec {
+        record Static(String name, long baseOffset) implements AddrSpec { }
+
+        record Dynamic(HighLevelOperand ptr, long baseOffset) implements AddrSpec { }
+    }
+
+    private void lowerStructTransfer(AsmType.ByteArray byteArray, AddrSpec src, AddrSpec dst) {
+        AsmType unitType = switch ((int) byteArray.alignment()) {
+            case 1 -> AsmType.BYTE;
+            case 4 -> AsmType.WORD;
+            case 8 -> AsmType.DWORD;
+            default -> throw new IllegalStateException("Unexpected alignment: " + byteArray.alignment());
+        };
+        for (long offset = 0; offset < byteArray.size(); offset += byteArray.alignment()) {
+            emitRead(unitType, src, offset, T1);
+            emitWrite(unitType, T1, dst, offset);
+        }
+    }
+
+    private void emitRead(AsmType t, AddrSpec addr, long offset, HighLevelOperand dst) {
+        if (addr instanceof AddrSpec.Static s) {
+            target.add(new Move(t, new PseudoMemory(s.name(), s.baseOffset() + offset), dst));
+        } else if (addr instanceof AddrSpec.Dynamic d) {
+            target.add(new Load(t, d.ptr(), new Immediate(d.baseOffset() + offset), dst));
+        } else {
+            throw new IllegalStateException("Unexpected AddrSpec type: " + addr.getClass().getSimpleName());
+        }
+    }
+
+    private void emitWrite(AsmType t, HighLevelOperand src, AddrSpec addr, long offset) {
+        if (addr instanceof AddrSpec.Static s) {
+            target.add(new Move(t, src, new PseudoMemory(s.name(), s.baseOffset() + offset)));
+        } else if (addr instanceof AddrSpec.Dynamic d) {
+            target.add(new Store(t, src, d.ptr(), new Immediate(d.baseOffset() + offset)));
+        } else {
+            throw new IllegalStateException("Unexpected AddrSpec type: " + addr.getClass().getSimpleName());
+        }
+    }
+
+    private GeneralPurposeRegister resolvePtrToT3(TacAddressDescriptor addr) {
+        HighLevelOperand base = lowerValue(addr.base());
+        if (addr.index() == null) {
+            target.add(new Move(AsmType.DWORD, base, T3));
+        } else {
+            addPointer(base, lowerValue(addr.index()), addr.scale(), T3);
+        }
+        return T3;
     }
 }
