@@ -1,5 +1,7 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.ir;
 
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.util.EscapeUnescapeHelper;
+
 import java.io.PrintStream;
 import java.util.Arrays;
 
@@ -42,7 +44,8 @@ public class TacCopyByteArrayToOffset implements TacInstruction {
         stream.print(dst);
         stream.print("[");
         stream.print(offset);
-        stream.print(":] = ");
-        stream.print(Arrays.toString(data));
+        stream.print(":] = \"");
+        stream.print(EscapeUnescapeHelper.escapeStringLiteral(data));
+        stream.print("\"");
     }
 }

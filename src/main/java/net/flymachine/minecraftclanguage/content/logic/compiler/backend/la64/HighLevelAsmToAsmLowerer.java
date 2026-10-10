@@ -202,7 +202,6 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
         HighLevelOperand dst = inst.dst;
         HighLevelOperand src = inst.src;
         testUnaryHighLevelOperand(src, dst);
-        testInnerType(asmType);
 
         // 特殊情况优化
         if (dst instanceof LA64Register dstReg) {
