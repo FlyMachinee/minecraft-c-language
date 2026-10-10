@@ -179,6 +179,6 @@ public record ConstantPointer(long value, Type referencedType) implements Pointe
 
     @Override
     public boolean isNullPointer() {
-        return value == 0 && referencedType.isVoid();
+        return value == 0;
     }
 }
