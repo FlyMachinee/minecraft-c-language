@@ -93,10 +93,10 @@ public final class AstToTacLowerer implements
         funcDef.body.accept(this);
         boolean global = symbolTable.get(funcDef.id.name).attr.isGlobal();
         FunctionTypeNode functionType = (FunctionTypeNode) funcDef.funcType;
-        if (functionType.retType instanceof VoidTypeNode) {
-            emitTacReturn();
-        } else {
+        if (funcDef.id.name.equals("main")) {
             emitTacReturn(new TacConstant(ConstantInt.ZERO));
+        } else {
+            emitTacReturn();
         }
         if (functionType.hasNoParameters()) {
             return new TacFunction(funcDef.id.name, global, List.of(), instructions);
