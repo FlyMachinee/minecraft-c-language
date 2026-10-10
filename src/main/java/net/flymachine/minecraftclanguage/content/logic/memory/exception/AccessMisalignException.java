@@ -1,9 +1,9 @@
 package net.flymachine.minecraftclanguage.content.logic.memory.exception;
 
-public class MemoryAccessMisalignException extends MemoryAccessException {
+public class AccessMisalignException extends MemoryAccessException {
     int alignTo;
 
-    public MemoryAccessMisalignException(long badAddress, int alignTo) {
+    public AccessMisalignException(long badAddress, int alignTo) {
         super(badAddress);
         this.alignTo = alignTo;
     }

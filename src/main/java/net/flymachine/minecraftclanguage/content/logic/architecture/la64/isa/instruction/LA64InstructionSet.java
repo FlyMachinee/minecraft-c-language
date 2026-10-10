@@ -19,11 +19,16 @@ import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
+import static net.flymachine.minecraftclanguage.content.logic.cpu.la64.LA64MemoryManagementUnit.LA64MemoryAccessType.LOAD;
+import static net.flymachine.minecraftclanguage.content.logic.cpu.la64.LA64MemoryManagementUnit.LA64MemoryAccessType.STORE;
+
 public final class LA64InstructionSet {
 
     private LA64InstructionSet() { }
 
     public static final List<LA64InstructionInfo> ALL_INSTRUCTIONS = new ArrayList<>();
+
+    public static boolean strictAlign = false;
 
     /**
      * 通过指令助记符来查询指令信息
@@ -1243,11 +1248,20 @@ public final class LA64InstructionSet {
                 long rjValue = cpu.getGr(operands[1].value());
                 long offset = operands[2].value();
                 long vaddr = rjValue + offset;
-                if ((vaddr & 0b111) != 0) {
+
+                if (strictAlign && (vaddr & 0b111) != 0) {
                     throw new LA64RuntimeException(LA64Exception.ALE);
                 }
-                long paddr = mmu.translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.LOAD);
-                fpu.setFrL(operands[0].value(), memory.loadDoubleWord(paddr));
+
+                long value;
+                if (!crossesPage(vaddr, 8)) {
+                    long paddr = mmu.translateVirtualAddress(vaddr, LOAD);
+                    value = memory.loadDoubleWord(paddr);
+                } else {
+                    value = loadVirtualBytewise(mmu, memory, vaddr, Width.D, false);
+                }
+
+                fpu.setFrL(operands[0].value(), value);
                 cpu.pcNext();
             }
         ));
@@ -1270,11 +1284,18 @@ public final class LA64InstructionSet {
                 long rjValue = cpu.getGr(operands[1].value());
                 long offset = operands[2].value();
                 long vaddr = rjValue + offset;
-                if ((vaddr & 0b111) != 0) {
+
+                if (strictAlign && (vaddr & 0b111) != 0) {
                     throw new LA64RuntimeException(LA64Exception.ALE);
                 }
-                long paddr = mmu.translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.STORE);
-                memory.storeDoubleWord(paddr, fpu.getFrL(operands[0].value()));
+
+                long value = fpu.getFrL(operands[0].value());
+                if (!crossesPage(vaddr, 8)) {
+                    long paddr = mmu.translateVirtualAddress(vaddr, STORE);
+                    memory.storeDoubleWord(paddr, value);
+                } else {
+                    storeVirtualBytewise(mmu, memory, vaddr, Width.D, value);
+                }
                 cpu.pcNext();
             }
         ));
@@ -1308,14 +1329,23 @@ public final class LA64InstructionSet {
                 LA64FpuState fpu = emulator.getFpuState();
                 MemoryLikeDevice memory = emulator.getMemory();
                 LA64MemoryManagementUnit mmu = emulator.getMemoryManagementUnit();
+
                 long rjValue = cpu.getGr(operands[1].value());
                 long rkValue = cpu.getGr(operands[2].value());
                 long vaddr = rjValue + rkValue;
-                if ((vaddr & 0b111) != 0) {
+
+                if (strictAlign && (vaddr & 0b111) != 0) {
                     throw new LA64RuntimeException(LA64Exception.ALE);
                 }
-                long paddr = mmu.translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.LOAD);
-                fpu.setFrL(operands[0].value(), memory.loadDoubleWord(paddr));
+
+                long value;
+                if (!crossesPage(vaddr, 8)) {
+                    long paddr = mmu.translateVirtualAddress(vaddr, LOAD);
+                    value = memory.loadDoubleWord(paddr);
+                } else {
+                    value = loadVirtualBytewise(mmu, memory, vaddr, Width.D, false);
+                }
+                fpu.setFrL(operands[0].value(), value);
                 cpu.pcNext();
             }
         ));
@@ -1334,14 +1364,22 @@ public final class LA64InstructionSet {
                 LA64FpuState fpu = emulator.getFpuState();
                 MemoryLikeDevice memory = emulator.getMemory();
                 LA64MemoryManagementUnit mmu = emulator.getMemoryManagementUnit();
+
                 long rjValue = cpu.getGr(operands[1].value());
                 long rkValue = cpu.getGr(operands[2].value());
                 long vaddr = rjValue + rkValue;
-                if ((vaddr & 0b111) != 0) {
+
+                if (strictAlign && (vaddr & 0b111) != 0) {
                     throw new LA64RuntimeException(LA64Exception.ALE);
                 }
-                long paddr = mmu.translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.STORE);
-                memory.storeDoubleWord(paddr, fpu.getFrL(operands[0].value()));
+
+                long value = fpu.getFrL(operands[0].value());
+                if (!crossesPage(vaddr, 8)) {
+                    long paddr = mmu.translateVirtualAddress(vaddr, STORE);
+                    memory.storeDoubleWord(paddr, value);
+                } else {
+                    storeVirtualBytewise(mmu, memory, vaddr, Width.D, value);
+                }
                 cpu.pcNext();
             }
         ));
@@ -1632,51 +1670,92 @@ public final class LA64InstructionSet {
     }
 
     private static void executeLoad(LA64EmulatorHandler e, int rd, long vaddr, Width w, boolean signExtend) {
-        if ((vaddr & w.alignMask()) != 0) {
+        if (strictAlign && (vaddr & w.alignMask()) != 0) {
             throw new LA64RuntimeException(LA64Exception.ALE);
         }
         LA64CpuState cpu = e.getCpuState();
-        long paddr = e.getMemoryManagementUnit()
-                      .translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.LOAD);
+        LA64MemoryManagementUnit mmu = e.getMemoryManagementUnit();
         MemoryLikeDevice mem = e.getMemory();
 
-        long value = switch (w) {
-            case B -> {
-                byte b = mem.loadByte(paddr);
-                yield signExtend ? b : (b & 0xFFL);
-            }
-            case H -> {
-                short h = mem.loadHalfWord(paddr);
-                yield signExtend ? h : (h & 0xFFFFL);
-            }
-            case W -> {
-                int i = mem.loadWord(paddr);
-                yield signExtend ? i : (i & 0xFFFFFFFFL);
-            }
-            case D -> mem.loadDoubleWord(paddr);
-        };
+        long value;
+        if (!crossesPage(vaddr, w.bytes)) {
+            // 快速路径
+            long paddr = mmu.translateVirtualAddress(vaddr, LOAD);
+            value = switch (w) {
+                case B -> {
+                    byte b = mem.loadByte(paddr);
+                    yield signExtend ? b : (b & 0xFFL);
+                }
+                case H -> {
+                    short h = mem.loadHalfWord(paddr);
+                    yield signExtend ? h : (h & 0xFFFFL);
+                }
+                case W -> {
+                    int i = mem.loadWord(paddr);
+                    yield signExtend ? i : (i & 0xFFFFFFFFL);
+                }
+                case D -> mem.loadDoubleWord(paddr);
+            };
+        } else {
+            // 慢速路径
+            value = loadVirtualBytewise(mmu, mem, vaddr, w, signExtend);
+        }
 
         cpu.setGr(rd, value);
         cpu.pcNext();
     }
 
     private static void executeStore(LA64EmulatorHandler e, int rd, long vaddr, Width w) {
-        if ((vaddr & w.alignMask()) != 0) {
+        if (strictAlign && (vaddr & w.alignMask()) != 0) {
             throw new LA64RuntimeException(LA64Exception.ALE);
         }
         LA64CpuState cpu = e.getCpuState();
-        long paddr = e.getMemoryManagementUnit()
-                      .translateVirtualAddress(vaddr, LA64MemoryManagementUnit.LA64MemoryAccessType.STORE);
+        LA64MemoryManagementUnit mmu = e.getMemoryManagementUnit();
         MemoryLikeDevice mem = e.getMemory();
         long value = cpu.getGr(rd);
 
-        switch (w) {
-            case B -> mem.storeByte(paddr, (byte) value);
-            case H -> mem.storeHalfWord(paddr, (short) value);
-            case W -> mem.storeWord(paddr, (int) value);
-            case D -> mem.storeDoubleWord(paddr, value);
+        if (!crossesPage(vaddr, w.bytes)) {
+            long paddr = mmu.translateVirtualAddress(vaddr, STORE);
+            switch (w) {
+                case B -> mem.storeByte(paddr, (byte) value);
+                case H -> mem.storeHalfWord(paddr, (short) value);
+                case W -> mem.storeWord(paddr, (int) value);
+                case D -> mem.storeDoubleWord(paddr, value);
+            }
+        } else {
+            storeVirtualBytewise(mmu, mem, vaddr, w, value);
         }
         cpu.pcNext();
+    }
+
+    private static boolean crossesPage(long vaddr, int size) {
+        long pageOffset = vaddr & (LA64MemoryManagementUnit.PAGE_SIZE - 1);
+        return pageOffset + size > LA64MemoryManagementUnit.PAGE_SIZE;
+    }
+
+    private static long loadVirtualBytewise(
+        LA64MemoryManagementUnit mmu, MemoryLikeDevice mem, long vaddr, Width w, boolean signExtend) {
+
+        long value = 0;
+        for (int i = 0; i < w.bytes; i++) {
+            long paddr = mmu.translateVirtualAddress(vaddr + i, LOAD);
+            value |= (mem.loadByte(paddr) & 0xFFL) << (i * 8);
+        }
+        return switch (w) {
+            case B -> signExtend ? (byte) value : (value & 0xFFL);
+            case H -> signExtend ? (short) value : (value & 0xFFFFL);
+            case W -> signExtend ? (int) value : (value & 0xFFFFFFFFL);
+            case D -> value;
+        };
+    }
+
+    private static void storeVirtualBytewise(
+        LA64MemoryManagementUnit mmu, MemoryLikeDevice mem, long vaddr, Width w, long value) {
+
+        for (int i = 0; i < w.bytes; i++) {
+            long paddr = mmu.translateVirtualAddress(vaddr + i, STORE);
+            mem.storeByte(paddr, (byte) (value >>> (i * 8)));
+        }
     }
 
     private static BiConsumer<LA64EmulatorHandler, LA64Operand[]> makeHandler(
