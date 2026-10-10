@@ -1208,6 +1208,12 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
 
     private boolean isLvalueExpression(ExpressionNode exp) {
         // 下列表达式是左值
+        // 类型检查，只能是对象类型，或者除 void 外的不完整类型
+        Type t = exp.expType;
+        if (!t.isObject() && (t.isComplete() || t.isVoid())) {
+            return false;
+        }
+
         // 标识符，含具名函数形参，只要声明它们为指代对象（而非函数或枚举常量）
         if (exp instanceof VariableNode var && !(var.expType.isFunction())) {
             return true;
@@ -1224,9 +1230,9 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
         if (exp instanceof PointerMemberAccessNode) {
             return true;
         }
-        // 对指向对象指针运用间接使用（一元 *）运算符的结果
+        // 对指向非函数指针运用间接使用（一元 *）运算符的结果
         if (exp instanceof DereferenceNode deref && deref.exp.expType instanceof PointerType pt
-            && pt.referencedType().isObject()) {
+            && !pt.referencedType().isFunction()) {
             return true;
         }
         // 下标运算符的结果
