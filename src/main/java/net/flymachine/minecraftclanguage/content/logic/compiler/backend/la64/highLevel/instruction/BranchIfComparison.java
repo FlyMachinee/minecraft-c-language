@@ -4,11 +4,22 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.hig
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.HighLevelOperand;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.Comparison;
 
+/**
+ * 如有需要，会将 lhs 加载至 T0，rhs 加载至 T1
+ * <p>
+ * 可能使用的临时寄存器：T0, T1
+ */
 public class BranchIfComparison implements HighLevelInstruction {
     public final Comparison cond;
     public final boolean isUnsigned;
     public final AsmType asmType;
+    /**
+     * 如有需要，会将 lhs 加载至 T0
+     */
     public HighLevelOperand lhs;
+    /**
+     * 如有需要，会将 rhs 加载至 T1
+     */
     public HighLevelOperand rhs;
     public final String target;
 

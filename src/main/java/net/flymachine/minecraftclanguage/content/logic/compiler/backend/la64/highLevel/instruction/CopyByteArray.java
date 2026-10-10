@@ -2,6 +2,9 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.hi
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.HighLevelOperand;
 
+/**
+ * 可能会使用的寄存器：T1 T2
+ */
 public class CopyByteArray implements HighLevelInstruction {
     public final byte[] data;
     public HighLevelOperand dst;

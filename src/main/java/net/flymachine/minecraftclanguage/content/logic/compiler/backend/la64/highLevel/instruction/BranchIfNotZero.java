@@ -3,8 +3,16 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.hi
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.AsmType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.HighLevelOperand;
 
+/**
+ * 如有需要，会将 cond 加载至 T0
+ * <p>
+ * 可能使用的临时寄存器：T0
+ */
 public class BranchIfNotZero implements HighLevelInstruction {
     public final AsmType asmType;
+    /**
+     * 如有需要，会将 cond 加载至 T0
+     */
     public HighLevelOperand cond;
     public final String target;
 

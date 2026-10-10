@@ -5,9 +5,15 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.hig
 
 /**
  * 仅表示移动相同二进制表示的值
+ * <p>
+ * 如有需要，会将 src 加载至 T0/FT0
  */
 public class Move implements HighLevelInstruction {
     public final AsmType asmType;
+
+    /**
+     * 如有需要，会将 src 加载至 T0/FT0
+     */
     public HighLevelOperand src;
     public HighLevelOperand dst;
 
