@@ -112,7 +112,7 @@ public final class LValuePathEvaluator implements ExpressionVisitor<Optional<LVa
                         new SymbolTable.Entry(
                             new IdentifierNode(null, name), TypeNode.fromType(t), t,
                             new SymbolTable.Entry.ConstantAttr(new StringInit(string.literal, true))));
-        return Optional.of(new LValuePath.Root(name, t));
+        return Optional.of(new LValuePath.Root(".L" + name, t));
     }
 
     @Override
