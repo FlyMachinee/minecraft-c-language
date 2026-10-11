@@ -1,5 +1,6 @@
 package net.flymachine.minecraftclanguage.content.logic.architecture.la64.abi.lp64d.callConv;
 
+import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.AsmType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.*;
 import org.jetbrains.annotations.NotNull;
 
@@ -35,6 +36,11 @@ public final class CallingConvention {
         // 先处理返回值：大结构体返回会占用 a0 作为隐藏指针
         Placement ret = allocateReturn(returnType, s);
 
+        // (void) 函数没有参数，直接返回
+        if (paramTypes.isEmpty() || paramTypes.size() == 1 && paramTypes.get(0).isVoid()) {
+            return new Signature(List.of(), ret, s.stackOffset);
+        }
+
         // 再分配参数
         List<Placement> params = new ArrayList<>(paramTypes.size());
         for (Type t : paramTypes) {
@@ -46,10 +52,6 @@ public final class CallingConvention {
     private record FlatInfo(int floatCount, int intCount, boolean isFirstFloat) {
         boolean onlyFloat() {
             return intCount == 0 && floatCount > 0;
-        }
-
-        boolean onlyInt() {
-            return floatCount == 0 && intCount > 0;
         }
     }
 
@@ -70,8 +72,7 @@ public final class CallingConvention {
             boolean firstFloat = false;
             List<Field> fields = st.fields();
             for (int idx = 0; idx < fields.size(); idx++) {
-                Field field = fields.get(idx);
-                FlatInfo fi = flatten(field.type);
+                FlatInfo fi = flatten(fields.get(idx).type);
                 if (idx == 0) {
                     firstFloat = fi.isFirstFloat();
                 }
@@ -83,103 +84,99 @@ public final class CallingConvention {
         throw new IllegalArgumentException("Unsupported type for flatten: " + type);
     }
 
-    private static Placement allocateParam(Type type, State s) {
-        if (type.isScalar()) {
-            return allocateScalar(type, s);
+    private static Placement allocateParam(Type t, State s) {
+        if (t.isScalar()) {
+            return allocateScalar(t.toAsmType(), s);
         }
-        if (type instanceof StructType st) {
+        if (t instanceof StructType st) {
             return allocateStruct(st, s);
         }
-        throw new IllegalArgumentException("Unsupported parameter type: " + type);
+        throw new IllegalArgumentException("Unsupported parameter type: " + t);
     }
 
-    private static Placement allocateScalar(Type type, State s) {
-        return type.isDouble() ? allocateSingleFar(s) : allocateSingleGar(s);
+    private static Placement allocateScalar(AsmType t, State s) {
+        return t.equals(AsmType.DOUBLE) ? allocateSingleFar(s) : allocateSingleGar(t, s);
     }
 
     private static Placement allocateStruct(StructType st, State s) {
-        long size = st.sizeof();
+        int size = (int) st.sizeof();
         if (size == 0) {
             throw new IllegalArgumentException("Empty struct is not supported");
         }
-
-        // 若一个聚合体位宽大于 2 * GRLEN，则它通过引用传递
         if (size > 2 * GRLEN) {
             return allocateByReference(s);
         }
 
         FlatInfo fi = flatten(st);
 
+        if (size <= GRLEN) {
+            return fi.onlyFloat() ? allocateSingleFar(s) : allocateSingleGar(slotAsmType(size), s);
+        }
+
+        // GRLEN < size <= 2 * GRLEN
         if (fi.onlyFloat()) {
-            return fi.floatCount == 1 ? allocateSingleFar(s) : allocateFarPair(s);
+            // 只可能是两个 double
+            return allocateFarPair(s);
         }
-
-        if (fi.onlyInt()) {
-            return size <= GRLEN ? allocateSingleGar(s) : allocateGarPair(s);
-        }
-
-        // 混合情况
-        // 浮点数只有 double，8 字节不可能同时装下 double 和整数
-        // 从而 8 < size ≤ 16
         if (fi.floatCount() == 1 && fi.intCount() == 1) {
             return allocateMixedFarGar(fi, s);
         }
-        return allocateGarPair(s);
+        return allocateGarPair(s, GRLEN, size - GRLEN);
     }
 
-    private static Placement allocateSingleGar(State s) {
+    private static Placement allocateSingleGar(AsmType t, State s) {
         if (s.garUsed < MAX_GAR) {
-            return one(new Slot.GAR(s.garUsed++));
+            return one(new Slot.GAR(s.garUsed++, t));
         }
-        return allocStack(s, GRLEN);
+        return one(allocStack(s, t));
     }
 
     private static Placement allocateSingleFar(State s) {
         if (s.farUsed < MAX_FAR) {
-            return one(new Slot.FAR(s.farUsed++));
+            return one(new Slot.FAR(s.farUsed++, AsmType.DOUBLE));
         }
-        return allocateSingleGar(s);
+        return allocateSingleGar(AsmType.DWORD, s);
     }
 
-    private static Placement allocateGarPair(State s) {
-        return switch (MAX_GAR - s.garUsed) {
-            case 0 -> allocStack(s, 2 * GRLEN);
-            case 1 -> {
-                List<Slot> out = List.of(new Slot.GAR(s.garUsed++), new Slot.Stack(s.stackOffset));
-                s.stackOffset += GRLEN;
-                yield new Placement.InSlots(out);
-            }
-            default -> slots(new Slot.GAR(s.garUsed++), new Slot.GAR(s.garUsed++));
-        };
+    private static Placement allocateGarPair(State s, int w0, int w1) {
+        AsmType t0 = slotAsmType(w0);
+        AsmType t1 = slotAsmType(w1);
+        int remaining = MAX_GAR - s.garUsed;
+
+        if (remaining >= 2) {
+            return slots(new Slot.GAR(s.garUsed++, t0), new Slot.GAR(s.garUsed++, t1));
+        }
+        if (remaining == 1) {
+            return slots(new Slot.GAR(s.garUsed++, t0), allocStack(s, t1));
+        }
+        return slots(allocStack(s, t0), allocStack(s, t1));
     }
 
     private static Placement allocateFarPair(State s) {
         if (s.farUsed + 2 <= MAX_FAR) {
-            return slots(new Slot.FAR(s.farUsed++), new Slot.FAR(s.farUsed++));
+            return slots(new Slot.FAR(s.farUsed++, AsmType.DOUBLE),
+                         new Slot.FAR(s.farUsed++, AsmType.DOUBLE));
         }
-        return allocateGarPair(s);
+        return allocateGarPair(s, GRLEN, GRLEN);
     }
 
     private static Placement allocateMixedFarGar(FlatInfo fi, State s) {
         if (s.farUsed < MAX_FAR && s.garUsed < MAX_GAR) {
             if (fi.isFirstFloat) {
-                return slots(new Slot.FAR(s.farUsed++), new Slot.GAR(s.garUsed++));
+                return slots(new Slot.FAR(s.farUsed++, AsmType.DOUBLE),
+                             new Slot.GAR(s.garUsed++, AsmType.DWORD));
             }
-            return slots(new Slot.GAR(s.garUsed++), new Slot.FAR(s.farUsed++));
+            return slots(new Slot.GAR(s.garUsed++, AsmType.DWORD),
+                         new Slot.FAR(s.farUsed++, AsmType.DOUBLE));
         }
-        return allocateGarPair(s);
+        return allocateGarPair(s, GRLEN, GRLEN);
     }
 
     private static Placement allocateByReference(State s) {
-        Slot pointerSlot;
         if (s.garUsed < MAX_GAR) {
-            pointerSlot = new Slot.GAR(s.garUsed++);
-        } else {
-            pointerSlot = new Slot.Stack(s.stackOffset);
-            s.stackOffset += GRLEN;
+            return new Placement.ByReference(new Slot.GAR(s.garUsed++, AsmType.DWORD));
         }
-        return new Placement.ByReference(pointerSlot);
-
+        return new Placement.ByReference(allocStack(s, AsmType.DWORD));
     }
 
     private static Placement allocateReturn(Type type, State s) {
@@ -204,15 +201,21 @@ public final class CallingConvention {
         return new Placement.InSlots(List.of(ss));
     }
 
-    private static Placement allocStack(State s, long size) {
+    private static Slot allocStack(State s, AsmType t) {
         long off = s.stackOffset;
-        int n = (int) (size / GRLEN);
-        List<Slot> out = new ArrayList<>(n);
-        for (int i = 0; i < n; i++) {
-            out.add(new Slot.Stack(off + (long) i * GRLEN));
-        }
-        s.stackOffset += size;
-        return new Placement.InSlots(out);
+        long roundedSize = (t.size() + GRLEN - 1) & -GRLEN;
+        s.stackOffset = off + roundedSize;
+        return new Slot.Stack(off, t);
+    }
+
+    private static AsmType slotAsmType(int bytes) {
+        return switch (bytes) {
+            case 1 -> AsmType.BYTE;
+            case 2 -> AsmType.HALF;
+            case 4 -> AsmType.WORD;
+            case 8 -> AsmType.DWORD;
+            default -> new AsmType.ByteArray(bytes, GRLEN);
+        };
     }
 
     private static final class State {
