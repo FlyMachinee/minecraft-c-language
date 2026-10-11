@@ -41,11 +41,24 @@ public final class CallingConvention {
             return new Signature(List.of(), ret, s.stackOffset);
         }
 
-        // 再分配参数
         List<Placement> params = new ArrayList<>(paramTypes.size());
-        for (Type t : paramTypes) {
-            params.add(allocateParam(t, s));
+        List<Integer> byRefIndices = new ArrayList<>();
+        for (int i = 0; i < paramTypes.size(); i++) {
+            Placement p = allocateParam(paramTypes.get(i), s);
+            if (p instanceof Placement.ByReference) {
+                byRefIndices.add(i);
+            }
+            params.add(p);
         }
+
+        // 从 stackSize 开始分配副本
+        for (int idx : byRefIndices) {
+            Placement.ByReference br = (Placement.ByReference) params.get(idx);
+            Type t = paramTypes.get(idx);
+            Slot.Stack copySlot = allocStackAligned(s, t.sizeof(), t.alignof());
+            params.set(idx, new Placement.ByReference(br.pointerSlot(), copySlot));
+        }
+
         return new Signature(List.copyOf(params), ret, s.stackOffset);
     }
 
@@ -173,10 +186,13 @@ public final class CallingConvention {
     }
 
     private static Placement allocateByReference(State s) {
+        Slot pointerSlot;
         if (s.garUsed < MAX_GAR) {
-            return new Placement.ByReference(new Slot.GAR(s.garUsed++, AsmType.DWORD));
+            pointerSlot = new Slot.GAR(s.garUsed++, AsmType.DWORD);
+        } else {
+            pointerSlot = allocStack(s, AsmType.DWORD);
         }
-        return new Placement.ByReference(allocStack(s, AsmType.DWORD));
+        return new Placement.ByReference(pointerSlot, null);
     }
 
     private static Placement allocateReturn(Type type, State s) {
@@ -206,6 +222,13 @@ public final class CallingConvention {
         long roundedSize = (t.size() + GRLEN - 1) & -GRLEN;
         s.stackOffset = off + roundedSize;
         return new Slot.Stack(off, t);
+    }
+
+    private static Slot.Stack allocStackAligned(State s, long size, long alignment) {
+        long off = s.stackOffset;
+        off = (off + alignment - 1) / alignment * alignment;
+        s.stackOffset = off + size;
+        return new Slot.Stack(off, new AsmType.ByteArray(size, alignment));
     }
 
     private static AsmType slotAsmType(int bytes) {

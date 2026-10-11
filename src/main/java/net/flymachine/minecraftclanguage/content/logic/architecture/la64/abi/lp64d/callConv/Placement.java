@@ -10,8 +10,10 @@ public sealed interface Placement {
 
     /**
      * 按引用传递：调用者分配空间，地址通过该槽传递
+     * <p>
+     * 注意，当作用于返回值时，其语义不太一样
      */
-    record ByReference(Slot pointerSlot) implements Placement { }
+    record ByReference(Slot pointerSlot, Slot.Stack copySlot) implements Placement { }
 
     /**
      * 忽略（空结构体、void）
