@@ -37,6 +37,10 @@ public final class ReplacePseudoOperandPass implements HighLevelVisitor<Void> {
 
     private void runOnFunction(HighLevelFunction function) {
         stackOffset = -function.savedRegisters * 8;
+        BackendSymbolTable.Entry entry = backendSymbolTable.get(function.name);
+        if (((BackendSymbolTable.FuncEntry) entry).returnOnStack()) {
+            stackOffset -= 8; // 保存返回结构体的地址处 fp-24
+        }
         for (HighLevelInstruction inst : function.insts) {
             inst.accept(this);
         }

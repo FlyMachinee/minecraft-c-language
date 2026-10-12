@@ -911,7 +911,7 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
             symbolTable.put(
                 paramId.name,
                 new SymbolTable.Entry(paramId, funcTypeNode.paramTypes.get(i), paramType,
-                                      SymbolTable.Entry.AutoAttr.INSTANCE));
+                                      new SymbolTable.Entry.AutoAttr()));
         }
     }
 
@@ -1068,7 +1068,7 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
         if (storageClass == null) {
             // 无存储类说明符，不可能重复定义
             // 进行定义
-            SymbolTable.Entry.AutoAttr attr = SymbolTable.Entry.AutoAttr.INSTANCE;
+            SymbolTable.Entry.AutoAttr attr = new SymbolTable.Entry.AutoAttr();
             symbolTable.put(id.name, new SymbolTable.Entry(id, typeNode, type, attr));
 
             if (initDecl.init == null) { return; }

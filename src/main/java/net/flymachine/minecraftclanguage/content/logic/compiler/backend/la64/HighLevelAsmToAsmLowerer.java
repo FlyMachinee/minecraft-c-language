@@ -658,10 +658,12 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
             // 源操作数直接在寄存器中
             if (srcType.size() <= dstType.size()) {
                 // 检查是否自然零拓展
-                if (srcType.equals(AsmType.UBYTE)) {
-                    // 自然零拓展，直接写回即可
-                    storeToDest(dstType, srcReg, dst, T1);
-                    return null;
+                switch (srcType.p()) {
+                    case UBYTE, UHALF, UWORD, DWORD -> {
+                        // 自然零拓展，直接写回即可
+                        storeToDest(dstType, srcReg, dst, T1);
+                        return null;
+                    }
                 }
             }
             // 否则人为进行零拓展，或截断后零拓展
@@ -692,7 +694,6 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
         AsmType.PrimitiveType srcType = (AsmType.PrimitiveType) inst.srcType;
         AsmType.PrimitiveType dstType = (AsmType.PrimitiveType) inst.dstType;
         testUnaryHighLevelOperand(src, dst);
-        testInnerType(srcType, dstType);
         if (srcType.equals(AsmType.DOUBLE) || dstType.equals(AsmType.DOUBLE)) {
             throw new IllegalArgumentException("SignExtend only supports integer types");
         }
@@ -706,10 +707,12 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
             // 源操作数直接在寄存器中
             if (srcType.size() <= dstType.size()) {
                 // 检查是否自然拓展
-                if (!srcType.equals(AsmType.UBYTE)) {
-                    // 自然拓展，直接将源寄存器的值移动到目标寄存器即可
-                    storeToDest(dstType, srcReg, dst, T1);
-                    return null;
+                switch (srcType.p()) {
+                    case BYTE, HALF, WORD, DWORD -> {
+                        // 自然拓展，直接将源寄存器的值移动到目标寄存器即可
+                        storeToDest(dstType, srcReg, dst, T1);
+                        return null;
+                    }
                 }
             }
             // 否则人为进行符号拓展，或截断后符号拓展
@@ -743,7 +746,6 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
         AsmType srcAsmType = inst.srcAsmType;
         testUnaryHighLevelOperand(src, dst);
         testByteType(srcAsmType);
-        testInnerType(srcAsmType);
 
         String mnemonic = srcAsmType.equals(AsmType.WORD) ? "ffint.d.w" : "ffint.d.l";
         GeneralPurposeRegister srcReg = (GeneralPurposeRegister) loadOperand(srcAsmType, src, T0, T0);

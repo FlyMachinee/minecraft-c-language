@@ -122,9 +122,9 @@ public final class SymbolTable {
         }
 
         public static final class AutoAttr implements IdentifierAttr {
-            private AutoAttr() { }
+            public boolean passByReference = false; // 仅作用于大结构体作为函数参数时
 
-            public static final AutoAttr INSTANCE = new AutoAttr();
+            public AutoAttr() { }
 
             @Override
             public boolean isDefinition() {

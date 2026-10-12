@@ -1,6 +1,9 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99;
 
 import com.mojang.datafixers.util.Either;
+import net.flymachine.minecraftclanguage.content.logic.architecture.la64.abi.lp64d.callConv.CallingConvention;
+import net.flymachine.minecraftclanguage.content.logic.architecture.la64.abi.lp64d.callConv.Placement;
+import net.flymachine.minecraftclanguage.content.logic.architecture.la64.abi.lp64d.callConv.Signature;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.AssignmentOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.BinaryOperator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.Comparison;
@@ -67,7 +70,7 @@ public final class AstToTacLowerer implements
         symbolTable.put(
             name, new SymbolTable.Entry(
                 new IdentifierNode(null, name), null, type,
-                SymbolTable.Entry.AutoAttr.INSTANCE));
+                new SymbolTable.Entry.AutoAttr()));
         return var;
     }
 
@@ -89,6 +92,8 @@ public final class AstToTacLowerer implements
     }
 
     private TacFunction lowerFunc(FunctionDefinitionNode funcDef) {
+        markByReferenceParameters((FunctionTypeNode) funcDef.funcType);
+
         instructions = new ArrayList<>();
         funcDef.body.accept(this);
         boolean global = symbolTable.get(funcDef.id.name).attr.isGlobal();
@@ -103,6 +108,19 @@ public final class AstToTacLowerer implements
         } else {
             List<String> parameters = functionType.params.stream().map(param -> param.name).toList();
             return new TacFunction(funcDef.id.name, global, parameters, instructions);
+        }
+    }
+
+    private void markByReferenceParameters(FunctionTypeNode functionType) {
+        if (functionType.hasNoParameters()) {
+            return;
+        }
+        Signature sig = CallingConvention.allocate(functionType.getType());
+        for (int i = 0; i < functionType.params.size(); i++) {
+            if (sig.params().get(i) instanceof Placement.ByReference) {
+                IdentifierNode param = functionType.params.get(i);
+                ((SymbolTable.Entry.AutoAttr) symbolTable.get(param.name).attr).passByReference = true;
+            }
         }
     }
 
@@ -839,6 +857,12 @@ public final class AstToTacLowerer implements
 
     @Override
     public ExpEvalResult visit(VariableNode variable) {
+        SymbolTable.Entry entry = symbolTable.get(variable.id.name);
+        if (entry.attr instanceof SymbolTable.Entry.AutoAttr autoAttr && autoAttr.passByReference) {
+            // 按引用传递的大结构体参数：实际参数中是指针
+            // 解引用以访问实际的结构体副本
+            return new DereferencedPointer(new TacAddressDescriptor(new TacVariable(variable)));
+        }
         return new PlainOperand(new TacVariable(variable));
     }
 

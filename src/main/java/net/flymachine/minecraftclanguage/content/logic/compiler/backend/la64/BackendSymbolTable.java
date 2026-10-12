@@ -40,5 +40,5 @@ public final class BackendSymbolTable {
 
     public record ObjectEntry(AsmType asmType, boolean isStatic, boolean isConstant) implements Entry { }
 
-    public record FuncEntry(boolean defined) implements Entry { }
+    public record FuncEntry(boolean defined, boolean returnOnStack) implements Entry { }
 }

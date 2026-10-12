@@ -1,5 +1,9 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64;
 
+import net.flymachine.minecraftclanguage.content.logic.architecture.la64.abi.lp64d.callConv.CallingConvention;
+import net.flymachine.minecraftclanguage.content.logic.architecture.la64.abi.lp64d.callConv.Placement;
+import net.flymachine.minecraftclanguage.content.logic.architecture.la64.abi.lp64d.callConv.Signature;
+import net.flymachine.minecraftclanguage.content.logic.architecture.la64.abi.lp64d.callConv.Slot;
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.isa.instruction.LA64FloatCompareCondition;
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.register.FloatingPointRegister;
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.register.GeneralPurposeRegister;
@@ -14,11 +18,13 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.ConstantDouble;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.DoubleInit;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.BasicType;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.FunctionType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.PointerType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.SymbolTable;
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.*;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -60,10 +66,16 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
         for (SymbolTable.Entry entry : symbolTable.getEntries()) {
             String name = entry.id.name;
             if (entry.attr instanceof SymbolTable.Entry.FuncAttr) {
-                backendSymbolTable.put(name, new BackendSymbolTable.FuncEntry(entry.attr.isDefinition()));
+                Signature signature = CallingConvention.allocate((FunctionType) entry.type);
+                boolean onStack = signature.ret() instanceof Placement.ByReference;
+                backendSymbolTable.put(name, new BackendSymbolTable.FuncEntry(entry.attr.isDefinition(), onStack));
             } else if (entry.attr instanceof SymbolTable.Entry.ConstantAttr) {
                 AsmType asmType = entry.type.toAsmType();
                 backendSymbolTable.put(name, new BackendSymbolTable.ObjectEntry(asmType, true, true));
+            } else if (entry.attr instanceof SymbolTable.Entry.AutoAttr autoAttr && autoAttr.passByReference) {
+                // 大结构体按引用传递
+                assert entry.type.isStruct() && entry.type.sizeof() > 16;
+                backendSymbolTable.put(name, new BackendSymbolTable.ObjectEntry(AsmType.DWORD, false, false));
             } else {
                 AsmType asmType = entry.type.toAsmType();
                 boolean isStatic = entry.attr instanceof SymbolTable.Entry.StaticAttr;
@@ -86,7 +98,7 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
     private static final GeneralPurposeRegister[] GPR_ARGS = {A0, A1, A2, A3, A4, A5, A6, A7};
     private static final FloatingPointRegister[] FPR_ARGS = {FA0, FA1, FA2, FA3, FA4, FA5, FA6, FA7};
 
-    private int maxCallStackArgSize;
+    private long maxCallStackArgSize;
 
     private Immediate immediate(Constant constant) {
         return new Immediate(constant.toByteRepresentation());
@@ -98,73 +110,81 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
         return prefix + "_backend" + labelCounter++;
     }
 
-    // 记录传递的参数存放的位置
-    private record ArgumentPassingInfo(List<Integer> gprArgs, List<Integer> fprArgs, List<Integer> stackArgs) { }
-
-    private ArgumentPassingInfo getArgumentPassingInfo(List<AsmType> asmTypes) {
-        List<Integer> gprArgs = new ArrayList<>();
-        List<Integer> fprArgs = new ArrayList<>();
-        List<Integer> stackArgs = new ArrayList<>();
-
-        int index = 0;
-        for (AsmType asmType : asmTypes) {
-            if (asmType.equals(AsmType.DOUBLE)) {
-                if (fprArgs.size() < FPR_ARGS.length) {
-                    fprArgs.add(index);
-                } else if (gprArgs.size() < GPR_ARGS.length) {
-                    gprArgs.add(index);
-                } else {
-                    stackArgs.add(index);
-                }
-            } else {
-                if (gprArgs.size() < GPR_ARGS.length) {
-                    gprArgs.add(index);
-                } else {
-                    stackArgs.add(index);
-                }
-            }
-            index++;
-        }
-        return new ArgumentPassingInfo(gprArgs, fprArgs, stackArgs);
-    }
+    private Signature functionSignature = null;
 
     private HighLevelFunction lowerFunction(TacFunction tacFunction) {
         target = new ArrayList<>();
         maxCallStackArgSize = 0;
 
-        // 拷贝参数至栈上
-        List<AsmType> asmTypes = tacFunction.params.stream()
-                                                   .map(name -> symbolTable.get(name).type.toAsmType())
-                                                   .toList();
-        ArgumentPassingInfo argPassingInfo = getArgumentPassingInfo(asmTypes);
+        SymbolTable.Entry entry = symbolTable.get(tacFunction.name);
+        FunctionType funcType = (FunctionType) entry.type;
+        Signature signature = CallingConvention.allocate(funcType);
 
-        int gprIndex = 0;
-        for (int argIndex : argPassingInfo.gprArgs) {
-            String name = tacFunction.params.get(argIndex);
-            AsmType asmType = asmTypes.get(argIndex);
-            target.add(new Move(asmType, GPR_ARGS[gprIndex], new Pseudo(name)));
-            gprIndex++;
+        if (signature.ret() instanceof Placement.ByReference) {
+            // 大结构体返回，需要在调用者分配空间，并传递地址给被调用函数
+            // 对地址进行保存
+            assert funcType.returnType().isStruct() && funcType.returnType().sizeof() > 16;
+            target.add(new Move(AsmType.DWORD, A0, new Memory(FP, -24)));
         }
 
-        int fprIndex = 0;
-        for (int argIndex : argPassingInfo.fprArgs) {
-            String name = tacFunction.params.get(argIndex);
-            target.add(new Move(AsmType.DOUBLE, FPR_ARGS[fprIndex], new Pseudo(name)));
-            fprIndex++;
+        // 将操作数拷贝至伪操作数
+        for (int i = 0; i < tacFunction.params.size(); i++) {
+            Placement placement = signature.params().get(i);
+            HighLevelOperand dst = lowerValue(new TacVariable(tacFunction.params.get(i)));
+            Type paramType = funcType.parameterType(i);
+
+            if (placement instanceof Placement.Ignored) {
+                throw new IllegalStateException("Control should not reach here");
+            }
+
+            if (placement instanceof Placement.ByReference byRef) {
+                // 结构体按引用传递
+                assert paramType.isStruct() && paramType.sizeof() > 16;
+                // 将传入的地址拷贝至伪操作数
+                target.add(new Move(AsmType.DWORD, lowerSlot(byRef.pointerSlot(), false), dst));
+                continue;
+            }
+
+            Placement.InSlots inSlots = (Placement.InSlots) placement;
+
+            if (paramType.isScalar()) {
+                assert inSlots.slots().size() == 1;
+                Slot slot = inSlots.slots().get(0);
+                target.add(new Move(slot.type(), lowerSlot(slot, false), dst));
+            } else if (paramType.isStruct()) {
+                // 结构体类型，按 ABI 要求进行传递
+                PseudoMemory dstMem = (PseudoMemory) dst;
+
+                for (Slot slot : inSlots.slots()) {
+                    if (slot.type() instanceof AsmType.PrimitiveType) {
+                        // 正常拷贝即可
+                        target.add(new Move(slot.type(), lowerSlot(slot, false), dstMem));
+                    } else {
+                        // 非 1 2 4 8 长度，特殊处理
+                        AsmType.ByteArray ba = (AsmType.ByteArray) slot.type();
+                        if (slot instanceof Slot.GAR gar) {
+                            // 通过寄存器传递的小结构体
+                            copyBytesFromReg((int) ba.size(), GPR_ARGS[gar.index()], dstMem);
+                        } else if (slot instanceof Slot.Stack stack) {
+                            // 通过栈传递的小结构体
+                            lowerStructTransfer(ba,
+                                                new AddrSpec.Dynamic(FP, stack.offset()),
+                                                new AddrSpec.Static(dstMem.name(), dstMem.offset()));
+                        } else {
+                            throw new IllegalStateException("Unknown slot type: " + slot);
+                        }
+                    }
+                    dstMem = new PseudoMemory(dstMem.name(), dstMem.offset() + 8);
+                }
+            }
         }
 
-        int stackOffset = 0;
-        for (int argIndex : argPassingInfo.stackArgs) {
-            String name = tacFunction.params.get(argIndex);
-            AsmType asmType = asmTypes.get(argIndex);
-            target.add(new Move(asmType, new Memory(FP, stackOffset), new Pseudo(name)));
-            stackOffset += 8;
-        }
-
+        functionSignature = signature;
         List<TacInstruction> instructions = tacFunction.insts;
         for (TacInstruction instruction : instructions) {
             instruction.accept(this);
         }
+        functionSignature = null;
         HighLevelFunction function = new HighLevelFunction(tacFunction.name, tacFunction.global, target);
         function.maxCallStackArgSize = maxCallStackArgSize;
         return function;
@@ -172,13 +192,56 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
 
     @Override
     public Void visit(TacReturn inst) {
-        if (inst.value != null) {
-            HighLevelOperand src = lowerValue(inst.value);
-            AsmType asmType = getType(inst.value).toAsmType();
-            if (asmType.equals(AsmType.DOUBLE)) {
-                target.add(new Move(AsmType.DOUBLE, src, FA0));
-            } else {
-                target.add(new Move(asmType, src, A0));
+        if (inst.value == null) {
+            target.add(new Ret());
+            return null;
+        }
+
+        Placement retPlacement = functionSignature.ret();
+        Type retType = getType(inst.value);
+        HighLevelOperand val = lowerValue(inst.value);
+
+        if (retPlacement instanceof Placement.Ignored) {
+            throw new IllegalStateException("Control should not reach here");
+        }
+        if (retPlacement instanceof Placement.ByReference) {
+            // 返回大结构体，将结构体写回先前调用者传入的地址
+            assert retType.isStruct() && retType.sizeof() > 16;
+            // 先前调用者传入的地址在 fp-24 处，按 ABI 要求通过 A0 传回
+            target.add(new Move(AsmType.DWORD, new Memory(FP, -24), A0));
+            // 进行写回
+            PseudoMemory valMem = (PseudoMemory) val;
+            lowerStructTransfer((AsmType.ByteArray) retType.toAsmType(),
+                                new AddrSpec.Static(valMem.name(), valMem.offset()),
+                                new AddrSpec.Dynamic(A0, 0));
+        } else {
+            // 通过寄存器返回
+            Placement.InSlots inSlots = (Placement.InSlots) retPlacement;
+            if (retType.isScalar()) {
+                assert inSlots.slots().size() == 1;
+                Slot slot = inSlots.slots().get(0);
+                assert slot instanceof Slot.GAR || slot instanceof Slot.FAR;
+                // 标量返回，拷贝即可
+                target.add(new Move(slot.type(), val, lowerSlot(slot, false)));
+            } else if (retType.isStruct()) {
+                // 结构体类型，按 ABI 要求进行传递
+                PseudoMemory valMem = (PseudoMemory) val;
+                assert retType.sizeof() <= 16;
+                // 0 < size <= 16
+                for (Slot slot : inSlots.slots()) {
+                    if (slot.type() instanceof AsmType.PrimitiveType) {
+                        assert slot instanceof Slot.GAR || slot instanceof Slot.FAR;
+                        // 正常拷贝即可
+                        target.add(new Move(slot.type(), valMem, lowerSlot(slot, false)));
+                    } else {
+                        assert slot instanceof Slot.GAR;
+                        // 非 1 2 4 8 长度，特殊处理
+                        AsmType.ByteArray ba = (AsmType.ByteArray) slot.type();
+                        Slot.GAR gar = (Slot.GAR) slot;
+                        copyBytesToReg((int) ba.size(), valMem, GPR_ARGS[gar.index()]);
+                    }
+                    valMem = new PseudoMemory(valMem.name(), valMem.offset() + 8);
+                }
             }
         }
         target.add(new Ret());
@@ -448,56 +511,154 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
         return null;
     }
 
-    private void passArguments(List<TacValue> args) {
-        // 参数传递逻辑
-        // 不需要分配或回收栈空间，由函数序言和尾声进行处理，函数序言中会分配好足够使用的栈空间
-        List<AsmType> asmTypes = args.stream()
-                                     .map(arg -> getType(arg).toAsmType())
-                                     .toList();
-        ArgumentPassingInfo argPassingInfo = getArgumentPassingInfo(asmTypes);
-
-        int gprIndex = 0;
-        for (int argIndex : argPassingInfo.gprArgs) {
-            HighLevelOperand arg = lowerValue(args.get(argIndex));
-            AsmType asmType = asmTypes.get(argIndex);
-            target.add(new Move(asmType, arg, GPR_ARGS[gprIndex]));
-            gprIndex++;
+    private HighLevelOperand lowerSlot(Slot slot, boolean isCaller) {
+        if (slot instanceof Slot.GAR gar) {
+            return GPR_ARGS[gar.index()];
+        } else if (slot instanceof Slot.FAR far) {
+            return FPR_ARGS[far.index()];
+        } else if (slot instanceof Slot.Stack stack) {
+            return new Memory(isCaller ? SP : FP, stack.offset());
+        } else {
+            throw new IllegalStateException("Unknown slot type: " + slot);
         }
-
-        int fprIndex = 0;
-        for (int argIndex : argPassingInfo.fprArgs) {
-            HighLevelOperand arg = lowerValue(args.get(argIndex));
-            target.add(new Move(AsmType.DOUBLE, arg, FPR_ARGS[fprIndex]));
-            fprIndex++;
-        }
-
-        int stackOffset = 0;
-        for (int argIndex : argPassingInfo.stackArgs) {
-            HighLevelOperand arg = lowerValue(args.get(argIndex));
-            AsmType asmType = asmTypes.get(argIndex);
-            target.add(new Move(asmType, arg, new Memory(SP, stackOffset)));
-            stackOffset += 8;
-        }
-
-        maxCallStackArgSize = Math.max(maxCallStackArgSize, stackOffset);
     }
 
-    private void getReturnValue(@NotNull TacValue dst) {
+    private void passArguments(List<TacValue> args, @Nullable TacValue dst, Signature signature) {
+        // 参数传递逻辑
+        // 不需要分配或回收栈空间，由函数序言和尾声进行处理，函数序言中会分配好足够使用的栈空间
+
+        // 处理返回值，大结构体返回需要通过 a0 传递返回值地址
+        if (signature.ret() instanceof Placement.ByReference) {
+            assert dst != null;
+            target.add(new LoadAddress(lowerValue(dst), A0));
+        }
+
+        // 参数传递
+        int argSize = args.size();
+        for (int i = 0; i < argSize; i++) {
+            Placement placement = signature.params().get(i);
+
+            if (placement instanceof Placement.Ignored) {
+                throw new IllegalStateException("Control should not reach here");
+            }
+
+            TacValue arg = args.get(i);
+            Type argType = getType(arg);
+            HighLevelOperand argOp = lowerValue(arg);
+
+            if (placement instanceof Placement.ByReference byRef) {
+                // 结构体按引用传递
+                assert argType.isStruct();
+                PseudoMemory argMem = (PseudoMemory) argOp;
+                // 调用者分配空间，并传递地址
+                long copyDstOffset = byRef.copySlot().offset();
+                // 地址传递
+                target.add(new LoadAddress(new Memory(SP, copyDstOffset), lowerSlot(byRef.pointerSlot(), true)));
+                // 拷贝结构体至分配的空间
+                AsmType.ByteArray asmType = (AsmType.ByteArray) argType.toAsmType();
+                lowerStructTransfer(asmType,
+                                    new AddrSpec.Static(argMem.name(), argMem.offset()),
+                                    new AddrSpec.Dynamic(SP, copyDstOffset));
+                continue;
+            }
+
+            var inSlots = (Placement.InSlots) placement;
+
+            if (argType.isScalar()) {
+                assert inSlots.slots().size() == 1;
+                Slot slot = inSlots.slots().get(0);
+                // 标量类型，按 ABI 要求进行拓展后传递
+                AsmType.PrimitiveType asmType = (AsmType.PrimitiveType) argType.toAsmType();
+                HighLevelOperand slotOp = lowerSlot(slot, true);
+                switch (asmType.p()) {
+                    case BYTE, HALF, WORD -> // 进行符号拓展
+                        target.add(new SignExtend(asmType, AsmType.DWORD, argOp, slotOp));
+                    case UBYTE, UHALF, UWORD -> // 进行零拓展
+                        target.add(new ZeroExtend(asmType, AsmType.DWORD, argOp, slotOp));
+                    case DWORD, DOUBLE -> target.add(new Move(asmType, argOp, slotOp));
+                }
+            } else if (argType.isStruct()) {
+                // 结构体类型，按 ABI 要求进行传递
+                PseudoMemory argMem = (PseudoMemory) argOp;
+
+                // 在此处，0 < size <= 16，通过寄存器/栈来传递
+                for (Slot slot : inSlots.slots()) {
+                    if (slot.type() instanceof AsmType.PrimitiveType) {
+                        // 正常拷贝即可
+                        target.add(new Move(slot.type(), argMem, lowerSlot(slot, true)));
+                    } else {
+                        // 非 1 2 4 8 长度，特殊处理
+                        AsmType.ByteArray ba = (AsmType.ByteArray) slot.type();
+                        if (slot instanceof Slot.GAR gar) {
+                            // 通过寄存器传递的小结构体
+                            copyBytesToReg((int) ba.size(), argMem, GPR_ARGS[gar.index()]);
+                        } else if (slot instanceof Slot.Stack stack) {
+                            // 通过栈传递的小结构体
+                            lowerStructTransfer(ba,
+                                                new AddrSpec.Static(argMem.name(), argMem.offset()),
+                                                new AddrSpec.Dynamic(SP, stack.offset()));
+                        } else {
+                            throw new IllegalStateException("Unknown slot type: " + slot);
+                        }
+                    }
+                    argMem = new PseudoMemory(argMem.name(), argMem.offset() + 8);
+                }
+            } else {
+                throw new IllegalStateException("Unsupported argument type: " + argType);
+            }
+        }
+
+        maxCallStackArgSize = Math.max(maxCallStackArgSize, signature.stackSize());
+    }
+
+    private void getReturnValue(@NotNull TacValue dst, Signature signature) {
         HighLevelOperand dstOp = lowerValue(dst);
-        AsmType asmType = getType(dst).toAsmType();
-        if (asmType.equals(AsmType.DOUBLE)) {
-            target.add(new Move(AsmType.DOUBLE, FA0, dstOp));
+        Type dstType = getType(dst);
+        Placement retPlacement = signature.ret();
+        if (retPlacement instanceof Placement.Ignored) {
+            throw new IllegalStateException("Control should not reach here");
+        } else if (retPlacement instanceof Placement.ByReference) {
+            // 结构体按引用返回，返回值已经通过 a0 传递了
+            return;
+        }
+
+        // 通过寄存器返回
+        Placement.InSlots inSlots = (Placement.InSlots) retPlacement;
+        if (dstType.isScalar()) {
+            assert inSlots.slots().size() == 1;
+            Slot slot = inSlots.slots().get(0);
+            HighLevelOperand slotOp = lowerSlot(slot, true);
+            AsmType.PrimitiveType asmType = (AsmType.PrimitiveType) dstType.toAsmType();
+            target.add(new Move(asmType, slotOp, dstOp));
+        } else if (dstType.isStruct()) {
+            // 结构体类型，按 ABI 要求进行返回
+            PseudoMemory dstMem = (PseudoMemory) dstOp;
+
+            for (Slot slot : inSlots.slots()) {
+                if (slot.type() instanceof AsmType.PrimitiveType) {
+                    // 正常拷贝即可
+                    target.add(new Move(slot.type(), lowerSlot(slot, true), dstMem));
+                } else {
+                    // 非 1 2 4 8 长度，特殊处理
+                    AsmType.ByteArray ba = (AsmType.ByteArray) slot.type();
+                    Slot.GAR gar = (Slot.GAR) slot;
+                    copyBytesFromReg((int) ba.size(), GPR_ARGS[gar.index()], dstMem);
+                }
+                dstMem = new PseudoMemory(dstMem.name(), dstMem.offset() + 8);
+            }
         } else {
-            target.add(new Move(asmType, A0, dstOp));
+            throw new IllegalStateException("Unsupported return type: " + dstType);
         }
     }
 
     @Override
     public Void visit(TacDirectCall inst) {
-        passArguments(inst.args);
+        SymbolTable.Entry entry = symbolTable.get(inst.funcDesignator);
+        Signature signature = CallingConvention.allocate((FunctionType) entry.type);
+        passArguments(inst.args, inst.dst, signature);
         target.add(new Call(inst.funcDesignator));
         if (inst.dst != null) {
-            getReturnValue(inst.dst);
+            getReturnValue(inst.dst, signature);
         }
         return null;
     }
@@ -810,10 +971,13 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
 
     @Override
     public Void visit(TacIndirectCall inst) {
-        passArguments(inst.args);
+        Type funcType = getType(inst.funcPtr);
+        FunctionType ft = (FunctionType) ((PointerType) funcType).referencedType();
+        Signature signature = CallingConvention.allocate(ft);
+        passArguments(inst.args, inst.dst, signature);
         target.add(new CallIndirect(lowerValue(inst.funcPtr)));
         if (inst.dst != null) {
-            getReturnValue(inst.dst);
+            getReturnValue(inst.dst, signature);
         }
         return null;
     }
@@ -886,8 +1050,16 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
             }
             return immediate(constant);
         } else if (tacValue instanceof TacVariable tacVariable) {
-            if (getType(tacVariable).isAggregate()) {
-                return new PseudoMemory(tacVariable.name, 0);
+            String name = tacVariable.name;
+            SymbolTable.Entry entry = symbolTable.get(name);
+            if (entry.type.isAggregate()) {
+                if (entry.attr instanceof SymbolTable.Entry.AutoAttr autoAttr && autoAttr.passByReference) {
+                    // 通过引用传递的大结构体
+                    assert entry.type.isStruct() && entry.type.sizeof() > 16;
+                    return new Pseudo(tacVariable.name);
+                } else {
+                    return new PseudoMemory(tacVariable.name, 0);
+                }
             } else {
                 return new Pseudo(tacVariable.name);
             }
@@ -899,7 +1071,13 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
         if (tacValue instanceof TacConstant tacConstant) {
             return tacConstant.value.getType();
         } else if (tacValue instanceof TacVariable tacVariable) {
-            return symbolTable.get(tacVariable.name).type;
+            SymbolTable.Entry entry = symbolTable.get(tacVariable.name);
+            if (entry.attr instanceof SymbolTable.Entry.AutoAttr autoAttr && autoAttr.passByReference) {
+                // 通过引用传递的大结构体
+                assert entry.type.isStruct() && entry.type.sizeof() > 16;
+                return new PointerType(entry.type);
+            }
+            return entry.type;
         }
         throw new UnsupportedOperationException("Unsupported value type: " + tacValue.getClass().getSimpleName());
     }
@@ -907,7 +1085,7 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
     private sealed interface AddrSpec {
         record Static(String name, long baseOffset) implements AddrSpec { }
 
-        record Dynamic(HighLevelOperand ptr, long baseOffset) implements AddrSpec { }
+        record Dynamic(GeneralPurposeRegister ptr, long baseOffset) implements AddrSpec { }
     }
 
     private void lowerStructTransfer(AsmType.ByteArray byteArray, AddrSpec src, AddrSpec dst) {
@@ -932,7 +1110,7 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
         }
     }
 
-    private void emitRead(AsmType t, AddrSpec addr, long offset, HighLevelOperand dst) {
+    private void emitRead(AsmType t, AddrSpec addr, long offset, GeneralPurposeRegister dst) {
         if (addr instanceof AddrSpec.Static s) {
             target.add(new Move(t, new PseudoMemory(s.name(), s.baseOffset() + offset), dst));
         } else if (addr instanceof AddrSpec.Dynamic d) {
@@ -942,7 +1120,7 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
         }
     }
 
-    private void emitWrite(AsmType t, HighLevelOperand src, AddrSpec addr, long offset) {
+    private void emitWrite(AsmType t, GeneralPurposeRegister src, AddrSpec addr, long offset) {
         if (addr instanceof AddrSpec.Static s) {
             target.add(new Move(t, src, new PseudoMemory(s.name(), s.baseOffset() + offset)));
         } else if (addr instanceof AddrSpec.Dynamic d) {
@@ -960,5 +1138,71 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
             addPointer(base, lowerValue(addr.index()), addr.scale(), T3);
         }
         return T3;
+    }
+
+    private void copyBytesToReg(int length, PseudoMemory src, GeneralPurposeRegister dst) {
+        // 将指定长度的字节从内存拷贝到寄存器中
+        // 实现为 4 -> 2 -> 1 的加载 + 移位 + 合并序列
+        // 注意是小端序
+        assert length == 3 || length == 5 || length == 6 || length == 7;
+        int shift = 0;
+        boolean first = true;
+        for (int offset = 0; offset < length; ) {
+            int remaining = length - offset;
+            AsmType type;
+            int width;
+            if (remaining >= 4) {
+                type = AsmType.UWORD;
+                width = 4;
+            } else if (remaining >= 2) {
+                type = AsmType.UHALF;
+                width = 2;
+            } else {
+                type = AsmType.UBYTE;
+                width = 1;
+            }
+            PseudoMemory srcOffset = new PseudoMemory(src.name(), src.offset() + offset);
+            if (first) {
+                // 加载最低部分到 dst
+                target.add(new Move(type, srcOffset, dst));
+                first = false;
+            } else {
+                // 后续先加载到 T1，再按已累积的位宽左移，最后按位或到 dst
+                target.add(new Move(type, srcOffset, T0));
+                assert shift > 0;
+                target.add(new BitwiseShift(true, AsmType.DWORD, false, T0, new Immediate(shift), T0));
+                target.add(new Bitwise(BinaryOperator.BITWISE_OR, AsmType.DWORD, dst, T0, dst));
+            }
+            offset += width;
+            shift += width * 8;
+        }
+    }
+
+    private void copyBytesFromReg(int length, GeneralPurposeRegister src, PseudoMemory dst) {
+        // 将指定长度的字节从寄存器拷贝到内存中
+        // 实现为 4 -> 2 -> 1 的存储 + 逐步右移序列
+        // 注意是小端序
+        assert length == 3 || length == 5 || length == 6 || length == 7;
+        target.add(new Move(AsmType.DWORD, src, T0));
+        for (int remaining = length, offset = 0; remaining > 0; ) {
+            int width;
+            AsmType type;
+            if (remaining >= 4) {
+                width = 4;
+                type = AsmType.WORD;
+            } else if (remaining >= 2) {
+                width = 2;
+                type = AsmType.HALF;
+            } else {
+                width = 1;
+                type = AsmType.BYTE;
+            }
+            target.add(new Move(type, T0, new PseudoMemory(dst.name(), dst.offset() + offset)));
+            offset += width;
+            remaining -= width;
+            if (remaining > 0) {
+                target.add(new BitwiseShift(false, AsmType.DWORD, true, T0, new Immediate(width * 8), T0));
+            }
+        }
     }
 }
