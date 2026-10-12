@@ -324,6 +324,7 @@ public final class InitializerHelper {
 
                 // 普通初始化器
                 cursor.expand();
+                subtype = cursor.subtype();
                 // 覆盖检查
                 checkOverwrite(cursor.fetch(full), sin, new MutableBoolean(false));
                 // 类型检查
