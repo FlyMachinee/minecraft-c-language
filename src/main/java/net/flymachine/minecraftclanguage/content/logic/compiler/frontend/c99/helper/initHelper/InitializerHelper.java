@@ -6,6 +6,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticIni
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.StringInit;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.ZeroInit;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.*;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.record.Field;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.TypeCheckingPass;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.*;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.helper.constexprHelper.ConstantEvaluator;
@@ -63,10 +64,9 @@ public final class InitializerHelper {
 
         SingleInitializerNode sin = (SingleInitializerNode) init;
         sin.exp = typeChecker.checkExpressionAndDecay(sin.exp);
-        if (typeToInit.isAggregate()) {
-            // 聚合类型初始化
-            // 对于结构体，可使用对应类型的结构体来初始化
-            if (!typeToInit.isStruct()) {
+        if (typeToInit.isAggregate() || typeToInit.isUnion()) {
+            // 对于结构体/联合体，可使用对应类型的结构体/联合体变量来初始化
+            if (!typeToInit.isRecord()) {
                 if (!sin.exp.expType.isError()) { // 避免级联报错
                     String msg = "invalid initializer";
                     reporter.error(init.getWholeLocation(), msg);
@@ -74,7 +74,7 @@ public final class InitializerHelper {
                 return zeroInitializer(typeToInit);
             }
         }
-        // 标量初始化
+        // 单初始化器初始化
         if (!sin.exp.expType.isError()) {
             sin.exp.expType = sin.exp.expType.removeConst();
 
@@ -161,7 +161,7 @@ public final class InitializerHelper {
                     cursor = newCursor;
                 }
             }
-            size = Math.max(size, ((ArrayDesignator) cursor.getDesignators().get(0)).index() + 1);
+            size = Math.max(size, ((ArrayDesignator) cursor.designators().get(0)).index() + 1);
 
             // 字符串字面量
             if (din.initializer instanceof SingleInitializerNode sin && sin.exp instanceof StringLiteralNode) {
@@ -259,7 +259,7 @@ public final class InitializerHelper {
 
             // 溢出检查
             if (cursor.isEmpty()) {
-                String type = typeToInit.isArray() ? "array" : "struct";
+                String type = typeToInit.isArray() ? "array" : typeToInit.isStruct() ? "struct" : "union";
                 String msg = "excess elements in " + type + " initializer";
                 reporter.error(din.initializer.getWholeLocation(), msg);
                 continue;
@@ -302,12 +302,12 @@ public final class InitializerHelper {
                 sin.exp = typeChecker.checkExpressionAndDecay(sin.exp);
 
                 // 特例检查，若是聚合类型的初始化器，且类型兼容，则直接使用该聚合类型的初始化器来初始化
-                if (subtype.isAggregate() && !(sin.exp.expType instanceof ErrorType)) {
+                if ((subtype.isAggregate() || subtype.isUnion()) && !(sin.exp.expType instanceof ErrorType)) {
                     sin.exp.expType = sin.exp.expType.removeConst();
                     Type exprType = sin.exp.expType;
 
                     boolean compatible;
-                    if (subtype.isStruct()) {
+                    if (subtype.isRecord()) {
                         // 结构体/联合体：类型必须兼容
                         compatible = subtype.removeQualifiers().isCompatible(exprType.removeQualifiers());
                     } else {
@@ -348,7 +348,7 @@ public final class InitializerHelper {
                 checkOverwrite(cursor.fetch(full), cin, new MutableBoolean(false));
                 // 递归处理
                 Type subtype = cursor.subtype();
-                if (!subtype.isAggregate()) {
+                if (!subtype.isAggregate() && !subtype.isUnion()) {
                     String msg = "braces around scalar initializer";
                     reporter.warning(cin.getWholeLocation(), msg);
                 }
@@ -415,18 +415,24 @@ public final class InitializerHelper {
                 currentType = at.elementType();
                 continue;
             }
-            if (currentType instanceof StructType st && designator instanceof MemberDesignatorNode mdn) {
-                // 结构体中只允许出现成员指代符
+            if (currentType instanceof RecordType<?> rt && designator instanceof MemberDesignatorNode mdn) {
+                // 结构体/联合体中只允许出现成员指代符
                 String memberName = mdn.member.name;
-                if (!st.hasField(memberName)) {
-                    String msg = "'" + reporter.white(st.typename()) + "' has no member named '"
+                if (!rt.hasField(memberName)) {
+                    String msg = "'" + reporter.white(rt.typename()) + "' has no member named '"
                                  + reporter.white(memberName) + "'";
                     reporter.error(mdn.member.wholeLoc, msg);
-                    memberName = st.info().fields().get(0).name;
+                    memberName = rt.info().fields().get(0).name;
                 }
 
-                currentDesignators.add(new MemberDesignator(memberName, st));
-                currentType = st.info().getField(memberName).orElseThrow().type;
+                Designator newDesignator;
+                if (rt.isStruct()) {
+                    newDesignator = new StructMemberDesignator(memberName, (StructType) rt);
+                } else {
+                    newDesignator = new UnionMemberDesignator(memberName, (UnionType) rt);
+                }
+                currentDesignators.add(newDesignator);
+                currentType = rt.info().getField(memberName).orElseThrow().type;
                 continue;
             }
 
@@ -435,7 +441,7 @@ public final class InitializerHelper {
             if (designator instanceof ArrayDesignatorNode) {
                 msg = "array index in non-array initializer";
             } else if (designator instanceof MemberDesignatorNode) {
-                msg = "field name not in record or union initializer";
+                msg = "field name not in struct or union initializer";
             } else {
                 throw new IllegalStateException("unexpected designator type: " + designator.getClass().getName());
             }
@@ -484,6 +490,16 @@ public final class InitializerHelper {
                 list.add(new DesignationInitializerNode(null, List.of(), zeroInitializer(field.type)));
             }
             return new CompoundInitializerNode(null, list);
+        }
+        if (t instanceof UnionType ut) {
+            Field firstField = ut.info().fields().get(0);
+            DesignatorNode firstDesignator = new MemberDesignatorNode(null, new IdentifierNode(null, firstField.name));
+
+            List<DesignationInitializerNode> inits = new ArrayList<>();
+            DesignationInitializerNode din = new DesignationInitializerNode(
+                null, List.of(firstDesignator), zeroInitializer(firstField.type));
+            inits.add(din);
+            return new CompoundInitializerNode(null, inits);
         }
         throw new UnsupportedOperationException("type '" + t.toString() + "' cannot be initialized");
     }
@@ -618,6 +634,20 @@ public final class InitializerHelper {
                 long structSize = st.info().sizeof();
                 if (structSize > offset) {
                     appendZeroInit(result, structSize - offset);
+                }
+                return;
+            }
+            if (type instanceof UnionType ut) {
+                assert cin.inits.size() == 1;
+                DesignationInitializerNode din = cin.inits.get(0);
+                Field field = ut.info().getField(((MemberDesignatorNode) din.designators.get(0)).member.name)
+                                .orElseThrow();
+                toStaticInitHelper(field.type, din.initializer, result);
+                // 尾部 padding
+                long unionSize = ut.info().sizeof();
+                long fieldSize = field.type.sizeof();
+                if (unionSize > fieldSize) {
+                    appendZeroInit(result, unionSize - fieldSize);
                 }
                 return;
             }

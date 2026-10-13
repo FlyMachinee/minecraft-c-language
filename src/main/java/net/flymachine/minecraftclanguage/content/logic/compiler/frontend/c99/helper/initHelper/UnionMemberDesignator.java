@@ -1,19 +1,18 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.helper.initHelper;
 
-import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.StructType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
-import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.CompoundInitializerNode;
-import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.DesignationInitializerNode;
-import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.InitializerNode;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.UnionType;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.record.Field;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.*;
 
 import java.util.List;
 
-public final class MemberDesignator implements Designator {
-    private long memberIndex;
-    private final StructType type;
+public final class UnionMemberDesignator implements Designator {
+    private final long memberIndex;
+    private final UnionType type;
     private boolean oob = false;
 
-    public MemberDesignator(String member, StructType type) {
+    public UnionMemberDesignator(String member, UnionType type) {
         this.type = type;
         int index = -1;
         for (int i = 0; i < type.info().fields().size(); i++) {
@@ -28,7 +27,7 @@ public final class MemberDesignator implements Designator {
         this.memberIndex = index;
     }
 
-    public MemberDesignator(long memberIndex, StructType type) {
+    public UnionMemberDesignator(long memberIndex, UnionType type) {
         this.type = type;
         if (memberIndex < 0 || memberIndex >= type.info().fields().size()) {
             oob = true;
@@ -36,13 +35,13 @@ public final class MemberDesignator implements Designator {
         this.memberIndex = memberIndex;
     }
 
-    public MemberDesignator(StructType type) {
+    public UnionMemberDesignator(UnionType type) {
         this.type = type;
         this.memberIndex = 0;
     }
 
     @Override
-    public Type type() {
+    public UnionType type() {
         return type;
     }
 
@@ -56,23 +55,23 @@ public final class MemberDesignator implements Designator {
         if (oob) {
             throw new IndexOutOfBoundsException();
         }
-
-        if (memberIndex + 1 < type.info().fields().size()) {
-            memberIndex++;
-            return true;
-        }
         oob = true;
         return false;
     }
 
     @Override
     public InitializerNode apply(CompoundInitializerNode initializer) {
-        return initializer.inits.get((int) memberIndex).initializer;
+        return initializer.inits.get(0).initializer;
     }
 
     @Override
     public void apply(CompoundInitializerNode initializer, InitializerNode newValue) {
-        initializer.inits.set(
-            (int) memberIndex, new DesignationInitializerNode(newValue.getWholeLocation(), List.of(), newValue));
+        Field member = type.info().fields().get((int) memberIndex);
+        IdentifierNode memberId = new IdentifierNode(newValue.getWholeLocation(), member.name);
+        MemberDesignatorNode memberDesignator =
+            new MemberDesignatorNode(newValue.getWholeLocation(), memberId);
+
+        initializer.inits.set(0, new DesignationInitializerNode(
+            newValue.getWholeLocation(), List.of(memberDesignator), newValue));
     }
 }

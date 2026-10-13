@@ -3,54 +3,54 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.he
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.ArrayType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.StructType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.UnionType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.CompoundInitializerNode;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.InitializerNode;
 
 import java.util.ArrayList;
 import java.util.List;
 
-final class Designation {
-    private final List<Designator> designators;
-
+record Designation(List<Designator> designators) {
     public Designation(Type type) {
-        designators = buildDesignator(type);
-    }
-
-    public Designation(List<Designator> designators) {
-        this.designators = designators;
+        this(buildDesignator(type));
     }
 
     private static List<Designator> buildDesignator(Type type) {
-        if (!type.isAggregate()) {
+        if (!type.isAggregate() && !type.isUnion()) {
             return new ArrayList<>();
         } else {
             List<Designator> designators = new ArrayList<>();
             if (type instanceof ArrayType arrayType) {
                 designators.add(new ArrayDesignator(arrayType));
             } else if (type instanceof StructType structType) {
-                designators.add(new MemberDesignator(structType));
+                designators.add(new StructMemberDesignator(structType));
+            } else if (type instanceof UnionType unionType) {
+                designators.add(new UnionMemberDesignator(unionType));
             } else {
-                throw new IllegalArgumentException("Unknown aggregate type: " + type);
+                throw new IllegalArgumentException("Unknown aggregate/union type: " + type);
             }
             return designators;
         }
     }
 
     private static List<Designator> buildDesignators(Type type) {
-        if (!type.isAggregate()) {
+        if (!type.isAggregate() && !type.isUnion()) {
             return new ArrayList<>();
         } else {
             List<Designator> designators = new ArrayList<>();
             Type currentType = type;
-            while (currentType.isAggregate()) {
+            while (currentType.isAggregate() || currentType.isUnion()) {
                 if (currentType instanceof ArrayType arrayType) {
                     designators.add(new ArrayDesignator(arrayType));
                     currentType = arrayType.elementType();
                 } else if (currentType instanceof StructType structType) {
-                    designators.add(new MemberDesignator(structType));
+                    designators.add(new StructMemberDesignator(structType));
                     currentType = structType.info().fields().get(0).type;
+                } else if (currentType instanceof UnionType unionType) {
+                    designators.add(new UnionMemberDesignator(unionType));
+                    currentType = unionType.info().fields().get(0).type;
                 } else {
-                    throw new IllegalArgumentException("Unknown aggregate type: " + currentType);
+                    throw new IllegalArgumentException("Unknown aggregate/union type: " + currentType);
                 }
             }
             return designators;
@@ -86,10 +86,6 @@ final class Designation {
             throw new IllegalStateException("Designation is empty");
         }
         return designators.get(designators.size() - 1).subtype();
-    }
-
-    public List<Designator> getDesignators() {
-        return designators;
     }
 
     /**
