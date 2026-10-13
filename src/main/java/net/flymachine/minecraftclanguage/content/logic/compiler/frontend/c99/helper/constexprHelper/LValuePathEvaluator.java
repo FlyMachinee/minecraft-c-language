@@ -6,7 +6,8 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.PointerConstant;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.StringInit;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.ArrayType;
-import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.StructType;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.RecordType;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.record.Field;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.SymbolTable;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.ExpressionVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.*;
@@ -137,15 +138,15 @@ public final class LValuePathEvaluator implements ExpressionVisitor<Optional<LVa
             return Optional.empty();
         }
 
-        if (!(memberAccess.base.expType instanceof StructType st)) {
+        if (!(memberAccess.base.expType instanceof RecordType<?> rt)) {
             return Optional.empty();
         }
 
-        String memberName = memberAccess.member.name;
-        if (!st.hasField(memberName)) {
+        Field member = rt.getField(memberAccess.member.name).orElse(null);
+        if (member == null) {
             return Optional.empty();
         }
-        return Optional.of(new LValuePath.Member(basePath.get(), st.getField(memberName).orElseThrow()));
+        return Optional.of(new LValuePath.Member(basePath.get(), member));
     }
 
     @Override
@@ -156,17 +157,16 @@ public final class LValuePathEvaluator implements ExpressionVisitor<Optional<LVa
         }
 
         PointerConstant addr = (PointerConstant) addrRes.orThrow();
-        if (!(addr.referencedType() instanceof StructType st)) {
+        if (!(addr.referencedType() instanceof RecordType<?> rt)) {
             return Optional.empty();
         }
 
-        String memberName = ptrMemberAccess.member.name;
-        if (!st.hasField(memberName)) {
+        Field member = rt.getField(ptrMemberAccess.member.name).orElse(null);
+        if (member == null) {
             return Optional.empty();
         }
 
-        return Optional.of(
-            new LValuePath.Member(new LValuePath.Dereference(addr), st.getField(memberName).orElseThrow()));
+        return Optional.of(new LValuePath.Member(new LValuePath.Dereference(addr), member));
     }
 
     @Override

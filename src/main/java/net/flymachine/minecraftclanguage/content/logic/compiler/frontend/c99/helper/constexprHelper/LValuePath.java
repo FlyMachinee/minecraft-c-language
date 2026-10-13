@@ -1,8 +1,8 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.helper.constexprHelper;
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.PointerConstant;
-import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Field;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.record.Field;
 
 public sealed interface LValuePath {
 
