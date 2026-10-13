@@ -11,6 +11,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.UnaryOper
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.*;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.StringInit;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.*;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.record.Field;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.util.UndefinedBehaviourUtil;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.ExpressionBoolVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.ExpressionVisitor;
@@ -142,7 +143,7 @@ public final class AstToTacLowerer implements
                 if (initDecl.init != null) {
                     Type t = initDecl.finalType.getType();
                     String name = initDecl.id.name;
-                    if (t.isAggregate()) {
+                    if (t.isAggregate() || t.isUnion()) {
                         initializeBlockScopeObject(name, t, initDecl.init, 0);
                     } else {
                         emitTacCopy(
@@ -155,7 +156,7 @@ public final class AstToTacLowerer implements
 
     private void initializeBlockScopeObject(String target, Type t, InitializerNode init, long offset) {
         // 初始化块作用域变量
-        if (!t.isAggregate()) {
+        if (!t.isAggregate() && !t.isUnion()) {
             SingleInitializerNode singleInit = (SingleInitializerNode) init;
             TacValue val = evalAndLvalueConvert(singleInit.exp);
             emitTac(new TacCopyToOffset(val, target, offset));
@@ -171,8 +172,8 @@ public final class AstToTacLowerer implements
                 System.arraycopy(str.literal, 0, data, 0, Math.min(data.length, str.literal.length));
                 emitTac(new TacCopyByteArrayToOffset(data, target, offset));
                 return;
-            } else if (t instanceof StructType) {
-                // 单结构体变量对结构体进行整体初始化
+            } else if (t instanceof RecordType<?>) {
+                // 单结构体/联合体变量对结构体/联合体进行整体初始化
                 TacValue val = evalAndLvalueConvert(sin.exp);
                 emitTac(new TacCopyToOffset(val, target, offset));
                 return;
@@ -197,6 +198,19 @@ public final class AstToTacLowerer implements
                 initializeBlockScopeObject(target, f.type, designatedInit.initializer, offset + f.offset);
                 ++index;
             }
+            return;
+        }
+        if (t instanceof UnionType ut) {
+            assert compoundInit.inits.size() == 1;
+            DesignationInitializerNode slot = compoundInit.inits.get(0);
+            Field active;
+            if (!slot.designators.isEmpty()
+                && slot.designators.get(0) instanceof MemberDesignatorNode mdn) {
+                active = ut.info().getField(mdn.member.name).orElseThrow();
+            } else {
+                active = ut.info().fields().get(0);
+            }
+            initializeBlockScopeObject(target, active.type, slot.initializer, offset + active.offset);
             return;
         }
 
@@ -859,8 +873,8 @@ public final class AstToTacLowerer implements
     public ExpEvalResult visit(VariableNode variable) {
         SymbolTable.Entry entry = symbolTable.get(variable.id.name);
         if (entry.attr instanceof SymbolTable.Entry.AutoAttr autoAttr && autoAttr.passByReference) {
-            // 按引用传递的大结构体参数：实际参数中是指针
-            // 解引用以访问实际的结构体副本
+            // 按引用传递的大结构体/联合体参数：实际参数中是指针
+            // 解引用以访问实际的结构体/联合体副本
             return new DereferencedPointer(new TacAddressDescriptor(new TacVariable(variable)));
         }
         return new PlainOperand(new TacVariable(variable));
@@ -1150,20 +1164,20 @@ public final class AstToTacLowerer implements
     @Override
     public ExpEvalResult visit(MemberAccessNode memberAccess) {
         // s.x
-        // 左侧为结构体对象
+        // 左侧为结构体/联合体对象
         ExpEvalResult lhs = eval(memberAccess.base);
-        StructType structType = (StructType) memberAccess.base.expType;
+        RecordType<?> recordType = (RecordType<?>) memberAccess.base.expType;
         String fieldName = memberAccess.member.name;
-        long offset = structType.getField(fieldName).orElseThrow().offset;
+        long offset = recordType.getField(fieldName).orElseThrow().offset;
 
         if (lhs instanceof PlainOperand obj) {
-            // 直接访问结构体对象
+            // 直接访问结构体/联合体对象
             return new SubObject(((TacVariable) obj.object()).name, offset);
         } else if (lhs instanceof SubObject subObj) {
-            // 访问结构体子对象
+            // 访问结构体/联合体子对象
             return new SubObject(subObj.base(), subObj.offset() + offset);
         } else if (lhs instanceof DereferencedPointer deref) {
-            // 通过结构体指针访问对象
+            // 通过结构体/联合体指针访问对象
             PointerType pt = new PointerType(memberAccess.base.expType);
             TacAddressDescriptor addr = pointerAdd(deref.addr(), pt, new TacConstant(new ConstantLong(offset)), 1);
             return new DereferencedPointer(addr);
@@ -1175,13 +1189,13 @@ public final class AstToTacLowerer implements
     @Override
     public ExpEvalResult visit(PointerMemberAccessNode ptrMemberAccess) {
         // s->x
-        // 左侧为指向结构体指针
+        // 左侧为指向结构体/联合体指针
         TacAddressDescriptor addrDesc = evalAsAddressDescriptor(ptrMemberAccess.pointer);
-        StructType structType = (StructType) ((PointerType) ptrMemberAccess.pointer.expType).referencedType();
+        RecordType<?> recordType = (RecordType<?>) ((PointerType) ptrMemberAccess.pointer.expType).referencedType();
         String fieldName = ptrMemberAccess.member.name;
-        long offset = structType.getField(fieldName).orElseThrow().offset;
+        long offset = recordType.getField(fieldName).orElseThrow().offset;
 
-        PointerType pt = new PointerType(structType);
+        PointerType pt = new PointerType(recordType);
         TacAddressDescriptor addr = pointerAdd(addrDesc, pt, new TacConstant(new ConstantLong(offset)), 1);
         return new DereferencedPointer(addr);
     }
