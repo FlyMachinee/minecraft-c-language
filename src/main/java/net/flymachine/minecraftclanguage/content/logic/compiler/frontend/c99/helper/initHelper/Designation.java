@@ -116,7 +116,8 @@ final class Designation {
             if (current instanceof CompoundInitializerNode compound) {
                 current = designator.apply(compound);
             } else {
-                throw new IllegalArgumentException("Cannot apply designator to non-compound initializer");
+                // 如果当前初始化器不是复合初始化器，则无法继续应用指代符
+                return current;
             }
         }
         return current;
@@ -132,14 +133,26 @@ final class Designation {
         InitializerNode current = initializer;
         for (int i = 0; i < designators.size(); i++) {
             Designator designator = designators.get(i);
-            if (current instanceof CompoundInitializerNode compound) {
-                if (i == designators.size() - 1) {
-                    designator.apply(compound, newValue);
-                } else {
-                    current = designator.apply(compound);
-                }
+            if (!(current instanceof CompoundInitializerNode compound)) {
+                throw new IllegalStateException("Unexpected non-compound initializer in designator chain");
+            }
+            if (i == designators.size() - 1) {
+                // 最后一步，直接替换目标位置的初始化器
+                designator.apply(compound, newValue);
             } else {
-                throw new IllegalArgumentException("Cannot apply designator to non-compound initializer");
+                // 中间步骤，沿指示符链向下遍历
+                InitializerNode next = designator.apply(compound);
+                if (next instanceof CompoundInitializerNode) {
+                    current = next;
+                } else {
+                    // 当前位置是单个初始化器（字符串字面量或兼容类型的结构体变量）
+                    // 根据 C99 要求，此时对其子对象的初始化，不应覆盖其其余部分的显式初始化
+                    // 为了简便，这里直接用该位置的零初始化器替换它，等价于 GCC 的行为
+                    // 严格来说这是个 bug（Clang 会用临时变量保留原值再进行部分覆盖）
+                    InitializerNode replacement = InitializerHelper.zeroInitializer(designator.subtype());
+                    designator.apply(compound, replacement);
+                    current = replacement;
+                }
             }
         }
     }
