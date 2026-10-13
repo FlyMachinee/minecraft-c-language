@@ -36,6 +36,10 @@ public abstract class Type {
         return kind() == TypeKind.STRUCT;
     }
 
+    public final boolean isUnion() {
+        return kind() == TypeKind.UNION;
+    }
+
     public final boolean isError() {
         return kind() == TypeKind.ERROR;
     }
@@ -123,6 +127,12 @@ public abstract class Type {
         return isArray() || isStruct();
     }
 
+    /**
+     * 非标准用词，指代结构体类型或联合体类型
+     */
+    public final boolean isRecord() {
+        return isStruct() || isUnion();
+    }
 
     public final boolean isInt() {
         return isBasic() && ((BasicType) this).primitive() == BasicType.Primitive.INT;

@@ -1,4 +1,6 @@
-package net.flymachine.minecraftclanguage.content.logic.compiler.common.type;
+package net.flymachine.minecraftclanguage.content.logic.compiler.common.type.record;
+
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
 
 public final class Field {
     public final String name;
