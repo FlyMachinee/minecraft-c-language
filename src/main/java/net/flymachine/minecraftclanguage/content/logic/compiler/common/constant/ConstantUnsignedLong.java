@@ -49,9 +49,9 @@ public record ConstantUnsignedLong(long value) implements IntegerConstant {
         if (value >= 0) {
             return new ConstantDouble((double) value);
         } else {
-            long lowBits = value & Long.MAX_VALUE;
-            double result = Math.scalb(1.0, 63) + (double) lowBits;
-            return new ConstantDouble(result);
+            long high = value >>> 11;   // 高 53 位，[0, 2^53)
+            long low = value & 0x7FFL;  // 低 11 位，[0, 2^11)
+            return new ConstantDouble(Math.scalb((double) high, 11) + (double) low);
         }
     }
 
