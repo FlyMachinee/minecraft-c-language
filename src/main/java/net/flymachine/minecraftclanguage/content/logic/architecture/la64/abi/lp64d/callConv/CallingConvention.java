@@ -26,6 +26,15 @@ public final class CallingConvention {
     }
 
     /**
+     * 根据调用约定，分配函数返回值的寄存器/栈位置
+     *
+     * @param returnType 返回类型
+     */
+    public static Placement allocateReturn(Type returnType) {
+        return allocateReturn(returnType, new State());
+    }
+
+    /**
      * 根据调用约定，分配函数参数和返回值的寄存器/栈位置
      *
      * @param returnType 返回类型

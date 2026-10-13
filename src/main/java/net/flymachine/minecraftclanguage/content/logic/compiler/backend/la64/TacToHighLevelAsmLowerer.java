@@ -66,8 +66,12 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
         for (SymbolTable.Entry entry : symbolTable.getEntries()) {
             String name = entry.id.name;
             if (entry.attr instanceof SymbolTable.Entry.FuncAttr) {
-                Signature signature = CallingConvention.allocate((FunctionType) entry.type);
-                boolean onStack = signature.ret() instanceof Placement.ByReference;
+                boolean onStack = false;
+                FunctionType funcType = (FunctionType) entry.type;
+                if (funcType.returnType().isComplete()) {
+                    Placement retPlacement = CallingConvention.allocateReturn(funcType.returnType());
+                    onStack = retPlacement instanceof Placement.ByReference;
+                }
                 backendSymbolTable.put(name, new BackendSymbolTable.FuncEntry(entry.attr.isDefinition(), onStack));
             } else if (entry.attr instanceof SymbolTable.Entry.ConstantAttr) {
                 AsmType asmType = entry.type.toAsmType();
