@@ -55,6 +55,14 @@ public abstract class TypeNode extends AstNode {
             node.resolve(st.info());
             return node;
         }
+        if (type instanceof UnionType ut) {
+            UnionTypeNode node = new UnionTypeNode(null, new IdentifierNode(null, ut.tag()), null);
+            if (ut.isConst()) {
+                node.constQualifier = new ConstQualifierNode(null);
+            }
+            node.resolve(ut.info());
+            return node;
+        }
         throw new IllegalArgumentException("Unknown Type " + type);
     }
 

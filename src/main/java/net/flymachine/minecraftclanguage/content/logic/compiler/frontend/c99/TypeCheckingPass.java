@@ -8,6 +8,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.ConstantLong;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.ConstantUnsignedLong;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.*;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.record.Field;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.*;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.helper.constexprHelper.ConstantEvaluator;
@@ -219,9 +220,10 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
             return addrExp;
         }
 
-        if (exp.expType instanceof StructType st) {
-            if (!st.isComplete()) {
-                String msg = "invalid use of incomplete struct type '" + reporter.white(st.typename()) + "'";
+        if (exp.expType instanceof RecordType<?> rt) {
+            if (!rt.isComplete()) {
+                String kind = rt.isStruct() ? "struct" : "union";
+                String msg = "invalid use of incomplete " + kind + " type '" + reporter.white(rt.typename()) + "'";
                 reporter.error(exp.wholeLoc, msg);
                 exp.expType = ErrorType.INSTANCE;
             }
@@ -623,8 +625,8 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
             }
         }
 
-        if (t instanceof StructTypeNode st) {
-            checkStructType(st);
+        if (t instanceof RecordTypeNode<?> rt) {
+            checkStructOrUnionType(rt);
         }
 
         // 检查自身类型是否完整
@@ -644,7 +646,7 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
         }
     }
 
-    private void checkStructType(StructTypeNode t) {
+    private void checkStructOrUnionType(RecordTypeNode<?> t) {
         // 检查是否有定义体
         if (t.memberDeclarations != null) {
             // 如果先前有定义，则先前将 populate，从而使类型完整
@@ -1171,8 +1173,8 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
     public boolean validConvertAsIfByAssignment(ExpressionNode rhs, Type lhsType) {
         // rhs 与 lhs 必须满足下列条件之一
         // lhs 与 rhs 拥有兼容的 struct 或 union 类型，或……
-        if (lhsType instanceof StructType lhsStructType) {
-            if (lhsStructType.removeQualifiers().isCompatible(rhs.expType.removeQualifiers())) {
+        if (lhsType.isRecord()) {
+            if (lhsType.removeQualifiers().isCompatible(rhs.expType.removeQualifiers())) {
                 return true;
             }
         }
@@ -1257,8 +1259,8 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
             return false;
         }
         // 而且若它是结构体/联合体，则递归地没有任何成员为 const 限定
-        if (exp.expType instanceof StructType st) {
-            return st.modifiable();
+        if (exp.expType instanceof RecordType<?> rt) {
+            return rt.modifiable();
         }
         return true;
     }
@@ -1429,9 +1431,9 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
             return null;
         }
         // 两个相同结构体或联合体类型的表达式
-        if (thenExpType instanceof StructType thenStruct) {
-            if (thenStruct.isCompatible(elseExpType)) {
-                node.expType = thenStruct;
+        if (thenExpType instanceof RecordType<?> thenRecord) {
+            if (thenRecord.isCompatible(elseExpType)) {
+                node.expType = thenRecord;
                 return null;
             }
         }
@@ -1968,7 +1970,7 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
 
         String memberName = node.member.name;
 
-        if (!(node.base.expType instanceof StructType st)) {
+        if (!(node.base.expType instanceof RecordType<?> rt)) {
             String msg = "request for member '" + reporter.white(memberName) +
                          "' in something not a structure or union";
             reporter.error(node.wholeLoc, msg);
@@ -1976,7 +1978,7 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
             return null;
         }
 
-        node.expType = getMemberType(st, memberName, node.wholeLoc);
+        node.expType = getMemberType(rt, memberName, node.wholeLoc);
         return null;
     }
 
@@ -1990,7 +1992,7 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
 
         String memberName = node.member.name;
 
-        if (!(node.pointer.expType instanceof PointerType pt && pt.referencedType() instanceof StructType st)) {
+        if (!(node.pointer.expType instanceof PointerType pt && pt.referencedType() instanceof RecordType<?> rt)) {
             String msg = "request for member '" + reporter.white(memberName) +
                          "' in something not a pointer to structure or union";
             reporter.error(node.wholeLoc, msg);
@@ -1998,23 +2000,23 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
             return null;
         }
 
-        node.expType = getMemberType(st, memberName, node.wholeLoc);
+        node.expType = getMemberType(rt, memberName, node.wholeLoc);
         return null;
     }
 
-    private Type getMemberType(StructType st, String member, SourceLocation loc) {
-        if (!st.isComplete()) {
-            String msg = "invalid use of incomplete type '" + reporter.white(st.typename()) + "'";
+    private Type getMemberType(RecordType<?> t, String member, SourceLocation loc) {
+        if (!t.isComplete()) {
+            String msg = "invalid use of incomplete type '" + reporter.white(t.typename()) + "'";
             reporter.error(loc, msg);
             return ErrorType.INSTANCE;
         }
 
-        if (!st.hasField(member)) {
-            String msg = "'" + reporter.white(st.typename()) + "' has no member named '" +
+        if (!t.hasField(member)) {
+            String msg = "'" + reporter.white(t.typename()) + "' has no member named '" +
                          reporter.white(member) + "'";
             reporter.error(loc, msg);
             return ErrorType.INSTANCE;
         }
-        return st.getField(member).orElseThrow().type;
+        return t.getField(member).orElseThrow().type;
     }
 }
