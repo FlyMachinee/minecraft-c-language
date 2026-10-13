@@ -1,7 +1,9 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99;
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.StorageClassSpecifier;
-import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.StructInfo;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.record.RecordInfo;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.record.StructInfo;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.record.UnionInfo;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.*;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.helper.scope.ScopeStack;
@@ -26,7 +28,7 @@ public final class IdentifierResolutionPass implements AstVisitor<Void> {
     }
 
     private final ScopeStack<String, IdentifierEntry> scopeStack = new ScopeStack<>();
-    private final ScopeStack<String, StructInfo> tagScopeStack = new ScopeStack<>();
+    private final ScopeStack<String, RecordTypeNode<?>> tagScopeStack = new ScopeStack<>();
 
     private static class IdentifierEntry {
         public IdentifierNode id;
@@ -95,50 +97,82 @@ public final class IdentifierResolutionPass implements AstVisitor<Void> {
             visitTypeNode(pointerType.referencedType);
         }
 
-        if (type instanceof StructTypeNode structType) {
-            if (structType.resolved()) {
+        if (type instanceof RecordTypeNode<?> recordType) {
+            if (recordType.resolved()) {
                 return;
             }
-            if (structType.memberDeclarations != null) {
-                // struct tag? { ... } ...?
+            if (recordType.memberDeclarations != null) {
+                // struct/union tag? { ... } ...?
                 // 结构体定义，仅在当前作用域中查找
-                if (structType.tag == null) {
+                if (recordType.tag == null) {
                     // 匿名结构体
-                    StructInfo info = new StructInfo(null);
-                    structType.resolve(info);
+                    recordType.resolve(newRecordInfo(recordType, null));
                 } else {
-                    String tag = structType.tag.name;
-                    if (tagScopeStack.declaredInCurrentScope(tag)) {
-                        // 当前作用域已有声明，进行引用
-                        StructInfo previous = tagScopeStack.declarationInCurrentScope(tag).orElseThrow();
-                        structType.resolve(previous);
-                    } else {
-                        // 当前作用域无定义，添加声明
-                        StructInfo info = new StructInfo(tag);
-                        structType.resolve(info);
-                        tagScopeStack.declare(tag, info);
-                    }
+                    checkTagInCurrentScope(recordType);
                 }
-                for (MemberDeclarationNode memberDecl : structType.memberDeclarations) {
+                for (MemberDeclarationNode memberDecl : recordType.memberDeclarations) {
                     visitMemberDeclaration(memberDecl);
                 }
             } else {
-                // struct tag
-                assert structType.tag != null;
-                String tag = structType.tag.name;
+                // struct/union tag
+                assert recordType.tag != null;
+                String tag = recordType.tag.name;
                 // 查找先前声明
-                if (tagScopeStack.declaredInScope(tag)) {
-                    // 先前已有声明，进行引用
-                    StructInfo previous = tagScopeStack.declarationOf(tag).orElseThrow();
-                    structType.resolve(previous);
-                } else {
-                    // 无声明，在当前作用域添加声明
-                    StructInfo info = new StructInfo(tag);
-                    structType.resolve(info);
-                    tagScopeStack.declare(tag, info);
-                }
+                RecordTypeNode<?> previous = tagScopeStack.declarationOf(tag).orElse(null);
+                checkTagReference(tag, recordType, previous);
             }
         }
+    }
+
+    private void checkTagInCurrentScope(RecordTypeNode<?> current) {
+        assert current.tag != null;
+        String tag = current.tag.name;
+        RecordTypeNode<?> previous = tagScopeStack.declarationInCurrentScope(tag).orElse(null);
+        checkTagReference(tag, current, previous);
+    }
+
+    private void checkTagReference(String tag, RecordTypeNode<?> current, RecordTypeNode<?> previous) {
+        if (previous != null) {
+            // 当前作用域已有声明，进行引用
+            checkTagKind(current, previous);
+            if (!current.resolved()) {
+                // 检查无误，引用先前的定义
+                current.resolve(previous.getInfo());
+            }
+        } else {
+            // 当前作用域无定义，添加声明
+            current.resolve(newRecordInfo(current, tag));
+            tagScopeStack.declare(tag, current);
+        }
+    }
+
+    private void checkTagKind(RecordTypeNode<?> current, RecordTypeNode<?> previous) {
+        if (current instanceof StructTypeNode && previous instanceof StructTypeNode) {
+            return;
+        }
+        if (current instanceof UnionTypeNode && previous instanceof UnionTypeNode) {
+            return;
+        }
+        assert current.tag != null;
+        assert previous.tag != null;
+
+        String tag = current.tag.name;
+
+        String msg = "'" + reporter.white(tag) + "' defined as wrong kind of tag";
+        reporter.error(current.tag.wholeLoc, msg);
+        reporter.note(previous.tag.wholeLoc, "previous definition");
+        // 给一个 dummy 的 RecordInfo，避免后续异常
+        current.resolve(newRecordInfo(current, tag));
+    }
+
+    private static RecordInfo newRecordInfo(RecordTypeNode<?> node, @Nullable String tag) {
+        if (node instanceof StructTypeNode) {
+            return new StructInfo(tag);
+        }
+        if (node instanceof UnionTypeNode) {
+            return new UnionInfo(tag);
+        }
+        throw new IllegalStateException("Unknown RecordTypeNode: " + node.getClass().getName());
     }
 
     private void visitMemberDeclaration(MemberDeclarationNode memberDecl) {
@@ -244,31 +278,20 @@ public final class IdentifierResolutionPass implements AstVisitor<Void> {
     @Override
     public Void visit(DeclarationNode node) {
         if (node.initDeclarators.isEmpty()) {
-            if (node.baseType instanceof StructTypeNode structType) {
-                if (structType.memberDeclarations == null) {
-                    // struct S;
-                    assert structType.tag != null;
-                    String tag = structType.tag.name;
-                    // 检查当前作用域是否有声明
-                    if (tagScopeStack.declaredInCurrentScope(tag)) {
-                        // 当前作用域已有声明，进行引用
-                        StructInfo previous = tagScopeStack.declarationInCurrentScope(tag).orElseThrow();
-                        structType.resolve(previous);
-                    } else {
-                        // 当前作用域无定义，添加声明
-                        StructInfo info = new StructInfo(tag);
-                        structType.resolve(info);
-                        tagScopeStack.declare(tag, info);
-                    }
+            if (node.baseType instanceof RecordTypeNode<?> recordType) {
+                if (recordType.memberDeclarations == null) {
+                    // struct/union S;
+                    assert recordType.tag != null;
+                    checkTagInCurrentScope(recordType);
                     return null;
                 } else {
-                    // struct tag? { ... };
-                    if (structType.tag == null) {
+                    // struct/record tag? { ... };
+                    if (recordType.tag == null) {
                         // 匿名结构体，且没有相关联的标识符
                         String msg = "unnamed struct/union that defines no instances";
-                        reporter.warning(structType.wholeLoc, msg);
+                        reporter.warning(recordType.wholeLoc, msg);
                     }
-                    visitTypeNode(structType);
+                    visitTypeNode(recordType);
                 }
             }
         }
