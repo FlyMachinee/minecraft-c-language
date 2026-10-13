@@ -77,8 +77,8 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
                 AsmType asmType = entry.type.toAsmType();
                 backendSymbolTable.put(name, new BackendSymbolTable.ObjectEntry(asmType, true, true));
             } else if (entry.attr instanceof SymbolTable.Entry.AutoAttr autoAttr && autoAttr.passByReference) {
-                // 大结构体按引用传递
-                assert entry.type.isStruct() && entry.type.sizeof() > 16;
+                // 大结构体/联合体按引用传递
+                assert entry.type.isRecord() && entry.type.sizeof() > 16;
                 backendSymbolTable.put(name, new BackendSymbolTable.ObjectEntry(AsmType.DWORD, false, false));
             } else {
                 AsmType asmType = entry.type.toAsmType();
@@ -125,9 +125,9 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
         Signature signature = CallingConvention.allocate(funcType);
 
         if (signature.ret() instanceof Placement.ByReference) {
-            // 大结构体返回，需要在调用者分配空间，并传递地址给被调用函数
+            // 大结构体/联合体返回，需要在调用者分配空间，并传递地址给被调用函数
             // 对地址进行保存
-            assert funcType.returnType().isStruct() && funcType.returnType().sizeof() > 16;
+            assert funcType.returnType().isRecord() && funcType.returnType().sizeof() > 16;
             target.add(new Move(AsmType.DWORD, A0, new Memory(FP, -24)));
         }
 
@@ -142,8 +142,8 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
             }
 
             if (placement instanceof Placement.ByReference byRef) {
-                // 结构体按引用传递
-                assert paramType.isStruct() && paramType.sizeof() > 16;
+                // 结构体/联合体按引用传递
+                assert paramType.isRecord() && paramType.sizeof() > 16;
                 // 将传入的地址拷贝至伪操作数
                 target.add(new Move(AsmType.DWORD, lowerSlot(byRef.pointerSlot(), false), dst));
                 continue;
@@ -155,8 +155,8 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
                 assert inSlots.slots().size() == 1;
                 Slot slot = inSlots.slots().get(0);
                 target.add(new Move(slot.type(), lowerSlot(slot, false), dst));
-            } else if (paramType.isStruct()) {
-                // 结构体类型，按 ABI 要求进行传递
+            } else if (paramType.isRecord()) {
+                // 结构体/联合体类型，按 ABI 要求进行传递
                 PseudoMemory dstMem = (PseudoMemory) dst;
 
                 for (Slot slot : inSlots.slots()) {
@@ -167,13 +167,13 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
                         // 非 1 2 4 8 长度，特殊处理
                         AsmType.ByteArray ba = (AsmType.ByteArray) slot.type();
                         if (slot instanceof Slot.GAR gar) {
-                            // 通过寄存器传递的小结构体
+                            // 通过寄存器传递的小结构体/联合体
                             copyBytesFromReg((int) ba.size(), GPR_ARGS[gar.index()], dstMem);
                         } else if (slot instanceof Slot.Stack stack) {
-                            // 通过栈传递的小结构体
-                            lowerStructTransfer(ba,
-                                                new AddrSpec.Dynamic(FP, stack.offset()),
-                                                new AddrSpec.Static(dstMem.name(), dstMem.offset()));
+                            // 通过栈传递的小结构体/联合体
+                            copyBytesMemToMem(ba,
+                                              new AddrSpec.Dynamic(FP, stack.offset()),
+                                              new AddrSpec.Static(dstMem.name(), dstMem.offset()));
                         } else {
                             throw new IllegalStateException("Unknown slot type: " + slot);
                         }
@@ -209,15 +209,15 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
             throw new IllegalStateException("Control should not reach here");
         }
         if (retPlacement instanceof Placement.ByReference) {
-            // 返回大结构体，将结构体写回先前调用者传入的地址
-            assert retType.isStruct() && retType.sizeof() > 16;
+            // 返回大结构体/联合体，将结构体/联合体写回先前调用者传入的地址
+            assert retType.isRecord() && retType.sizeof() > 16;
             // 先前调用者传入的地址在 fp-24 处，按 ABI 要求通过 A0 传回
             target.add(new Move(AsmType.DWORD, new Memory(FP, -24), A0));
             // 进行写回
             PseudoMemory valMem = (PseudoMemory) val;
-            lowerStructTransfer((AsmType.ByteArray) retType.toAsmType(),
-                                new AddrSpec.Static(valMem.name(), valMem.offset()),
-                                new AddrSpec.Dynamic(A0, 0));
+            copyBytesMemToMem((AsmType.ByteArray) retType.toAsmType(),
+                              new AddrSpec.Static(valMem.name(), valMem.offset()),
+                              new AddrSpec.Dynamic(A0, 0));
         } else {
             // 通过寄存器返回
             Placement.InSlots inSlots = (Placement.InSlots) retPlacement;
@@ -227,8 +227,8 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
                 assert slot instanceof Slot.GAR || slot instanceof Slot.FAR;
                 // 标量返回，拷贝即可
                 target.add(new Move(slot.type(), val, lowerSlot(slot, false)));
-            } else if (retType.isStruct()) {
-                // 结构体类型，按 ABI 要求进行传递
+            } else if (retType.isRecord()) {
+                // 结构体/联合体类型，按 ABI 要求进行传递
                 PseudoMemory valMem = (PseudoMemory) val;
                 assert retType.sizeof() <= 16;
                 // 0 < size <= 16
@@ -369,13 +369,13 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
         // 但存放在寄存器中时，(signed) char 是符号拓展的，而 unsigned char 是零拓展的，此时就不能使用 Move 指令，而是相应的拓展指令了
 
         if (srcType instanceof AsmType.ByteArray byteArray) {
-            // 结构体拷贝
+            // 结构体/联合体拷贝
             assert byteArray.equals(dstType);
             PseudoMemory srcMem = (PseudoMemory) src;
             PseudoMemory dstMem = (PseudoMemory) dst;
-            lowerStructTransfer(byteArray,
-                                new AddrSpec.Static(srcMem.name(), srcMem.offset()),
-                                new AddrSpec.Static(dstMem.name(), dstMem.offset()));
+            copyBytesMemToMem(byteArray,
+                              new AddrSpec.Static(srcMem.name(), srcMem.offset()),
+                              new AddrSpec.Static(dstMem.name(), dstMem.offset()));
             return null;
         }
 
@@ -531,7 +531,7 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
         // 参数传递逻辑
         // 不需要分配或回收栈空间，由函数序言和尾声进行处理，函数序言中会分配好足够使用的栈空间
 
-        // 处理返回值，大结构体返回需要通过 a0 传递返回值地址
+        // 处理返回值，大结构体/联合体返回需要通过 a0 传递返回值地址
         if (signature.ret() instanceof Placement.ByReference) {
             assert dst != null;
             target.add(new LoadAddress(lowerValue(dst), A0));
@@ -551,18 +551,18 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
             HighLevelOperand argOp = lowerValue(arg);
 
             if (placement instanceof Placement.ByReference byRef) {
-                // 结构体按引用传递
-                assert argType.isStruct();
+                // 结构体/联合体按引用传递
+                assert argType.isRecord();
                 PseudoMemory argMem = (PseudoMemory) argOp;
                 // 调用者分配空间，并传递地址
                 long copyDstOffset = byRef.copySlot().offset();
                 // 地址传递
                 target.add(new LoadAddress(new Memory(SP, copyDstOffset), lowerSlot(byRef.pointerSlot(), true)));
-                // 拷贝结构体至分配的空间
+                // 拷贝结构体/联合体至分配的空间
                 AsmType.ByteArray asmType = (AsmType.ByteArray) argType.toAsmType();
-                lowerStructTransfer(asmType,
-                                    new AddrSpec.Static(argMem.name(), argMem.offset()),
-                                    new AddrSpec.Dynamic(SP, copyDstOffset));
+                copyBytesMemToMem(asmType,
+                                  new AddrSpec.Static(argMem.name(), argMem.offset()),
+                                  new AddrSpec.Dynamic(SP, copyDstOffset));
                 continue;
             }
 
@@ -581,8 +581,8 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
                         target.add(new ZeroExtend(asmType, AsmType.DWORD, argOp, slotOp));
                     case DWORD, DOUBLE -> target.add(new Move(asmType, argOp, slotOp));
                 }
-            } else if (argType.isStruct()) {
-                // 结构体类型，按 ABI 要求进行传递
+            } else if (argType.isRecord()) {
+                // 结构体/联合体类型，按 ABI 要求进行传递
                 PseudoMemory argMem = (PseudoMemory) argOp;
 
                 // 在此处，0 < size <= 16，通过寄存器/栈来传递
@@ -594,13 +594,13 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
                         // 非 1 2 4 8 长度，特殊处理
                         AsmType.ByteArray ba = (AsmType.ByteArray) slot.type();
                         if (slot instanceof Slot.GAR gar) {
-                            // 通过寄存器传递的小结构体
+                            // 通过寄存器传递的小结构体/联合体
                             copyBytesToReg((int) ba.size(), argMem, GPR_ARGS[gar.index()]);
                         } else if (slot instanceof Slot.Stack stack) {
-                            // 通过栈传递的小结构体
-                            lowerStructTransfer(ba,
-                                                new AddrSpec.Static(argMem.name(), argMem.offset()),
-                                                new AddrSpec.Dynamic(SP, stack.offset()));
+                            // 通过栈传递的小结构体/联合体
+                            copyBytesMemToMem(ba,
+                                              new AddrSpec.Static(argMem.name(), argMem.offset()),
+                                              new AddrSpec.Dynamic(SP, stack.offset()));
                         } else {
                             throw new IllegalStateException("Unknown slot type: " + slot);
                         }
@@ -622,7 +622,7 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
         if (retPlacement instanceof Placement.Ignored) {
             throw new IllegalStateException("Control should not reach here");
         } else if (retPlacement instanceof Placement.ByReference) {
-            // 结构体按引用返回，返回值已经通过 a0 传递了
+            // 结构体/联合体按引用返回，返回值已经通过 a0 传递了
             return;
         }
 
@@ -634,8 +634,8 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
             HighLevelOperand slotOp = lowerSlot(slot, true);
             AsmType.PrimitiveType asmType = (AsmType.PrimitiveType) dstType.toAsmType();
             target.add(new Move(asmType, slotOp, dstOp));
-        } else if (dstType.isStruct()) {
-            // 结构体类型，按 ABI 要求进行返回
+        } else if (dstType.isRecord()) {
+            // 结构体/联合体类型，按 ABI 要求进行返回
             PseudoMemory dstMem = (PseudoMemory) dstOp;
 
             for (Slot slot : inSlots.slots()) {
@@ -839,12 +839,12 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
         HighLevelOperand base = lowerValue(addr.base());
 
         if (asmType instanceof AsmType.ByteArray byteArray) {
-            // 结构体加载
+            // 结构体/联合体加载
             PseudoMemory dstMem = (PseudoMemory) dst;
             GeneralPurposeRegister ptr = resolvePtrToT3(addr);
-            lowerStructTransfer(byteArray,
-                                new AddrSpec.Dynamic(ptr, addr.offset()),
-                                new AddrSpec.Static(dstMem.name(), dstMem.offset()));
+            copyBytesMemToMem(byteArray,
+                              new AddrSpec.Dynamic(ptr, addr.offset()),
+                              new AddrSpec.Static(dstMem.name(), dstMem.offset()));
             return null;
         }
 
@@ -888,12 +888,12 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
         HighLevelOperand base = lowerValue(addr.base());
 
         if (asmType instanceof AsmType.ByteArray byteArray) {
-            // 结构体存储
+            // 结构体/联合体存储
             PseudoMemory srcMem = (PseudoMemory) src;
             GeneralPurposeRegister ptr = resolvePtrToT3(addr);
-            lowerStructTransfer(byteArray,
-                                new AddrSpec.Static(srcMem.name(), srcMem.offset()),
-                                new AddrSpec.Dynamic(ptr, addr.offset()));
+            copyBytesMemToMem(byteArray,
+                              new AddrSpec.Static(srcMem.name(), srcMem.offset()),
+                              new AddrSpec.Dynamic(ptr, addr.offset()));
             return null;
         }
 
@@ -961,11 +961,11 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
         AsmType asmType = getType(inst.src).toAsmType();
 
         if (asmType instanceof AsmType.ByteArray byteArray) {
-            // 结构体拷贝
+            // 结构体/联合体拷贝
             PseudoMemory srcMem = (PseudoMemory) lowerValue(inst.src);
-            lowerStructTransfer(byteArray,
-                                new AddrSpec.Static(srcMem.name(), srcMem.offset()),
-                                new AddrSpec.Static(inst.dst, inst.offset));
+            copyBytesMemToMem(byteArray,
+                              new AddrSpec.Static(srcMem.name(), srcMem.offset()),
+                              new AddrSpec.Static(inst.dst, inst.offset));
             return null;
         }
 
@@ -1022,11 +1022,11 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
         AsmType asmType = getType(inst.dst).toAsmType();
 
         if (asmType instanceof AsmType.ByteArray byteArray) {
-            // 结构体拷贝
+            // 结构体/联合体拷贝
             PseudoMemory dstMem = (PseudoMemory) lowerValue(inst.dst);
-            lowerStructTransfer(byteArray,
-                                new AddrSpec.Static(inst.src, inst.offset),
-                                new AddrSpec.Static(dstMem.name(), dstMem.offset()));
+            copyBytesMemToMem(byteArray,
+                              new AddrSpec.Static(inst.src, inst.offset),
+                              new AddrSpec.Static(dstMem.name(), dstMem.offset()));
             return null;
         }
 
@@ -1056,10 +1056,10 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
         } else if (tacValue instanceof TacVariable tacVariable) {
             String name = tacVariable.name;
             SymbolTable.Entry entry = symbolTable.get(name);
-            if (entry.type.isAggregate()) {
+            if (entry.type.isAggregate() || entry.type.isUnion()) {
                 if (entry.attr instanceof SymbolTable.Entry.AutoAttr autoAttr && autoAttr.passByReference) {
-                    // 通过引用传递的大结构体
-                    assert entry.type.isStruct() && entry.type.sizeof() > 16;
+                    // 通过引用传递的大结构体/联合体
+                    assert entry.type.isRecord() && entry.type.sizeof() > 16;
                     return new Pseudo(tacVariable.name);
                 } else {
                     return new PseudoMemory(tacVariable.name, 0);
@@ -1077,8 +1077,8 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
         } else if (tacValue instanceof TacVariable tacVariable) {
             SymbolTable.Entry entry = symbolTable.get(tacVariable.name);
             if (entry.attr instanceof SymbolTable.Entry.AutoAttr autoAttr && autoAttr.passByReference) {
-                // 通过引用传递的大结构体
-                assert entry.type.isStruct() && entry.type.sizeof() > 16;
+                // 通过引用传递的大结构体/联合体
+                assert entry.type.isRecord() && entry.type.sizeof() > 16;
                 return new PointerType(entry.type);
             }
             return entry.type;
@@ -1092,7 +1092,7 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
         record Dynamic(GeneralPurposeRegister ptr, long baseOffset) implements AddrSpec { }
     }
 
-    private void lowerStructTransfer(AsmType.ByteArray byteArray, AddrSpec src, AddrSpec dst) {
+    private void copyBytesMemToMem(AsmType.ByteArray byteArray, AddrSpec src, AddrSpec dst) {
         for (long offset = 0; offset < byteArray.size(); ) {
             if (offset + 8 <= byteArray.size()) {
                 emitRead(AsmType.DWORD, src, offset, T1);
