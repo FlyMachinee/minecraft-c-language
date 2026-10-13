@@ -1,44 +1,32 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node;
 
-import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.StructInfo;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.StructType;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.record.RecordInfo;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.record.StructInfo;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 
-public final class StructTypeNode extends TypeNode {
-    public final @Nullable IdentifierNode tag;
-    public final @Nullable List<MemberDeclarationNode> memberDeclarations;
-
-    private StructType resolvedType;
+public final class StructTypeNode extends RecordTypeNode<StructInfo> {
 
     public StructTypeNode(SourceLocation wholeLocation, @Nullable IdentifierNode tag,
         @Nullable List<MemberDeclarationNode> memberDeclarations) {
-
-        super(wholeLocation);
-        this.tag = tag;
-        this.memberDeclarations = memberDeclarations;
+        super(wholeLocation, tag, memberDeclarations);
     }
 
-    public void resolve(StructInfo info) {
-        if (this.resolvedType != null) {
-            throw new IllegalStateException("StructTypeNode is already resolved");
-        }
-        this.resolvedType = new StructType(info, constQualifier != null);
-    }
-
-    public boolean resolved() {
-        return resolvedType != null;
+    @Override
+    protected StructInfo narrowInfo(RecordInfo info) {
+        return (StructInfo) info;
     }
 
     @Override
     public StructType getType() {
-        if (resolvedType == null) {
+        if (!resolved()) {
             throw new IllegalStateException("StructTypeNode is not resolved yet");
         }
-        return resolvedType;
+        return new StructType(getInfo(), constQualifier != null);
     }
 
     @Override

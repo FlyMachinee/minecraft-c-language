@@ -140,6 +140,7 @@ Sizeof: 'sizeof';
 Static: 'static';
 Struct: 'struct';
 Switch: 'switch';
+Union: 'union';
 Unsigned: 'unsigned';
 Void: 'void';
 While: 'while';

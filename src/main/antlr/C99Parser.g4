@@ -233,6 +233,7 @@ structOrUnionSpecifier
     ;
 structOrUnion
     : Struct
+    | Union
     ;
 structDeclaration
     : specifierQualifierList structDeclarator (Comma structDeclarator)* Semicolon

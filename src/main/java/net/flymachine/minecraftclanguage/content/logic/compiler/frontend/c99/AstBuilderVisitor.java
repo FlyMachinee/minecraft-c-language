@@ -334,7 +334,11 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
                 memberDeclarations.add(visitStructDeclaration(structDeclCtx));
             }
         }
-        return new StructTypeNode(getSourceLocation(ctx), tag, memberDeclarations);
+        if (ctx.structOrUnion().Struct() != null) {
+            return new StructTypeNode(getSourceLocation(ctx), tag, memberDeclarations);
+        } else {
+            return new UnionTypeNode(getSourceLocation(ctx), tag, memberDeclarations);
+        }
     }
 
     @Override
