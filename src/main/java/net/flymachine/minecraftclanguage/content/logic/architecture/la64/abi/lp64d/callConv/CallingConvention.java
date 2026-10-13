@@ -2,6 +2,7 @@ package net.flymachine.minecraftclanguage.content.logic.architecture.la64.abi.lp
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.AsmType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.*;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.record.Field;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
@@ -94,6 +95,12 @@ public final class CallingConvention {
             }
             return new FlatInfo(f, i, firstFloat);
         }
+        if (type instanceof UnionType ut) {
+            // 联合体展开时一律按整数处理
+            long size = ut.sizeof();
+            int intCount = (int) ((size + GRLEN - 1) / GRLEN);
+            return new FlatInfo(0, intCount, false);
+        }
         throw new IllegalArgumentException("Unsupported type for flatten: " + type);
     }
 
@@ -103,6 +110,9 @@ public final class CallingConvention {
         }
         if (t instanceof StructType st) {
             return allocateStruct(st, s);
+        }
+        if (t instanceof UnionType ut) {
+            return allocateUnion(ut, s);
         }
         throw new IllegalArgumentException("Unsupported parameter type: " + t);
     }
@@ -134,6 +144,21 @@ public final class CallingConvention {
         if (fi.floatCount() == 1 && fi.intCount() == 1) {
             return allocateMixedFarGar(fi, s);
         }
+        return allocateGarPair(s, GRLEN, size - GRLEN);
+    }
+
+    private static Placement allocateUnion(UnionType ut, State s) {
+        int size = (int) ut.sizeof();
+        if (size == 0) {
+            throw new IllegalArgumentException("Empty union is not supported");
+        }
+        if (size > 2 * GRLEN) {
+            return allocateByReference(s);
+        }
+        if (size <= GRLEN) {
+            return allocateSingleGar(slotAsmType(size), s);
+        }
+        // GRLEN < size <= 2 * GRLEN
         return allocateGarPair(s, GRLEN, size - GRLEN);
     }
 
