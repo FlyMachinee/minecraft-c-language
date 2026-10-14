@@ -150,6 +150,8 @@ public final class IdentifierResolutionPass implements AstVisitor<Void> {
             }
             return;
         }
+        // 枚举常量也要重命名
+        enumerator.name.name = makeUniqueName(name);
         scopeStack.declare(name, IdentifierEntry.ofEnumerator(enumerator.name, enumType));
     }
 
