@@ -332,7 +332,7 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
                 // lhs 与 rhs 必须为下列之一
                 // 都拥有算术类型，包含复数和虚数
                 if (lhsType.isArithmetic() && rhsType.isArithmetic()) {
-                    BasicType commonType = Type.commonRealType((BasicType) lhsType, (BasicType) rhsType);
+                    BasicType commonType = Type.commonRealType(lhsType, rhsType);
                     node.lhs = convertTo(node.lhs, commonType);
                     node.rhs = convertTo(node.rhs, commonType);
                     yield commonType;
@@ -373,7 +373,7 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
                 // lhs 与 rhs 必须为下列之一
                 // 都拥有算术类型，包含复数和虚数
                 if (lhsType.isArithmetic() && rhsType.isArithmetic()) {
-                    BasicType commonType = Type.commonRealType((BasicType) lhsType, (BasicType) rhsType);
+                    BasicType commonType = Type.commonRealType(lhsType, rhsType);
                     node.lhs = convertTo(node.lhs, commonType);
                     node.rhs = convertTo(node.rhs, commonType);
                     yield commonType;
@@ -424,7 +424,7 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
                     reporter.error(node.op.wholeLoc, msg);
                     yield ErrorType.INSTANCE;
                 }
-                BasicType commonType = Type.commonRealType((BasicType) lhsType, (BasicType) rhsType);
+                BasicType commonType = Type.commonRealType(lhsType, rhsType);
                 node.lhs = convertTo(node.lhs, commonType);
                 node.rhs = convertTo(node.rhs, commonType);
                 yield commonType;
@@ -438,7 +438,7 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
                     reporter.error(node.op.wholeLoc, msg);
                     yield ErrorType.INSTANCE;
                 }
-                BasicType commonType = Type.commonRealType((BasicType) lhsType, (BasicType) rhsType);
+                BasicType commonType = Type.commonRealType(lhsType, rhsType);
                 node.lhs = convertTo(node.lhs, commonType);
                 node.rhs = convertTo(node.rhs, commonType);
                 yield commonType;
@@ -476,7 +476,7 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
                 // 若 lhs 和 rhs 是任何实数类型的表达式，则
                 if (lhsType.isReal() && rhsType.isReal()) {
                     // 进行一般算术转换
-                    BasicType commonType = Type.commonRealType((BasicType) lhsType, (BasicType) rhsType);
+                    BasicType commonType = Type.commonRealType(lhsType, rhsType);
                     node.lhs = convertTo(node.lhs, commonType);
                     node.rhs = convertTo(node.rhs, commonType);
                     yield BasicType.INT;
@@ -501,7 +501,7 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
                 Type commonType = ErrorType.INSTANCE;
                 if (lhsType.isArithmetic() && rhsType.isArithmetic()) {
                     // 若两个运算数都拥有算术类型，则进行一般算术转换，而以通常数学意义比较所得值
-                    commonType = Type.commonRealType((BasicType) lhsType, (BasicType) rhsType);
+                    commonType = Type.commonRealType(lhsType, rhsType);
                 } else if (lhsType.isPointer() || rhsType.isPointer()) {
                     // 若一个操作数为指针而另一空指针常量，则首先转换空指针常量为该指针的类型（给出空指针值），并以后述方式比较两个指针
                     if (isNullPointerConstant(node.lhs)) {
@@ -547,7 +547,7 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
             case ASSIGN -> throw new IllegalArgumentException("Cannot handle simple assignment");
             case MULTIPLY_ASSIGN, DIVIDE_ASSIGN, ADD_ASSIGN, SUBTRACT_ASSIGN, MODULO_ASSIGN, BITWISE_AND_ASSIGN,
                  BITWISE_OR_ASSIGN, BITWISE_XOR_ASSIGN -> {
-                BasicType commonType = Type.commonRealType((BasicType) lhsType, (BasicType) rhsType);
+                BasicType commonType = Type.commonRealType(lhsType, rhsType);
                 yield new TypeCheckCompoundAssignmentResult(commonType, commonType, commonType);
             }
             case LEFT_SHIFT_ASSIGN, RIGHT_SHIFT_ASSIGN -> {
@@ -629,6 +629,10 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
             checkStructOrUnionType(rt);
         }
 
+        if (t instanceof EnumTypeNode et) {
+            checkEnumType(et);
+        }
+
         // 检查自身类型是否完整
         if (requireCompleteItself && !t.getType().isComplete()) {
             // 不完整类型
@@ -700,6 +704,55 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
                     // 非匿名结构体，添加至定义表中
                     tagDefLocation.put(t.tag.name, t.tag.wholeLoc);
                 }
+            }
+        }
+    }
+
+    private void checkEnumType(EnumTypeNode t) {
+        if (t.enumerators == null) {
+            // 引用形式 enum E，不需要处理
+            return;
+        }
+
+        EnumType et = t.getType();
+        boolean redefinition = et.isComplete();
+        if (redefinition) {
+            // 重定义
+            assert t.tag != null;
+            String msg = "redefinition of '" + reporter.white(t.tag.name) + "'";
+            reporter.error(t.tag.wholeLoc, msg);
+            reporter.note(tagDefLocation.get(t.tag.name), "previous definition is here");
+        }
+
+        int nextValue = 0;
+
+        for (EnumeratorNode enumerator : t.enumerators) {
+            int value;
+            if (enumerator.value != null) {
+                ExpressionNode exp = checkExpressionAndDecay(enumerator.value);
+                Either<Constant, SourceLocation> evalResult = constantEvaluator.tryEvalIntegerConstant(exp);
+                if (evalResult.right().isPresent()) {
+                    String msg = "enumerator value for '" + reporter.white(enumerator.name.name) +
+                                 "' is not an integer constant";
+                    reporter.error(evalResult.right().get(), msg);
+                    value = nextValue;
+                } else {
+                    value = evalResult.orThrow().toInt().value();
+                }
+            } else {
+                value = nextValue;
+            }
+
+            symbolTable.put(enumerator.name.name,
+                            new SymbolTable.Entry(enumerator.name, t, BasicType.INT,
+                                                  new SymbolTable.Entry.EnumeratorAttr(value)));
+            nextValue = value + 1;
+        }
+
+        if (!redefinition) {
+            et.populate();
+            if (t.tag != null) {
+                tagDefLocation.put(t.tag.name, t.tag.wholeLoc);
             }
         }
     }
@@ -1166,7 +1219,12 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
     public Void visit(VariableNode node) {
         // 始终有定义
         SymbolTable.Entry entry = symbolTable.get(node.id.name);
-        node.expType = entry.type;
+        if (entry.attr instanceof SymbolTable.Entry.EnumeratorAttr) {
+            // 枚举常量的类型是 int (ISO C99 6.4.4.3p2)
+            node.expType = BasicType.INT;
+        } else {
+            node.expType = entry.type;
+        }
         return null;
     }
 
@@ -1217,8 +1275,12 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
         }
 
         // 标识符，含具名函数形参，只要声明它们为指代对象（而非函数或枚举常量）
-        if (exp instanceof VariableNode var && !(var.expType.isFunction())) {
-            return true;
+        if (exp instanceof VariableNode var) {
+            if (var.expType.isFunction()) {
+                return false;
+            }
+            SymbolTable.Entry entry = symbolTable.get(var.id.name);
+            return !(entry.attr instanceof SymbolTable.Entry.EnumeratorAttr);
         }
         // 字符串字面量
         if (exp instanceof StringLiteralNode) {
@@ -1424,7 +1486,7 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
         // 两个任何算术类型的表达式
         if (thenExpType.isArithmetic() && elseExpType.isArithmetic()) {
             // 若表达式拥有算术类型，则公共类型为一般算术转换后的类型
-            BasicType commonType = Type.commonRealType((BasicType) thenExpType, (BasicType) elseExpType);
+            BasicType commonType = Type.commonRealType(thenExpType, elseExpType);
             node.thenExp = convertTo(node.thenExp, commonType);
             node.elseExp = convertTo(node.elseExp, commonType);
             node.expType = commonType;

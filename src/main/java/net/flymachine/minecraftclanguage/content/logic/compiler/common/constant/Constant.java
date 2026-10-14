@@ -8,6 +8,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.UnaryOper
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.StaticInit;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.ZeroInit;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.BasicType;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.EnumType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.PointerType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.ConstantNode;
@@ -51,6 +52,9 @@ public sealed interface Constant permits ConstantDouble, IntegerConstant, Pointe
         }
         if (type instanceof PointerType pt) {
             return toPointer(pt.referencedType());
+        }
+        if (type instanceof EnumType et) {
+            return castTo(et.underlyingType());
         }
         throw new UnsupportedOperationException("Unsupported type for constant cast: " + type);
     }

@@ -63,6 +63,14 @@ public abstract class TypeNode extends AstNode {
             node.resolve(ut.info());
             return node;
         }
+        if (type instanceof EnumType et) {
+            EnumTypeNode node = new EnumTypeNode(null, new IdentifierNode(null, et.tag()), null);
+            if (et.isConst()) {
+                node.constQualifier = new ConstQualifierNode(null);
+            }
+            node.resolve(et.info());
+            return node;
+        }
         throw new IllegalArgumentException("Unknown Type " + type);
     }
 

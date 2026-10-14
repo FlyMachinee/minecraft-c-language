@@ -53,7 +53,7 @@ public final class SymbolTable {
             this.attr = attr;
         }
 
-        public sealed interface IdentifierAttr permits FuncAttr, AutoAttr, StaticAttr, ConstantAttr {
+        public sealed interface IdentifierAttr permits AutoAttr, ConstantAttr, EnumeratorAttr, FuncAttr, StaticAttr {
             boolean isDefinition();
 
             boolean isGlobal();
@@ -137,13 +137,19 @@ public final class SymbolTable {
             }
         }
 
-        public static final class ConstantAttr implements IdentifierAttr {
-            public StaticInit init;
-
-            public ConstantAttr(StaticInit init) {
-                this.init = init;
+        public record ConstantAttr(StaticInit init) implements IdentifierAttr {
+            @Override
+            public boolean isDefinition() {
+                return true;
             }
 
+            @Override
+            public boolean isGlobal() {
+                return false;
+            }
+        }
+
+        public record EnumeratorAttr(int value) implements IdentifierAttr {
             @Override
             public boolean isDefinition() {
                 return true;

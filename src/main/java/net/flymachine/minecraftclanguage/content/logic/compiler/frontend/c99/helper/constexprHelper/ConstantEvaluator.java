@@ -331,4 +331,16 @@ public final class ConstantEvaluator implements ConstantEvalVisitor {
         Type t = node.type.getType();
         return t.isError() ? Either.right(node.wholeLoc) : Either.left(new ConstantUnsignedLong(t.sizeof()));
     }
+
+    @Override
+    public Either<Constant, SourceLocation> visit(VariableNode node, ConstantCategory category) {
+        SymbolTable.Entry entry = symbolTable.get(node.id.name);
+        if (entry.attr instanceof SymbolTable.Entry.EnumeratorAttr enumAttr) {
+            if (category == ConstantCategory.ADDRESS) {
+                return Either.right(node.wholeLoc);
+            }
+            return Either.left(new ConstantInt(enumAttr.value()));
+        }
+        return Either.right(node.wholeLoc);
+    }
 }

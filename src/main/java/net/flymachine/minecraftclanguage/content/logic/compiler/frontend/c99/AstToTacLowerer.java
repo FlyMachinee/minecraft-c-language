@@ -57,7 +57,7 @@ public final class AstToTacLowerer implements
                         entry.id.name, staticAttr.global, entry.type, InitializerHelper.zeroStaticInit(entry.type)));
                 }
             } else if (attr instanceof SymbolTable.Entry.ConstantAttr constAttr) {
-                topLevels.add(new TacStaticConstant(entry.id.name, entry.type, constAttr.init));
+                topLevels.add(new TacStaticConstant(entry.id.name, entry.type, constAttr.init()));
             }
         }
         return new TacProgram(topLevels);
@@ -872,6 +872,10 @@ public final class AstToTacLowerer implements
     @Override
     public ExpEvalResult visit(VariableNode variable) {
         SymbolTable.Entry entry = symbolTable.get(variable.id.name);
+        if (entry.attr instanceof SymbolTable.Entry.EnumeratorAttr ea) {
+            // 枚举常量折叠为 int 常量
+            return new PlainOperand(new TacConstant(new ConstantInt(ea.value())));
+        }
         if (entry.attr instanceof SymbolTable.Entry.AutoAttr autoAttr && autoAttr.passByReference) {
             // 按引用传递的大结构体/联合体参数：实际参数中是指针
             // 解引用以访问实际的结构体/联合体副本
@@ -1034,8 +1038,23 @@ public final class AstToTacLowerer implements
         TacVariable dst = makeTempVar(targetType);
 
         // 指针视为 unsigned long
-        BasicType targetBasic = targetType.isBasic() ? (BasicType) targetType : BasicType.UNSIGNED_LONG;
-        BasicType originBasic = originType.isBasic() ? (BasicType) originType : BasicType.UNSIGNED_LONG;
+        BasicType targetBasic;
+        if (targetType instanceof EnumType et) {
+            targetBasic = (BasicType) et.underlyingType();
+        } else if (targetType.isBasic()) {
+            targetBasic = (BasicType) targetType;
+        } else {
+            targetBasic = BasicType.UNSIGNED_LONG;  // pointer
+        }
+
+        BasicType originBasic;
+        if (originType instanceof EnumType et) {
+            originBasic = (BasicType) et.underlyingType();
+        } else if (originType.isBasic()) {
+            originBasic = (BasicType) originType;
+        } else {
+            originBasic = BasicType.UNSIGNED_LONG;
+        }
 
         if (targetBasic.isDouble()) {
             switch (originBasic.primitive()) {

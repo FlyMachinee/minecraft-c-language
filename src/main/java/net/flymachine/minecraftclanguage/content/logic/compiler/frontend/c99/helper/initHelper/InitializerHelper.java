@@ -501,6 +501,10 @@ public final class InitializerHelper {
             inits.add(din);
             return new CompoundInitializerNode(null, inits);
         }
+        if (t instanceof EnumType) {
+            // 枚举类型对象被初始化成其类型的零值
+            return makeSingleInit(new ConstantInt(0));
+        }
         throw new UnsupportedOperationException("type '" + t.toString() + "' cannot be initialized");
     }
 
