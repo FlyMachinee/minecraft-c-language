@@ -224,6 +224,7 @@ typeSpecifier
     | Signed
     | Unsigned
     | structOrUnionSpecifier
+    | enumSpecifier
     ;
 
 // ISO 6.7.2.1, Structure And Union Specifiers
@@ -247,6 +248,18 @@ specifierQualifierList // rewrote
 specifierQualifier // added
     : typeSpecifier
     | typeQualifier
+    ;
+
+// ISO 6.7.2.2, Enumeration Specifiers
+enumSpecifier
+    : Enum Identifier? LeftBrace enumeratorList Comma? RightBrace
+    | Enum Identifier
+    ;
+enumeratorList
+    : enumerator (Comma enumerator)*
+    ;
+enumerator
+    : Identifier (Assign constantExpression)?
     ;
 
 // ISO 6.7.3, Type Qualifiers

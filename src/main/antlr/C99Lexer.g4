@@ -128,6 +128,7 @@ Default: 'default';
 Do: 'do';
 Double: 'double';
 Else: 'else';
+Enum: 'enum';
 Extern: 'extern';
 For: 'for';
 Goto: 'goto';

@@ -97,7 +97,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
 
     private class TypeCombinationHelper {
         private Type t;
-        private TypeNode structOrUnion;
+        private TypeNode otherType; // struct/union/enum
         private SourceLocation loc;
         private int nonLongCount = 0;
         private int longCount = 0;
@@ -114,7 +114,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         }
 
         void append(String typeSpecifierName, SourceLocation loc) {
-            if (structOrUnion != null) {
+            if (otherType != null) {
                 reporter.error(loc, "two or more data types in declaration specifiers");
                 return;
             }
@@ -239,18 +239,21 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
             }
         }
 
-        void appendStructOrUnion(TypeNode structOrUnion) {
-            if (t != null || this.structOrUnion != null) {
+        /**
+         * 处理结构体/联合体/枚举类型
+         */
+        void appendOtherType(TypeNode otherType) {
+            if (t != null || this.otherType != null) {
                 reporter.error(loc, "two or more data types in declaration specifiers");
                 return;
             }
-            this.loc = structOrUnion.wholeLoc;
-            this.structOrUnion = structOrUnion;
+            this.loc = otherType.wholeLoc;
+            this.otherType = otherType;
         }
 
         TypeNode toTypeNode() {
-            if (structOrUnion != null) {
-                return structOrUnion;
+            if (otherType != null) {
+                return otherType;
             }
             if (t == null) {
                 return null;
@@ -266,7 +269,10 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         SourceLocation specLoc = getSourceLocation(typeSpecCtx);
         if (typeSpecCtx.structOrUnionSpecifier() != null) {
             TypeNode structOrUnion = visitStructOrUnionSpecifier(typeSpecCtx.structOrUnionSpecifier());
-            helper.appendStructOrUnion(structOrUnion);
+            helper.appendOtherType(structOrUnion);
+        } else if (typeSpecCtx.enumSpecifier() != null) {
+            TypeNode enumType = visitEnumSpecifier(typeSpecCtx.enumSpecifier());
+            helper.appendOtherType(enumType);
         } else {
             String typeSpecifierText = typeSpecCtx.getText();
             helper.append(typeSpecifierText, specLoc);
@@ -322,10 +328,10 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
     }
 
     @Override
-    public TypeNode visitStructOrUnionSpecifier(C99Parser.StructOrUnionSpecifierContext ctx) {
+    public RecordTypeNode<?> visitStructOrUnionSpecifier(C99Parser.StructOrUnionSpecifierContext ctx) {
         IdentifierNode tag = null;
         if (ctx.Identifier() != null) {
-            tag = new IdentifierNode(getSourceLocation(ctx.Identifier()), ctx.Identifier().getText());
+            tag = createIdentifierNode(ctx.Identifier());
         }
         List<MemberDeclarationNode> memberDeclarations = null;
         if (!ctx.structDeclaration().isEmpty()) {
@@ -370,6 +376,27 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         }
         return new MemberDeclarationNode(getSourceLocation(ctx), baseType, structDeclarators);
     }
+    
+    @Override
+    public EnumTypeNode visitEnumSpecifier(C99Parser.EnumSpecifierContext ctx) {
+        IdentifierNode tag = null;
+        if (ctx.Identifier() != null) {
+            tag = createIdentifierNode(ctx.Identifier());
+        }
+        List<EnumeratorNode> enumerators = null;
+        if (ctx.enumeratorList() != null) {
+            enumerators = new ArrayList<>();
+            for (C99Parser.EnumeratorContext enumeratorCtx : ctx.enumeratorList().enumerator()) {
+                IdentifierNode name = createIdentifierNode(enumeratorCtx.Identifier());
+                ExpressionNode value = null;
+                if (enumeratorCtx.constantExpression() != null) {
+                    value = (ExpressionNode) visit(enumeratorCtx.constantExpression());
+                }
+                enumerators.add(new EnumeratorNode(name, value));
+            }
+        }
+        return new EnumTypeNode(getSourceLocation(ctx), tag, enumerators);
+    }
 
     private PointerTypeNode parsePointer(TypeNode baseType, C99Parser.PointerContext ctx) {
         // pointer
@@ -401,9 +428,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         // directDeclarator -> Identifier
         if (ctx.Identifier() != null) {
             // 递归出口
-            String name = ctx.Identifier().getText();
-            SourceLocation nameLocation = getSourceLocation(ctx.Identifier());
-            return new DeclarationLikeResult(baseType, new IdentifierNode(nameLocation, name));
+            return new DeclarationLikeResult(baseType, createIdentifierNode(ctx.Identifier()));
         }
 
         // directDeclarator -> LeftParen declarator RightParen
@@ -655,9 +680,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
             ExpressionNode index = (ExpressionNode) visit(ctx.constantExpression());
             return new ArrayDesignatorNode(loc, index);
         } else if (ctx.Dot() != null) {
-            String fieldName = ctx.Identifier().getText();
-            SourceLocation fieldLoc = getSourceLocation(ctx.Identifier());
-            return new MemberDesignatorNode(loc, new IdentifierNode(fieldLoc, fieldName));
+            return new MemberDesignatorNode(loc, createIdentifierNode(ctx.Identifier()));
         } else {
             throw new IllegalStateException("Unknown designator");
         }
@@ -667,9 +690,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
     public StatementNode visitLabeledStatement(C99Parser.LabeledStatementContext ctx) {
         StatementNode statement = (StatementNode) visit(ctx.statement());
         if (ctx.Identifier() != null) {
-            String label = ctx.Identifier().getText();
-            SourceLocation labelLocation = getSourceLocation(ctx.Identifier());
-            statement.gotoLabels.add(new StatementNode.GotoLabelInfo(new IdentifierNode(labelLocation, label)));
+            statement.gotoLabels.add(new StatementNode.GotoLabelInfo(createIdentifierNode(ctx.Identifier())));
             return statement;
         } else if (ctx.Case() != null) {
             SourceLocation caseLocation = getSourceLocation(ctx.Case());
@@ -770,9 +791,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
     @Override
     public StatementNode visitJumpStatement(C99Parser.JumpStatementContext ctx) {
         if (ctx.Goto() != null) {
-            String identifier = ctx.Identifier().getText();
-            SourceLocation identifierLocation = getSourceLocation(ctx.Identifier());
-            return new GotoNode(getSourceLocation(ctx.Goto()), new IdentifierNode(identifierLocation, identifier));
+            return new GotoNode(getSourceLocation(ctx.Goto()), createIdentifierNode(ctx.Identifier()));
         } else if (ctx.Continue() != null) {
             return new ContinueNode(getSourceLocation(ctx.Continue()));
         } else if (ctx.Break() != null) {
@@ -940,9 +959,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
     @Override
     public ExpressionNode visitPrimaryExpression(C99Parser.PrimaryExpressionContext ctx) {
         if (ctx.Identifier() != null) {
-            String identifier = ctx.Identifier().getText();
-            IdentifierNode identifierNode = new IdentifierNode(getSourceLocation(ctx.Identifier()), identifier);
-            return new VariableNode(identifierNode);
+            return new VariableNode(createIdentifierNode(ctx.Identifier()));
         } else if (ctx.constant() != null) {
             return visitConstant(ctx.constant());
         } else if (!ctx.StringLiteral().isEmpty()) {
@@ -991,17 +1008,13 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
 
         if (ctx.Dot() != null) {
             ExpressionNode base = visitPostfixExpression(ctx.postfixExpression());
-            String fieldName = ctx.Identifier().getText();
-            SourceLocation fieldLoc = getSourceLocation(ctx.Identifier());
-            return new MemberAccessNode(base, getSourceLocation(ctx.Dot()), new IdentifierNode(fieldLoc, fieldName));
+            return new MemberAccessNode(base, getSourceLocation(ctx.Dot()), createIdentifierNode(ctx.Identifier()));
         }
 
         if (ctx.Arrow() != null) {
             ExpressionNode ptr = visitPostfixExpression(ctx.postfixExpression());
-            String fieldName = ctx.Identifier().getText();
-            SourceLocation fieldLoc = getSourceLocation(ctx.Identifier());
-            return new PointerMemberAccessNode(
-                ptr, getSourceLocation(ctx.Arrow()), new IdentifierNode(fieldLoc, fieldName));
+            return new PointerMemberAccessNode(ptr, getSourceLocation(ctx.Arrow()),
+                                               createIdentifierNode(ctx.Identifier()));
         }
 
         if (ctx.LeftParen() != null) {
@@ -1334,5 +1347,11 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         } else {
             return visitAssignmentExpression(ctx.assignmentExpression());
         }
+    }
+
+    private IdentifierNode createIdentifierNode(TerminalNode identifier) {
+        String name = identifier.getText();
+        SourceLocation loc = getSourceLocation(identifier);
+        return new IdentifierNode(loc, name);
     }
 }

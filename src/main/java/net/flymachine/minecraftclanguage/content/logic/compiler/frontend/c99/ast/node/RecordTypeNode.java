@@ -7,15 +7,13 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 
-public abstract sealed class RecordTypeNode<I extends RecordInfo> extends TypeNode permits StructTypeNode, UnionTypeNode {
-    public final @Nullable IdentifierNode tag;
+public abstract sealed class RecordTypeNode<I extends RecordInfo> extends TaggedTypeNode permits StructTypeNode, UnionTypeNode {
     public final @Nullable List<MemberDeclarationNode> memberDeclarations;
     protected @Nullable RecordInfo info;
 
     protected RecordTypeNode(SourceLocation wholeLoc, @Nullable IdentifierNode tag,
         @Nullable List<MemberDeclarationNode> memberDeclarations) {
-        super(wholeLoc);
-        this.tag = tag;
+        super(wholeLoc, tag);
         this.memberDeclarations = memberDeclarations;
     }
 
