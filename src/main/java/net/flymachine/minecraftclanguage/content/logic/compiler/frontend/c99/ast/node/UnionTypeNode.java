@@ -4,6 +4,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Unio
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.record.RecordInfo;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.record.UnionInfo;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.enumerate.TagKind;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 import org.jetbrains.annotations.Nullable;
 
@@ -51,5 +52,10 @@ public final class UnionTypeNode extends RecordTypeNode<UnionInfo> {
     @Override
     public <T> T accept(AstVisitor<T> visitor) {
         return null;
+    }
+
+    @Override
+    public TagKind tagKind() {
+        return TagKind.UNION;
     }
 }

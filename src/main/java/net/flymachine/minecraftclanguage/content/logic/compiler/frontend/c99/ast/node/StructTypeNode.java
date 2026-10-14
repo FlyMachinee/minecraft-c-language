@@ -4,6 +4,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Stru
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.record.RecordInfo;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.record.StructInfo;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.enumerate.TagKind;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 import org.jetbrains.annotations.Nullable;
 
@@ -51,5 +52,10 @@ public final class StructTypeNode extends RecordTypeNode<StructInfo> {
     @Override
     public <T> T accept(AstVisitor<T> visitor) {
         return null;
+    }
+
+    @Override
+    public TagKind tagKind() {
+        return TagKind.STRUCT;
     }
 }

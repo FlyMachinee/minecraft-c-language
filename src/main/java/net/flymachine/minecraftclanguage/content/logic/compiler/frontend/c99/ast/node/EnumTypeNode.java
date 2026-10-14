@@ -3,6 +3,7 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.as
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.EnumInfo;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.EnumType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.enumerate.TagKind;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
 import javax.annotation.Nullable;
@@ -20,6 +21,11 @@ public final class EnumTypeNode extends TaggedTypeNode {
 
     @Override
     public boolean resolved() { return info != null; }
+
+    @Override
+    public TagKind tagKind() {
+        return TagKind.ENUM;
+    }
 
     public void resolve(EnumInfo info) {
         if (this.info != null) { throw new IllegalStateException("EnumTypeNode is already resolved"); }

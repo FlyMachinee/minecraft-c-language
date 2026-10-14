@@ -1,13 +1,16 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99;
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.StorageClassSpecifier;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.EnumInfo;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.record.RecordInfo;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.record.StructInfo;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.record.UnionInfo;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.*;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.enumerate.TagKind;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.helper.scope.ScopeStack;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.DiagnosticReporter;
+import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -28,21 +31,8 @@ public final class IdentifierResolutionPass implements AstVisitor<Void> {
     }
 
     private final ScopeStack<String, IdentifierEntry> scopeStack = new ScopeStack<>();
-    private final ScopeStack<String, RecordTypeNode<?>> tagScopeStack = new ScopeStack<>();
+    private final ScopeStack<String, TagEntry> tagScopeStack = new ScopeStack<>();
 
-    private static class IdentifierEntry {
-        public IdentifierNode id;
-        public TypeNode t;
-        public boolean hasLinkage;
-        public boolean defined; // 仅用于信息打印，不参与逻辑检查
-
-        public IdentifierEntry(IdentifierNode id, TypeNode t, boolean hasLinkage, boolean defined) {
-            this.id = id;
-            this.t = t;
-            this.hasLinkage = hasLinkage;
-            this.defined = defined;
-        }
-    }
 
     private void enterScope() {
         scopeStack.enterScope();
@@ -72,14 +62,6 @@ public final class IdentifierResolutionPass implements AstVisitor<Void> {
         }
     }
 
-    private void panicWithPreviousRef(String msg, IdentifierNode id, IdentifierEntry previous) {
-        reporter.error(id.wholeLoc, msg);
-        msg = "previous " + (previous.defined ? "definition" : "declaration") + " of '" +
-              reporter.white(id.name) + "' with type '" +
-              reporter.white(previous.t.typename()) + "'";
-        reporter.note(previous.id.wholeLoc, msg);
-    }
-
     private void visitTypeNode(TypeNode type) {
         if (type instanceof FunctionTypeNode funcType) {
             visitTypeNode(funcType.retType);
@@ -98,82 +80,79 @@ public final class IdentifierResolutionPass implements AstVisitor<Void> {
         }
 
         if (type instanceof RecordTypeNode<?> recordType) {
-            if (recordType.resolved()) {
-                return;
-            }
-            if (recordType.memberDeclarations != null) {
-                // struct/union tag? { ... } ...?
-                // 结构体定义，仅在当前作用域中查找
-                if (recordType.tag == null) {
-                    // 匿名结构体
-                    recordType.resolve(newRecordInfo(recordType, null));
-                } else {
-                    checkTagInCurrentScope(recordType);
-                }
-                for (MemberDeclarationNode memberDecl : recordType.memberDeclarations) {
-                    visitMemberDeclaration(memberDecl);
-                }
-            } else {
-                // struct/union tag
-                assert recordType.tag != null;
-                String tag = recordType.tag.name;
-                // 查找先前声明
-                RecordTypeNode<?> previous = tagScopeStack.declarationOf(tag).orElse(null);
-                checkTagReference(tag, recordType, previous);
-            }
+            visitRecordTypeNode(recordType);
+        }
+
+        if (type instanceof EnumTypeNode enumType) {
+            visitEnumTypeNode(enumType);
         }
     }
 
-    private void checkTagInCurrentScope(RecordTypeNode<?> current) {
-        assert current.tag != null;
-        String tag = current.tag.name;
-        RecordTypeNode<?> previous = tagScopeStack.declarationInCurrentScope(tag).orElse(null);
-        checkTagReference(tag, current, previous);
-    }
-
-    private void checkTagReference(String tag, RecordTypeNode<?> current, RecordTypeNode<?> previous) {
-        if (previous != null) {
-            // 当前作用域已有声明，进行引用
-            checkTagKind(current, previous);
-            if (!current.resolved()) {
-                // 检查无误，引用先前的定义
-                current.resolve(previous.getInfo());
+    private void visitRecordTypeNode(RecordTypeNode<?> recordType) {
+        if (recordType.resolved()) {
+            return;
+        }
+        if (recordType.memberDeclarations != null) {
+            // struct/union tag? { ... } ...?
+            // 结构体/联合体定义，仅在当前作用域中查找
+            if (recordType.tag == null) {
+                // 匿名结构体/联合体
+                bindDummy(recordType);
+            } else {
+                checkTagInCurrentScope(recordType);
+            }
+            for (MemberDeclarationNode memberDecl : recordType.memberDeclarations) {
+                visitMemberDeclaration(memberDecl);
             }
         } else {
-            // 当前作用域无定义，添加声明
-            current.resolve(newRecordInfo(current, tag));
-            tagScopeStack.declare(tag, current);
+            // struct/union tag
+            // 结构体引用/隐式声明
+            assert recordType.tag != null;
+            resolveTagReference(recordType);
         }
     }
 
-    private void checkTagKind(RecordTypeNode<?> current, RecordTypeNode<?> previous) {
-        if (current instanceof StructTypeNode && previous instanceof StructTypeNode) {
+    private void visitEnumTypeNode(EnumTypeNode enumType) {
+        if (enumType.resolved()) {
             return;
         }
-        if (current instanceof UnionTypeNode && previous instanceof UnionTypeNode) {
+        if (enumType.enumerators != null) {
+            // enum tag? { ... }
+            // 枚举定义
+            if (enumType.tag == null) {
+                // 匿名枚举
+                bindDummy(enumType);
+            } else {
+                checkTagInCurrentScope(enumType);
+            }
+            for (EnumeratorNode enumerator : enumType.enumerators) {
+                if (enumerator.value != null) {
+                    enumerator.value.accept(this);
+                }
+                declareEnumerator(enumerator, enumType);
+            }
+        } else {
+            // enum tag
+            assert enumType.tag != null;
+            resolveTagReference(enumType);
+        }
+    }
+
+    private void declareEnumerator(EnumeratorNode enumerator, EnumTypeNode enumType) {
+        String name = enumerator.name.name;
+        IdentifierEntry previous = scopeStack.declarationInCurrentScope(name).orElse(null);
+        if (previous != null) {
+            if (previous.kind == SymbolKind.ENUMERATOR) {
+                String msg = "redefinition of enumerator '" + reporter.white(name) + "'";
+                panicWithPreviousRef(msg, enumerator.name, previous);
+            } else {
+                panicKindConflict(enumerator.name, previous);
+            }
             return;
         }
-        assert current.tag != null;
-        assert previous.tag != null;
-
-        String tag = current.tag.name;
-
-        String msg = "'" + reporter.white(tag) + "' defined as wrong kind of tag";
-        reporter.error(current.tag.wholeLoc, msg);
-        reporter.note(previous.tag.wholeLoc, "previous definition");
-        // 给一个 dummy 的 RecordInfo，避免后续异常
-        current.resolve(newRecordInfo(current, tag));
+        scopeStack.declare(name, IdentifierEntry.ofEnumerator(enumerator.name, enumType));
     }
 
-    private static RecordInfo newRecordInfo(RecordTypeNode<?> node, @Nullable String tag) {
-        if (node instanceof StructTypeNode) {
-            return new StructInfo(tag);
-        }
-        if (node instanceof UnionTypeNode) {
-            return new UnionInfo(tag);
-        }
-        throw new IllegalStateException("Unknown RecordTypeNode: " + node.getClass().getName());
-    }
 
     private void visitMemberDeclaration(MemberDeclarationNode memberDecl) {
         // 结构体成员声明中，每行都至少声明了一个标识符
@@ -294,6 +273,13 @@ public final class IdentifierResolutionPass implements AstVisitor<Void> {
                     visitTypeNode(recordType);
                 }
             }
+            if (node.baseType instanceof EnumTypeNode enumType) {
+                // enum E; 和 enum E { ... }; 都走 visitTypeNode
+                // 引用形式会在 resolveTagReference 里根据是否已定义决定合法或报错
+                // 定义形式会在 visitEnumTypeNode 里注册枚举常量
+                visitTypeNode(enumType);
+                return null;
+            }
         }
 
         for (InitDeclaratorNode initDecl : node.initDeclarators) {
@@ -313,15 +299,25 @@ public final class IdentifierResolutionPass implements AstVisitor<Void> {
 
         String name = id.name;
         IdentifierEntry previous = scopeStack.declarationOf(name).orElse(null);
-        if (type instanceof FunctionTypeNode) {
-            // 函数声明，始终有链接
-            if (previous != null && scopeStack.declaredInCurrentScope(name) && !previous.hasLinkage) {
-                // 当前作用域先前的声明无链接，肯定是变量，当前声明是函数声明，有链接，冲突
-                String msg = "'" + reporter.white(name) + "' redeclared as different kind of symbol";
-                panicWithPreviousRef(msg, id, previous);
+
+        boolean isFunction = type instanceof FunctionTypeNode;
+        SymbolKind currentKind = isFunction ? SymbolKind.FUNCTION : SymbolKind.OBJECT;
+        boolean isExtern = storageClass != null
+                           && storageClass.storageClass.equals(StorageClassSpecifier.EXTERN);
+        boolean currentHasLinkage = isFunction || inGlobalScope() || isExtern;
+
+        // 符号类型检查：同作用域，或双方都有链接（引用同一实体）
+        if (previous != null && previous.kind != currentKind) {
+            boolean sameScope = scopeStack.declaredInCurrentScope(name);
+            boolean bothLinkage = previous.hasLinkage && currentHasLinkage;
+            if (sameScope || bothLinkage) {
+                panicKindConflict(id, previous);
                 return;
             }
-            // 无先前声明、先前声明有链接、先前声明不在当前作用域，这里暂时不管类型
+        }
+
+        if (isFunction) {
+            // 函数声明，始终有链接
             if (!inGlobalScope() && storageClass != null &&
                 storageClass.storageClass.equals(StorageClassSpecifier.STATIC)) {
                 // 块作用域函数声明为 static 非法
@@ -331,74 +327,76 @@ public final class IdentifierResolutionPass implements AstVisitor<Void> {
             // 函数声明不需要重命名
             if (previous != null && previous.defined && previous.hasLinkage) {
                 // 先前有声明、有链接且为定义，引用先前的定义
-                scopeStack.declare(name, new IdentifierEntry(previous.id, previous.t, true, true));
+                assert previous.kind == SymbolKind.FUNCTION;
+                scopeStack.declare(name, IdentifierEntry.ofFunction(previous.id, previous.t, true));
             } else {
                 // 先前无声明，或先前声明不是定义，或先前声明无链接
                 // 引入新符号
-                scopeStack.declare(name, new IdentifierEntry(id, type, true, defined));
+                assert !(previous != null && previous.hasLinkage && previous.kind != SymbolKind.FUNCTION);
+                scopeStack.declare(name, IdentifierEntry.ofFunction(id, type, defined));
             }
         } else {
             // 变量声明，如果在全局作用域则有链接，否则没有链接
             if (inGlobalScope()) {
+                // 有链接
                 // 全局变量不需要重命名
-                // 这里不考虑可能的定义冲突，随后在类型检查中处理
+                // 这里不考虑可能的类型冲突，随后在类型检查中处理
                 if (previous == null || !previous.defined) {
                     // 先前无声明，或先前声明不是定义
-                    scopeStack.declare(name, new IdentifierEntry(id, type, true, defined));
+                    assert !(previous != null && previous.kind != SymbolKind.OBJECT);
+                    scopeStack.declare(name, IdentifierEntry.ofObject(id, type, true, defined));
+                } else {
+                    // 否则采用先前的定义，目前在全局作用域，那么我们不需要再次定义，使用先前的即可
+                    assert previous.kind == SymbolKind.OBJECT;
                 }
-                // 否则采用先前的定义，目前在全局作用域，那么我们不需要再次定义，使用先前的即可
-            } else {
-                // 块作用域变量
-                if (previous != null) {
-                    // 先前有声明，而且是当前作用域的
-                    if (scopeStack.declaredInCurrentScope(name) &&
-                        !(previous.hasLinkage && storageClass != null &&
-                          storageClass.storageClass.equals(StorageClassSpecifier.EXTERN))) {
-                        // 当前作用域之前的声明有链接，并且当前声明是 extern，则允许重定义
-                        // 除此之外，声明冲突
-                        String msg;
-                        if (!previous.hasLinkage) {
-                            // 先前的声明无链接
-                            if (storageClass == null ||
-                                !storageClass.storageClass.equals(StorageClassSpecifier.EXTERN)) {
-                                // 当前的声明无链接
-                                msg =
-                                    (defined ? "redefinition" : "redeclaration") + " of '" + reporter.white(name) +
-                                    "' with no linkage";
-                            } else {
-                                // 当前的声明是 extern，有链接
-                                if (defined) {
-                                    msg = "redefinition of '" + reporter.white(name) + "'";
-                                } else {
-                                    msg = "extern declaration of '" + reporter.white(name) +
-                                          "' follows declaration with no linkage";
-                                }
-                            }
-                        } else {
-                            // 先前的声明有链接，则当前声明无链接
-                            msg = (defined ? "redefinition" : "redeclaration") + " of '" + reporter.white(name) +
-                                  "' with no linkage";
-                        }
-                        panicWithPreviousRef(msg, id, previous);
-                        return;
-                    }
-                }
-                // 声明不冲突或先前无声明（不考虑类型）
-                if (storageClass != null && storageClass.storageClass.equals(StorageClassSpecifier.EXTERN)) {
-                    // 当前声明是 extern，有链接，不需要重命名
-                    if (previous != null && previous.defined && previous.hasLinkage) {
-                        // 先前有声明、有链接且为定义，引用先前的定义
-                        scopeStack.declare(name, new IdentifierEntry(previous.id, previous.t, true, true));
+                return;
+            }
+
+            // 块作用域变量
+            if (previous != null && scopeStack.declaredInCurrentScope(name) &&
+                !(previous.hasLinkage && currentHasLinkage)) {
+                // 先前有声明，而且是当前作用域的
+                // 若先前声明有链接，并且当前声明是 extern，则允许重定义
+                // 除此之外，声明链接冲突
+                String msg;
+                if (!previous.hasLinkage) {
+                    // 先前的声明无链接
+                    if (!isExtern) {
+                        // 当前的声明无链接
+                        msg = (defined ? "redefinition" : "redeclaration") + " of '" + reporter.white(name) +
+                              "' with no linkage";
                     } else {
-                        // 先前无声明，或先前声明不是定义，或先前声明无链接
-                        // 引入新符号
-                        scopeStack.declare(name, new IdentifierEntry(id, type, true, defined));
+                        // 当前的声明是 extern，有链接
+                        msg = defined ?
+                            "redefinition of '" + reporter.white(name) + "'" :
+                            "extern declaration of '" + reporter.white(name) +
+                            "' follows declaration with no linkage";
                     }
                 } else {
-                    // 无链接，需要重命名
-                    id.name = makeUniqueName(name);
-                    scopeStack.declare(name, new IdentifierEntry(id, type, false, defined));
+                    // 先前的声明有链接，则当前声明无链接
+                    msg = (defined ? "redefinition" : "redeclaration") + " of '" + reporter.white(name) +
+                          "' with no linkage";
                 }
+                panicWithPreviousRef(msg, id, previous);
+                return;
+            }
+            // 声明不冲突或先前无声明（不考虑类型）
+            if (isExtern) {
+                // 当前声明是 extern，有链接，不需要重命名
+                if (previous != null && previous.defined && previous.hasLinkage) {
+                    assert previous.kind == SymbolKind.OBJECT;
+                    // 先前有声明、有链接且为定义，引用先前的定义
+                    scopeStack.declare(name, IdentifierEntry.ofObject(previous.id, previous.t, true, true));
+                } else {
+                    assert !(previous != null && previous.hasLinkage && previous.kind != SymbolKind.OBJECT);
+                    // 先前无声明，或先前声明不是定义，或先前声明无链接
+                    // 引入新符号
+                    scopeStack.declare(name, IdentifierEntry.ofObject(id, type, true, defined));
+                }
+            } else {
+                // 无链接，需要重命名
+                id.name = makeUniqueName(name);
+                scopeStack.declare(name, IdentifierEntry.ofObject(id, type, false, defined));
             }
         }
     }
@@ -419,11 +417,11 @@ public final class IdentifierResolutionPass implements AstVisitor<Void> {
     @Override
     public Void visit(VariableNode node) {
         String name = node.id.name;
-        IdentifierEntry renamed = scopeStack.declarationOf(name).orElse(null);
-        if (renamed == null) {
+        IdentifierEntry entry = scopeStack.declarationOf(name).orElse(null);
+        if (entry == null) {
             reporter.error(node.wholeLoc, "'" + reporter.white(name) + "' undeclared");
         } else {
-            node.id.name = renamed.id.name;
+            node.id.name = entry.id.name;
         }
         return null;
     }
@@ -618,5 +616,174 @@ public final class IdentifierResolutionPass implements AstVisitor<Void> {
     public Void visit(PointerMemberAccessNode node) {
         node.pointer.accept(this);
         return null;
+    }
+
+    // =============================================
+    // 普通标识符处理逻辑，包括变量、函数、枚举常量的声明和引用
+    // =============================================
+
+    private enum SymbolKind {
+        OBJECT, FUNCTION, ENUMERATOR
+    }
+
+    private static class IdentifierEntry {
+        public IdentifierNode id;
+        public TypeNode t;
+        public boolean hasLinkage;
+        public boolean defined; // 仅用于信息打印，不参与逻辑检查
+        public SymbolKind kind;
+
+        public IdentifierEntry(IdentifierNode id, TypeNode t, boolean hasLinkage, boolean defined, SymbolKind kind) {
+            this.id = id;
+            this.t = t;
+            this.hasLinkage = hasLinkage;
+            this.defined = defined;
+            this.kind = kind;
+        }
+
+        public static IdentifierEntry ofObject(IdentifierNode id, TypeNode t, boolean hasLinkage, boolean defined) {
+            return new IdentifierEntry(id, t, hasLinkage, defined, SymbolKind.OBJECT);
+        }
+
+        public static IdentifierEntry ofFunction(IdentifierNode id, TypeNode t, boolean defined) {
+            return new IdentifierEntry(id, t, true, defined, SymbolKind.FUNCTION);
+        }
+
+        public static IdentifierEntry ofEnumerator(IdentifierNode id, TypeNode t) {
+            return new IdentifierEntry(id, t, false, true, SymbolKind.ENUMERATOR);
+        }
+    }
+
+    private void panicWithPreviousRef(String msg, IdentifierNode id, IdentifierEntry previous) {
+        reporter.error(id.wholeLoc, msg);
+        msg = "previous " + (previous.defined ? "definition" : "declaration") + " of '" +
+              reporter.white(id.name) + "' with type '" +
+              reporter.white(previous.t.typename()) + "'";
+        reporter.note(previous.id.wholeLoc, msg);
+    }
+
+    private void panicKindConflict(IdentifierNode id, IdentifierEntry previous) {
+        String msg = "'" + reporter.white(id.name) + "' redeclared as different kind of symbol";
+        panicWithPreviousRef(msg, id, previous);
+    }
+
+    // =================================================
+    // tag 处理逻辑，包括 struct/union/enum 的 tag 声明和引用
+    // =================================================
+
+    private abstract static sealed class TagEntry permits RecordTagEntry, EnumTagEntry {
+        final String tag;
+        final TagKind kind;
+        final SourceLocation location;
+
+        TagEntry(String tag, TagKind kind, SourceLocation location) {
+            this.tag = tag;
+            this.kind = kind;
+            this.location = location;
+        }
+
+        abstract void bindTo(TaggedTypeNode node);
+    }
+
+    private static final class RecordTagEntry extends TagEntry {
+        private final RecordInfo info;
+
+        RecordTagEntry(RecordInfo info, TagKind kind, SourceLocation location) {
+            super(info.tag(), kind, location);
+            if (kind != TagKind.STRUCT && kind != TagKind.UNION) {
+                throw new IllegalArgumentException("RecordTagEntry requires STRUCT or UNION");
+            }
+            this.info = info;
+        }
+
+        @Override
+        void bindTo(TaggedTypeNode node) {
+            if (!(node instanceof RecordTypeNode<?> rt)) {
+                throw new IllegalArgumentException("cannot bind RecordTagEntry to " + node.getClass().getSimpleName());
+            }
+            rt.resolve(info);
+        }
+    }
+
+    private static final class EnumTagEntry extends TagEntry {
+        private final EnumInfo info;
+
+        EnumTagEntry(EnumInfo info, SourceLocation location) {
+            super(info.tag(), TagKind.ENUM, location);
+            this.info = info;
+        }
+
+        @Override
+        void bindTo(TaggedTypeNode node) {
+            if (!(node instanceof EnumTypeNode et)) {
+                throw new IllegalArgumentException("cannot bind EnumTagEntry to " + node.getClass().getSimpleName());
+            }
+            et.resolve(info);
+        }
+    }
+
+    private void checkTagInCurrentScope(TaggedTypeNode current) {
+        assert current.tag != null;
+        String tag = current.tag.name;
+        TagEntry previous = tagScopeStack.declarationInCurrentScope(tag).orElse(null);
+        checkTagReference(current, previous, true);
+    }
+
+    private void resolveTagReference(TaggedTypeNode current) {
+        assert current.tag != null;
+        String tag = current.tag.name;
+        TagEntry previous = tagScopeStack.declarationOf(tag).orElse(null);
+        checkTagReference(current, previous, current.tagKind() != TagKind.ENUM);
+    }
+
+    private void checkTagReference(TaggedTypeNode current, @Nullable TagEntry previous, boolean createIfMissing) {
+        assert current.tag != null;
+        if (previous != null) {
+            if (previous.kind != current.tagKind()) {
+                panicWrongTagKind(current, previous);
+                bindDummy(current);
+                return;
+            }
+            previous.bindTo(current);
+            return;
+        }
+
+        if (createIfMissing) {
+            TagEntry entry = createTagEntry(current);
+            entry.bindTo(current);
+            tagScopeStack.declare(current.tag.name, entry);
+        } else {
+            reporter.error(current.tag.wholeLoc,
+                           "ISO C forbids forward references to '" + reporter.white("enum") + "' types");
+            bindDummy(current);
+        }
+    }
+
+    private void panicWrongTagKind(TaggedTypeNode current, TagEntry previous) {
+        assert current.tag != null;
+        String tag = current.tag.name;
+        String msg = "'" + reporter.white(tag) + "' defined as wrong kind of tag";
+        reporter.error(current.tag.wholeLoc, msg);
+        reporter.note(previous.location, "previous declaration");
+    }
+
+    private void bindDummy(TaggedTypeNode current) {
+        createTagEntry(current).bindTo(current);
+    }
+
+    private TagEntry createTagEntry(TaggedTypeNode node) {
+        String tag = node.tag == null ? null : node.tag.name;
+        SourceLocation loc = node.tag == null ? node.wholeLoc : node.tag.wholeLoc;
+
+        if (node instanceof StructTypeNode) {
+            return new RecordTagEntry(new StructInfo(tag), TagKind.STRUCT, loc);
+        }
+        if (node instanceof UnionTypeNode) {
+            return new RecordTagEntry(new UnionInfo(tag), TagKind.UNION, loc);
+        }
+        if (node instanceof EnumTypeNode) {
+            return new EnumTagEntry(new EnumInfo(tag), loc);
+        }
+        throw new IllegalStateException("Unknown TaggedTypeNode: " + node.getClass().getName());
     }
 }
