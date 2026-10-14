@@ -12,6 +12,8 @@ public abstract class Type {
 
     abstract TypeKind kind();
 
+    public Type underlyingType() { return this; }
+
     public final boolean isBasic() {
         return kind() == TypeKind.BASIC;
     }
@@ -38,6 +40,10 @@ public abstract class Type {
 
     public final boolean isUnion() {
         return kind() == TypeKind.UNION;
+    }
+
+    public final boolean isEnum() {
+        return kind() == TypeKind.ENUM;
     }
 
     public final boolean isError() {
@@ -89,28 +95,28 @@ public abstract class Type {
      * 算术类型：整数类型和浮点数类型
      */
     public final boolean isArithmetic() {
-        return isBasic();
+        return isBasic() || isEnum();
     }
 
     /**
      * 标量类型：算术类型和指针类型
      */
     public final boolean isScalar() {
-        return isBasic() || isPointer();
+        return isBasic() || isPointer() || isEnum();
     }
 
     /**
      * 整数类型：char、有符号整数类型、无符号整数类型、枚举类型
      */
     public final boolean isInteger() {
-        return isBasic() && ((BasicType) this).primitive() != BasicType.Primitive.DOUBLE;
+        return (isBasic() && ((BasicType) this).primitive() != BasicType.Primitive.DOUBLE) || isEnum();
     }
 
     /**
      * 实数类型：整数类型和实浮点数类型
      */
     public final boolean isReal() {
-        return isBasic();
+        return isBasic() || isEnum();
     }
 
     /**
@@ -181,7 +187,7 @@ public abstract class Type {
 
     public abstract AsmType toAsmType();
 
-    public static BasicType commonRealType(BasicType t1, BasicType t2) {
+    public static BasicType commonRealType(Type t1, Type t2) {
         if (!t1.isArithmetic() || !t2.isArithmetic()) {
             throw new IllegalArgumentException("can only handle arithmetic types");
         }
@@ -194,49 +200,53 @@ public abstract class Type {
         }
 
         // 否则两个操作数均为整数。两个操作数都会经历整数提升
+        // 枚举处理
+        BasicType b1 = (BasicType) t1.underlyingType();
+        BasicType b2 = (BasicType) t2.underlyingType();
+
         // 整数提升是任何等级小于或等于 int 等级的整数类型
         // 或是 _Bool、int、signed int、unsigned int 类型的位域类型的值到 int 或 unsigned int 类型值的隐式转换
         // 若 int 能表示原类型的整个值域（或原位域的值域），则值转换成 int 类型。否则值转化成 unsigned int 类型
-        if (t1.isCharacter()) {
-            t1 = BasicType.INT;
+        if (b1.isCharacter()) {
+            b1 = BasicType.INT;
         }
-        if (t2.isCharacter()) {
-            t2 = BasicType.INT;
+        if (b2.isCharacter()) {
+            b2 = BasicType.INT;
         }
 
         // 经过整数提升后，适用于以下情况之一：
         // 若两类型相同，则该类型即为公共类型
-        if (t1 == t2) {
-            return t1;
+        if (b1 == b2) {
+            return b1;
         }
         // 否则，两类型不同：
         // 若两类型有相同的符号性（均为有符号或均为无符号），则拥有较低转换等级者会隐式转换为另一类型
-        if (t1.isSigned() && t2.isSigned() || t1.isUnsigned() && t2.isUnsigned()) {
-            if (t1.sizeof() < t2.sizeof()) {
-                return t2;
+        if (b1.isSigned() && b2.isSigned() || b1.isUnsigned() && b2.isUnsigned()) {
+            if (b1.sizeof() < b2.sizeof()) {
+                return b2;
             } else {
-                return t1;
+                return b1;
             }
         }
         // 否则，两者符号性不同：
-        if (t1.isUnsigned()) {
+        if (b1.isUnsigned()) {
             // 左为无符号类型
             // 若无符号类型的转换等级大于或等于有符号类型的等级，则有符号类型操作数会隐式转换成无符号类型
-            if (t1.sizeof() >= t2.sizeof()) {
-                return t1;
+            if (b1.sizeof() >= b2.sizeof()) {
+                return b1;
             }
             // 否则，无符号类型的转换等级小于有符号类型：
             // 若有符号类型可以表达无符号类型的所有值，则无无符号类型的操作数被隐式转换成有符号操作数的类型
-            return t2;
+            return b2;
         } else {
             // 右为无符号类型
             // 若无符号类型的转换等级大于或等于有符号类型的等级，则有符号类型操作数会隐式转换成无符号类型
-            if (t2.sizeof() >= t1.sizeof()) {
-                return t2;
+            if (b2.sizeof() >= b1.sizeof()) {
+                return b2;
             }
             // 否则，无符号类型的转换等级小于有符号类型：
             // 若有符号类型可以表达无符号类型的所有值，则无无符号类型的操作数被隐式转换成有符号操作数的类型
-            return t1;
+            return b1;
         }
     }
 
