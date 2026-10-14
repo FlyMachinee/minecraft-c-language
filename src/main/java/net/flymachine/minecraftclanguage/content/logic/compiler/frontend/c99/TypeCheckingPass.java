@@ -17,10 +17,7 @@ import net.flymachine.minecraftclanguage.content.logic.errorHandle.DiagnosticRep
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.function.Function;
 
 /**
@@ -650,60 +647,65 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
         }
     }
 
+    private final Set<TypeNode> definedNodes = Collections.newSetFromMap(new IdentityHashMap<>());
+
     private void checkStructOrUnionType(RecordTypeNode<?> t) {
         // 检查是否有定义体
-        if (t.memberDeclarations != null) {
-            // 如果先前有定义，则先前将 populate，从而使类型完整
-            boolean isDefined = t.getType().isComplete();
-            if (isDefined) {
-                assert t.tag != null; // 先前有定义，从而不可能是匿名结构体
-                String msg = "redefinition of '" + reporter.white(t.tag.name) + "'";
-                reporter.error(t.tag.wholeLoc, msg);
-                reporter.note(tagDefLocation.get(t.tag.name), "previous definition is here");
-            }
+        if (t.memberDeclarations == null) { return; }
 
-            List<Field> fields = new ArrayList<>();
-            Map<String, SourceLocation> fieldLoc = new HashMap<>();
-            for (MemberDeclarationNode memberDecl : t.memberDeclarations) {
-                for (MemberDeclaratorNode decl : memberDecl.memberDeclarators) {
-                    TypeNode fieldType = decl.finalType;
-                    IdentifierNode fieldName = decl.id;
+        if (!definedNodes.add(t)) {
+            return;
+        }
+        // 如果先前有定义，则先前将 populate，从而使类型完整
+        boolean isDefined = t.getType().isComplete();
+        if (isDefined) {
+            assert t.tag != null; // 先前有定义，从而不可能是匿名结构体
+            String msg = "redefinition of '" + reporter.white(t.tag.name) + "'";
+            reporter.error(t.tag.wholeLoc, msg);
+            reporter.note(tagDefLocation.get(t.tag.name), "previous definition is here");
+        }
 
-                    // 检查成员是否重复
-                    boolean duplicated = fieldLoc.containsKey(fieldName.name);
-                    if (duplicated) {
-                        String msg = "duplicate member '" + reporter.white(fieldName.name) + "'";
-                        reporter.error(fieldName.wholeLoc, msg);
-                        msg = "previous member '" + reporter.white(fieldName.name) + "' declared here";
-                        reporter.note(fieldLoc.get(fieldName.name), msg);
-                    } else {
-                        fieldLoc.put(fieldName.name, fieldName.wholeLoc);
-                    }
+        List<Field> fields = new ArrayList<>();
+        Map<String, SourceLocation> fieldLoc = new HashMap<>();
+        for (MemberDeclarationNode memberDecl : t.memberDeclarations) {
+            for (MemberDeclaratorNode decl : memberDecl.memberDeclarators) {
+                TypeNode fieldType = decl.finalType;
+                IdentifierNode fieldName = decl.id;
 
-                    // 检查成员类型
-                    checkType(fieldType, fieldName, false);
-                    // 不能是函数类型
-                    if (fieldType instanceof FunctionTypeNode) {
-                        String msg = "field '" + reporter.white(fieldName.name) + "' declared as a function";
-                        reporter.error(fieldName.wholeLoc, msg);
-                    } else if (!fieldType.getType().isComplete()) {
-                        String msg = "field '" + reporter.white(fieldName.name) + "' has incomplete type '" +
-                                     reporter.white(fieldType.typename()) + "'";
-                        reporter.error(fieldName.wholeLoc, msg);
-                    } else if (!duplicated) {
-                        // 成员合法，添加到结构体中
-                        fields.add(new Field(fieldName.name, fieldType.getType()));
-                    }
+                // 检查成员是否重复
+                boolean duplicated = fieldLoc.containsKey(fieldName.name);
+                if (duplicated) {
+                    String msg = "duplicate member '" + reporter.white(fieldName.name) + "'";
+                    reporter.error(fieldName.wholeLoc, msg);
+                    msg = "previous member '" + reporter.white(fieldName.name) + "' declared here";
+                    reporter.note(fieldLoc.get(fieldName.name), msg);
+                } else {
+                    fieldLoc.put(fieldName.name, fieldName.wholeLoc);
+                }
+
+                // 检查成员类型
+                checkType(fieldType, fieldName, false);
+                // 不能是函数类型
+                if (fieldType instanceof FunctionTypeNode) {
+                    String msg = "field '" + reporter.white(fieldName.name) + "' declared as a function";
+                    reporter.error(fieldName.wholeLoc, msg);
+                } else if (!fieldType.getType().isComplete()) {
+                    String msg = "field '" + reporter.white(fieldName.name) + "' has incomplete type '" +
+                                 reporter.white(fieldType.typename()) + "'";
+                    reporter.error(fieldName.wholeLoc, msg);
+                } else if (!duplicated) {
+                    // 成员合法，添加到结构体中
+                    fields.add(new Field(fieldName.name, fieldType.getType()));
                 }
             }
+        }
 
-            // 进行 populate
-            if (!isDefined) {
-                t.getType().populate(fields);
-                if (t.tag != null) {
-                    // 非匿名结构体，添加至定义表中
-                    tagDefLocation.put(t.tag.name, t.tag.wholeLoc);
-                }
+        // 进行 populate
+        if (!isDefined) {
+            t.getType().populate(fields);
+            if (t.tag != null) {
+                // 非匿名结构体，添加至定义表中
+                tagDefLocation.put(t.tag.name, t.tag.wholeLoc);
             }
         }
     }
@@ -711,6 +713,9 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
     private void checkEnumType(EnumTypeNode t) {
         if (t.enumerators == null) {
             // 引用形式 enum E，不需要处理
+            return;
+        }
+        if (!definedNodes.add(t)) {
             return;
         }
 
