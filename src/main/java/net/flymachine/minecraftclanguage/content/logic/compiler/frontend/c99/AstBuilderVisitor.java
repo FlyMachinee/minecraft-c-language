@@ -376,7 +376,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         }
         return new MemberDeclarationNode(getSourceLocation(ctx), baseType, structDeclarators);
     }
-    
+
     @Override
     public EnumTypeNode visitEnumSpecifier(C99Parser.EnumSpecifierContext ctx) {
         IdentifierNode tag = null;
@@ -565,7 +565,7 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
                 parameters.add(paramRes.id);
             } else {
                 // 没有参数名
-                if (paramBaseType == null || paramBaseType.getType() == null) {
+                if (paramBaseType == null) {
                     // 没有类型
                     String msg = "type defaults to '" + reporter.white("int") + "' in type name";
                     reporter.error(getSourceLocation(paramCtx.declarationSpecifiers()), msg);
