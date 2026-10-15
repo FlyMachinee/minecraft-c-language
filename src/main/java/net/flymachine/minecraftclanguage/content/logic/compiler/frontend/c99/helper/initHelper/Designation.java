@@ -4,8 +4,8 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Arra
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.StructType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.UnionType;
-import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.CompoundInitializerNode;
-import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.InitializerNode;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.initializer.CompoundInitializerNode;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.initializer.InitializerNode;
 
 import java.util.ArrayList;
 import java.util.List;

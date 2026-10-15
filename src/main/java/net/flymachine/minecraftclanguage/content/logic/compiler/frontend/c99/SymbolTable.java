@@ -3,7 +3,7 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticInit.StaticInit;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.IdentifierNode;
-import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.TypeNode;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.type.TypeNode;
 
 import java.util.Collection;
 import java.util.HashMap;

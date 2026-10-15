@@ -1,0 +1,38 @@
+package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.statement;
+
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
+import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
+
+import java.io.PrintStream;
+
+public final class NullStatementNode extends StatementNode {
+    // 其 Location 为分号的 Location
+
+    public NullStatementNode(SourceLocation wholeLocation) {
+        super(wholeLocation);
+    }
+
+    @Override
+    public <T> T accept(AstVisitor<T> visitor) {
+        return visitor.visit(this);
+    }
+
+    @Override
+    public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            indent(stream, indentLevel);
+        }
+        if (isLabeled()) {
+            stream.print("NullStatementNode(");
+            dumpLabels(stream);
+            stream.print(')');
+        } else {
+            stream.print("NullStatementNode()");
+        }
+    }
+
+    @Override
+    public void accept(StatementVisitor visitor) {
+        visitor.visit(this);
+    }
+}

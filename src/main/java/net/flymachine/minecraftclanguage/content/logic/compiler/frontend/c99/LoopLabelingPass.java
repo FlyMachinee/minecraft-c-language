@@ -1,7 +1,11 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99;
 
-import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.StatementVisitor;
-import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.*;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.ExternalDeclarationNode;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.FunctionDefinitionNode;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.ProgramNode;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.blockItem.BlockItemNode;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.blockItem.StatementBlockItemNode;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.statement.*;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.DiagnosticReporter;
 
 import java.util.Stack;

@@ -1,8 +1,8 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.helper.initHelper;
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
-import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.CompoundInitializerNode;
-import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.InitializerNode;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.initializer.CompoundInitializerNode;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.initializer.InitializerNode;
 
 sealed interface Designator permits ArrayDesignator, StructMemberDesignator, UnionMemberDesignator {
     /**

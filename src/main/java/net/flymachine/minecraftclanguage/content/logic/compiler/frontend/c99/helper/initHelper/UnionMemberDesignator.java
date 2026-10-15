@@ -3,7 +3,11 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.he
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.UnionType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.record.Field;
-import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.*;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.IdentifierNode;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.initializer.CompoundInitializerNode;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.initializer.DesignationInitializerNode;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.initializer.InitializerNode;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.initializer.MemberDesignatorNode;
 
 import java.util.List;
 

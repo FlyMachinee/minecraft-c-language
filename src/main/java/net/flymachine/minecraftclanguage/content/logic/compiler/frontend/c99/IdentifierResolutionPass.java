@@ -7,6 +7,13 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.reco
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.record.UnionInfo;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.*;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.blockItem.BlockItemNode;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.expression.*;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.statement.*;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.type.*;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.type.enumerate.EnumeratorNode;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.type.record.MemberDeclarationNode;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.type.record.MemberDeclaratorNode;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.enumerate.TagKind;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.helper.scope.ScopeStack;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.DiagnosticReporter;

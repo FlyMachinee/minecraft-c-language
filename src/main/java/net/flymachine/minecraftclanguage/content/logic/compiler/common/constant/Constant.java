@@ -11,7 +11,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Basi
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.EnumType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.PointerType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
-import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.ConstantNode;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.expression.ConstantNode;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.DiagnosticReporter;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 

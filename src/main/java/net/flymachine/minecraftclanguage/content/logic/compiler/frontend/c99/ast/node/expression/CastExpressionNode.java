@@ -1,0 +1,66 @@
+package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.expression;
+
+import com.mojang.datafixers.util.Either;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.Constant;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.type.TypeNode;
+import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
+
+import java.io.PrintStream;
+
+public final class CastExpressionNode extends ExpressionNode {
+    public TypeNode targetType;
+    public ExpressionNode exp;
+
+    public CastExpressionNode(SourceLocation wholeLocation, TypeNode targetType, ExpressionNode exp) {
+        super(wholeLocation);
+        this.targetType = targetType;
+        this.exp = exp;
+    }
+
+    @Override
+    public <T> T accept(AstVisitor<T> visitor) {
+        return visitor.visit(this);
+    }
+
+    @Override
+    public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            indent(stream, indentLevel);
+        }
+
+        stream.println("CastNode(");
+
+        indent(stream, indentLevel + 1);
+        stream.print("targetType=");
+        targetType.dump(stream);
+        stream.println(',');
+
+        indent(stream, indentLevel + 1);
+        stream.print("exp=");
+        exp.dump(stream, indentLevel + 1, false);
+        stream.println(',');
+
+        dumpExpType(stream, indentLevel + 1);
+
+        indent(stream, indentLevel);
+        stream.print(')');
+    }
+
+    @Override
+    public <T> T accept(ExpressionVisitor<T> visitor) {
+        return visitor.visit(this);
+    }
+
+    @Override
+    public ExpressionBoolVisitor.BoolGenResult accept(
+        ExpressionBoolVisitor visitor, String jumpTarget, boolean inverse) {
+        return visitor.visit(this, jumpTarget, inverse);
+    }
+
+    @Override
+    public Either<Constant, SourceLocation> accept(ConstantEvalVisitor visitor,
+        ConstantEvalVisitor.ConstantCategory category) {
+        return visitor.visit(this, category);
+    }
+}

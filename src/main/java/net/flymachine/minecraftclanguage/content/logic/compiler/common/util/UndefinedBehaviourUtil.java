@@ -3,8 +3,8 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.common.util;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.Comparison;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.ConstantLong;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.constant.IntegerConstant;
-import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.ConstantNode;
-import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.ExpressionNode;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.expression.ConstantNode;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.expression.ExpressionNode;
 
 import java.util.Optional;
 

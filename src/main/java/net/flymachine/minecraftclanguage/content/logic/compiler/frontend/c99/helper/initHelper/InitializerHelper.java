@@ -8,7 +8,11 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticIni
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.*;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.record.Field;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.TypeCheckingPass;
-import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.*;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.IdentifierNode;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.expression.ConstantNode;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.expression.ExpressionNode;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.expression.StringLiteralNode;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.initializer.*;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.helper.constexprHelper.ConstantEvaluator;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.DiagnosticReporter;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;

@@ -1,7 +1,7 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.ir;
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.IdentifierNode;
-import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.VariableNode;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.expression.VariableNode;
 
 import java.io.PrintStream;
 

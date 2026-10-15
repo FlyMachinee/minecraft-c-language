@@ -1,6 +1,10 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast;
 
-import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.*;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.DeclarationNode;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.FunctionDefinitionNode;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.ProgramNode;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.expression.*;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.statement.*;
 
 public interface AstVisitor<T> {
     T visit(ProgramNode node);

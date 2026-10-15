@@ -9,8 +9,9 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Arra
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.RecordType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.record.Field;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.SymbolTable;
-import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.ExpressionVisitor;
-import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.*;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.IdentifierNode;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.expression.*;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.type.TypeNode;
 
 import java.util.Optional;
 
