@@ -51,6 +51,7 @@ public final class FunctionType extends Type {
 
     @Override
     public boolean isCompatible(Type other) {
+        other = other.unwrap();
         if (!(other instanceof FunctionType o)) {
             return false;
         }
@@ -76,12 +77,22 @@ public final class FunctionType extends Type {
     }
 
     @Override
+    public FunctionType unwrap() {
+        return new FunctionType(returnType.unwrap(), parameterTypes.stream().map(Type::unwrap).toList());
+    }
+
+    @Override
+    public boolean containsAlias() {
+        return returnType.containsAlias() || parameterTypes.stream().anyMatch(Type::containsAlias);
+    }
+
+    @Override
     public Type merge(Type other) {
         if (!this.isCompatible(other)) {
             return ErrorType.INSTANCE;
         }
 
-        FunctionType o = (FunctionType) other;
+        FunctionType o = (FunctionType) other.unwrap();
 
         Type mergedReturnType = returnType.merge(o.returnType);
 

@@ -73,16 +73,17 @@ public final class BasicType extends Type {
 
     @Override
     public boolean isCompatible(Type other) {
-        if (this.isConst() != other.isConst()) {
-            return false;
-        }
-        if (other instanceof EnumType) {
-            return this.removeQualifiers().isCompatible(other.removeQualifiers().underlyingType());
+        other = other.unwrap();
+        if (other instanceof EnumType et) {
+            return this.isCompatible(et.enumUnderlyingType());
         }
         if (!(other instanceof BasicType o)) {
             return false;
         }
-        return this.primitive == o.primitive;
+        if (this.primitive != o.primitive) {
+            return false;
+        }
+        return this.isConst == o.isConst;
     }
 
     @Override

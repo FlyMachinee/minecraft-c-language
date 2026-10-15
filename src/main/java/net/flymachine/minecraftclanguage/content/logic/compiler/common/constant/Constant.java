@@ -54,7 +54,7 @@ public sealed interface Constant permits ConstantDouble, IntegerConstant, Pointe
             return toPointer(pt.referencedType());
         }
         if (type instanceof EnumType et) {
-            return castTo(et.underlyingType());
+            return castTo(et.enumUnderlyingType());
         }
         throw new UnsupportedOperationException("Unsupported type for constant cast: " + type);
     }

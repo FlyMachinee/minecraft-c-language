@@ -1040,7 +1040,7 @@ public final class AstToTacLowerer implements
         // 指针视为 unsigned long
         BasicType targetBasic;
         if (targetType instanceof EnumType et) {
-            targetBasic = (BasicType) et.underlyingType();
+            targetBasic = et.enumUnderlyingType();
         } else if (targetType.isBasic()) {
             targetBasic = (BasicType) targetType;
         } else {
@@ -1049,7 +1049,7 @@ public final class AstToTacLowerer implements
 
         BasicType originBasic;
         if (originType instanceof EnumType et) {
-            originBasic = (BasicType) et.underlyingType();
+            originBasic = et.enumUnderlyingType();
         } else if (originType.isBasic()) {
             originBasic = (BasicType) originType;
         } else {

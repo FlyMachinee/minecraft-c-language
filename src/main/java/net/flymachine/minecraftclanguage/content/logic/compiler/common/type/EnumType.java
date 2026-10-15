@@ -45,17 +45,16 @@ public final class EnumType extends Type {
 
     @Override
     public boolean isCompatible(Type other) {
-        if (this.isConst() != other.isConst()) { return false; }
+        other = other.unwrap();
         // 枚举与相同枚举类型兼容
         if (other instanceof EnumType otherEnum) {
-            return this.info.id() == otherEnum.info.id();
+            return this.info.id() == otherEnum.info.id() && this.isConst == otherEnum.isConst;
         }
         // 与底层整数类型兼容
-        return UNDERLYING_TYPE.isCompatible(other.removeQualifiers());
+        return enumUnderlyingType().isCompatible(other);
     }
 
-    @Override
-    public Type underlyingType() {
+    public BasicType enumUnderlyingType() {
         return UNDERLYING_TYPE.setConst(this.isConst());
     }
 

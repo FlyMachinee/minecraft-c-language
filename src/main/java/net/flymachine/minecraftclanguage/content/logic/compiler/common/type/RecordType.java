@@ -79,10 +79,11 @@ public sealed abstract class RecordType<I extends RecordInfo> extends Type permi
 
     @Override
     public final boolean isCompatible(Type other) {
-        if (this.isConst() != other.isConst()) {
+        other = other.unwrap();
+        if (!(other instanceof RecordType<?> otherRecord)) {
             return false;
         }
-        return other instanceof RecordType<?> otherRecord && this.id() == otherRecord.id();
+        return this.id() == otherRecord.id() && this.isConst == otherRecord.isConst;
     }
 
     @Override

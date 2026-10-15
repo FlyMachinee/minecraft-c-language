@@ -48,6 +48,7 @@ public final class ArrayType extends Type {
 
     @Override
     public boolean isCompatible(Type other) {
+        other = other.unwrap();
         if (!(other instanceof ArrayType o)) {
             return false;
         }
@@ -61,12 +62,22 @@ public final class ArrayType extends Type {
     }
 
     @Override
+    public ArrayType unwrap() {
+        return new ArrayType(elementType.unwrap(), size);
+    }
+
+    @Override
+    public boolean containsAlias() {
+        return elementType.containsAlias();
+    }
+
+    @Override
     public Type merge(Type other) {
         if (!this.isCompatible(other)) {
             return ErrorType.INSTANCE;
         }
 
-        ArrayType o = (ArrayType) other;
+        ArrayType o = (ArrayType) other.unwrap();
 
         Type mergedElementType = elementType.merge(o.elementType);
         ConstantUnsignedLong mergedSize = new ConstantUnsignedLong(Math.max(size.value(), o.size.value()));

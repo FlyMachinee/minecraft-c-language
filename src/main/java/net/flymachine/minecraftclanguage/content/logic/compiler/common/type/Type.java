@@ -12,38 +12,44 @@ public abstract class Type {
 
     abstract TypeKind kind();
 
-    public Type underlyingType() { return this; }
+    public Type unwrap() { return this; }
 
-    public final boolean isBasic() {
+    public boolean containsAlias() { return false; }
+
+    public boolean isBasic() {
         return kind() == TypeKind.BASIC;
     }
 
-    public final boolean isVoid() {
+    public boolean isVoid() {
         return kind() == TypeKind.VOID;
     }
 
-    public final boolean isFunction() {
+    public boolean isFunction() {
         return kind() == TypeKind.FUNCTION;
     }
 
-    public final boolean isPointer() {
+    public boolean isPointer() {
         return kind() == TypeKind.POINTER;
     }
 
-    public final boolean isArray() {
+    public boolean isArray() {
         return kind() == TypeKind.ARRAY;
     }
 
-    public final boolean isStruct() {
+    public boolean isStruct() {
         return kind() == TypeKind.STRUCT;
     }
 
-    public final boolean isUnion() {
+    public boolean isUnion() {
         return kind() == TypeKind.UNION;
     }
 
-    public final boolean isEnum() {
+    public boolean isEnum() {
         return kind() == TypeKind.ENUM;
+    }
+
+    public final boolean isTypedef() {
+        return kind() == TypeKind.TYPEDEF;
     }
 
     public final boolean isError() {
@@ -109,7 +115,7 @@ public abstract class Type {
      * 整数类型：char、有符号整数类型、无符号整数类型、枚举类型
      */
     public final boolean isInteger() {
-        return (isBasic() && ((BasicType) this).primitive() != BasicType.Primitive.DOUBLE) || isEnum();
+        return (isBasic() && ((BasicType) this.unwrap()).primitive() != BasicType.Primitive.DOUBLE) || isEnum();
     }
 
     /**
@@ -141,44 +147,44 @@ public abstract class Type {
     }
 
     public final boolean isInt() {
-        return isBasic() && ((BasicType) this).primitive() == BasicType.Primitive.INT;
+        return isBasic() && ((BasicType) this.unwrap()).primitive() == BasicType.Primitive.INT;
     }
 
     public final boolean isLong() {
-        return isBasic() && ((BasicType) this).primitive() == BasicType.Primitive.LONG;
+        return isBasic() && ((BasicType) this.unwrap()).primitive() == BasicType.Primitive.LONG;
     }
 
     public final boolean isUnsignedInt() {
-        return isBasic() && ((BasicType) this).primitive() == BasicType.Primitive.UNSIGNED_INT;
+        return isBasic() && ((BasicType) this.unwrap()).primitive() == BasicType.Primitive.UNSIGNED_INT;
     }
 
     public final boolean isUnsignedLong() {
-        return isBasic() && ((BasicType) this).primitive() == BasicType.Primitive.UNSIGNED_LONG;
+        return isBasic() && ((BasicType) this.unwrap()).primitive() == BasicType.Primitive.UNSIGNED_LONG;
     }
 
     public final boolean isDouble() {
-        return isBasic() && ((BasicType) this).primitive() == BasicType.Primitive.DOUBLE;
+        return isBasic() && ((BasicType) this.unwrap()).primitive() == BasicType.Primitive.DOUBLE;
     }
 
     public final boolean isCharacter() {
         if (!isBasic()) {
             return false;
         }
-        BasicType.Primitive primitive = ((BasicType) this).primitive();
+        BasicType.Primitive primitive = ((BasicType) this.unwrap()).primitive();
         return primitive == BasicType.Primitive.CHAR || primitive == BasicType.Primitive.SIGNED_CHAR ||
                primitive == BasicType.Primitive.UNSIGNED_CHAR;
     }
 
     public final boolean isChar() {
-        return isBasic() && ((BasicType) this).primitive() == BasicType.Primitive.CHAR;
+        return isBasic() && ((BasicType) this.unwrap()).primitive() == BasicType.Primitive.CHAR;
     }
 
     public final boolean isSignedChar() {
-        return isBasic() && ((BasicType) this).primitive() == BasicType.Primitive.SIGNED_CHAR;
+        return isBasic() && ((BasicType) this.unwrap()).primitive() == BasicType.Primitive.SIGNED_CHAR;
     }
 
     public final boolean isUnsignedChar() {
-        return isBasic() && ((BasicType) this).primitive() == BasicType.Primitive.UNSIGNED_CHAR;
+        return isBasic() && ((BasicType) this.unwrap()).primitive() == BasicType.Primitive.UNSIGNED_CHAR;
     }
 
     public abstract long sizeof();
@@ -191,6 +197,11 @@ public abstract class Type {
         if (!t1.isArithmetic() || !t2.isArithmetic()) {
             throw new IllegalArgumentException("can only handle arithmetic types");
         }
+
+        // typedef 处理
+        t1 = t1.unwrap();
+        t2 = t2.unwrap();
+
         // 否则，若一个操作数是 double、double complex 或 double imaginary，则会按下列方式隐式转换另一操作数：
         // 整数或实浮点数类型转换成 double
         // 复数类型转换成 double complex
@@ -201,8 +212,8 @@ public abstract class Type {
 
         // 否则两个操作数均为整数。两个操作数都会经历整数提升
         // 枚举处理
-        BasicType b1 = (BasicType) t1.underlyingType();
-        BasicType b2 = (BasicType) t2.underlyingType();
+        BasicType b1 = t1 instanceof EnumType e1 ? e1.enumUnderlyingType() : (BasicType) t1;
+        BasicType b2 = t2 instanceof EnumType e2 ? e2.enumUnderlyingType() : (BasicType) t2;
 
         // 整数提升是任何等级小于或等于 int 等级的整数类型
         // 或是 _Bool、int、signed int、unsigned int 类型的位域类型的值到 int 或 unsigned int 类型值的隐式转换

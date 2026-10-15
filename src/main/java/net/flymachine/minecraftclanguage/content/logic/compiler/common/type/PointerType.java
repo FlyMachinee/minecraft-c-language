@@ -43,13 +43,21 @@ public final class PointerType extends Type {
 
     @Override
     public boolean isCompatible(Type other) {
-        if (this.isConst() != other.isConst()) {
-            return false;
-        }
+        other = other.unwrap();
         if (!(other instanceof PointerType o)) {
             return false;
         }
-        return referencedType.isCompatible(o.referencedType);
+        return referencedType.isCompatible(o.referencedType) && this.isConst == o.isConst;
+    }
+
+    @Override
+    public PointerType unwrap() {
+        return new PointerType(referencedType.unwrap(), this.isConst());
+    }
+
+    @Override
+    public boolean containsAlias() {
+        return referencedType.containsAlias();
     }
 
     @Override
@@ -57,7 +65,8 @@ public final class PointerType extends Type {
         if (!this.isCompatible(other)) {
             return ErrorType.INSTANCE;
         }
-        return new PointerType(referencedType.merge(((PointerType) other).referencedType), this.isConst());
+        PointerType o = (PointerType) other.unwrap();
+        return new PointerType(referencedType.merge(o.referencedType), this.isConst());
     }
 
     @Override
