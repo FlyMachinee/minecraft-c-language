@@ -18,6 +18,16 @@ public final class PointerTypeNode extends TypeNode {
     }
 
     @Override
+    public boolean containsAlias() {
+        return referencedType.containsAlias();
+    }
+
+    @Override
+    public PointerTypeNode unwrap() {
+        return new PointerTypeNode(wholeLoc, referencedType.unwrap());
+    }
+
+    @Override
     protected String format(String declarator) {
         String newDeclarator = "*" + (isConst() ? " const" : "") + declarator;
         return referencedType.format(newDeclarator);

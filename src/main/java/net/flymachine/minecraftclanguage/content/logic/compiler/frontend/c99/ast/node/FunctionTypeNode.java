@@ -34,6 +34,17 @@ public final class FunctionTypeNode extends TypeNode {
     }
 
     @Override
+    public boolean containsAlias() {
+        return retType.containsAlias() || paramTypes.stream().anyMatch(TypeNode::containsAlias);
+    }
+
+    @Override
+    public FunctionTypeNode unwrap() {
+        return new FunctionTypeNode(
+            wholeLoc, retType.unwrap(), paramTypes.stream().map(TypeNode::unwrap).toList(), params);
+    }
+
+    @Override
     protected String format(String declarator) {
         String params = paramTypes.stream()
                                   .map(t -> t.format(""))

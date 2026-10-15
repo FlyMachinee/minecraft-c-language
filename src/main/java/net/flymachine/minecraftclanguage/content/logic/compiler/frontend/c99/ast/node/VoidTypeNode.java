@@ -12,7 +12,7 @@ public final class VoidTypeNode extends TypeNode {
 
     @Override
     public VoidType getType() {
-        return VoidType.INSTANCE;
+        return VoidType.getInstance(constQualifier != null);
     }
 
     @Override

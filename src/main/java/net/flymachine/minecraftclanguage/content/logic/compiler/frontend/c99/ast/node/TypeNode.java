@@ -71,7 +71,23 @@ public abstract class TypeNode extends AstNode {
             node.resolve(et.info());
             return node;
         }
+        if (type instanceof TypedefType tt) {
+            TypedefNameNode node = new TypedefNameNode(null, new IdentifierNode(null, tt.typename));
+            if (tt.isConst()) {
+                node.constQualifier = new ConstQualifierNode(null);
+            }
+            node.resolve(fromType(tt.underlyingType));
+            return node;
+        }
         throw new IllegalArgumentException("Unknown Type " + type);
+    }
+
+    public boolean containsAlias() {
+        return false;
+    }
+
+    public TypeNode unwrap() {
+        return this;
     }
 
     public boolean isConst() {

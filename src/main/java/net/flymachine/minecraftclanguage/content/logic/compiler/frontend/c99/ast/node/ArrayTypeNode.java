@@ -51,6 +51,16 @@ public final class ArrayTypeNode extends TypeNode {
     }
 
     @Override
+    public boolean containsAlias() {
+        return elementType.containsAlias();
+    }
+
+    @Override
+    public ArrayTypeNode unwrap() {
+        return new ArrayTypeNode(wholeLoc, elementType.unwrap(), size, constLoc);
+    }
+
+    @Override
     protected String format(String declarator) {
         String newDecl;
         if (size == null) {
