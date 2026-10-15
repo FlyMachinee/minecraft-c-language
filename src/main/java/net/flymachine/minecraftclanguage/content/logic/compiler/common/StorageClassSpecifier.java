@@ -12,6 +12,7 @@ public enum StorageClassSpecifier {
         return switch (s) {
             case "static" -> STATIC;
             case "extern" -> EXTERN;
+            case "typedef" -> TYPEDEF;
             default -> throw new IllegalArgumentException("Invalid storage class specifier: " + s);
         };
     }

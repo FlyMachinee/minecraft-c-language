@@ -2,8 +2,13 @@ parser grammar C99Parser;
 
 // Based on the C99 standard (ISO/IEC 9899:1999)
 
+@parser::header {
+    import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.C99ParserBase;
+}
+
 options {
     tokenVocab=C99Lexer;
+    superClass=C99ParserBase;
 }
 
 // Start Rule
@@ -46,8 +51,8 @@ unaryExpression
     | PlusPlus unaryExpression
     | MinusMinus unaryExpression
     | unaryOperator castExpression
-    | Sizeof unaryExpression
-    | Sizeof LeftParen typeName RightParen
+    | {!isTypeName()}? Sizeof unaryExpression
+    | {isTypeName()}? Sizeof LeftParen typeName RightParen
     ;
 
 unaryOperator
@@ -191,27 +196,30 @@ constantExpression
 
 // ISO 6.7, Declarations
 declaration
-    : declarationSpecifiers initDeclaratorList? Semicolon
+    : declarationSpecifiers
+      { setCurrentDeclarationTypedef($ctx.declarationSpecifiers()); }
+      initDeclaratorList? Semicolon
     ;
 declarationSpecifiers // rewrote
     : declarationSpecifier+
     ;
 declarationSpecifier // added
     : storageClassSpecifier
-    | typeSpecifier
+    | { isDeclarationSpecifier() }? typeSpecifier
     | typeQualifier
     ;
 initDeclaratorList
     : initDeclarator (Comma initDeclarator)*
     ;
 initDeclarator
-    : declarator (Assign initializer)?
+    : declarator { registerInitDeclarator($ctx.declarator()); } (Assign initializer)?
     ;
 
 // ISO 6.7.1, Storage-Class Specifiers
 storageClassSpecifier
     : Static
     | Extern
+    | Typedef
     ;
 
 // ISO 6.7.2, Type Specifiers
@@ -225,6 +233,7 @@ typeSpecifier
     | Unsigned
     | structOrUnionSpecifier
     | enumSpecifier
+    | typedefName
     ;
 
 // ISO 6.7.2.1, Structure And Union Specifiers
@@ -246,7 +255,7 @@ specifierQualifierList // rewrote
     : specifierQualifier+
     ;
 specifierQualifier // added
-    : typeSpecifier
+    : { isDeclarationSpecifier() }? typeSpecifier
     | typeQualifier
     ;
 
@@ -259,7 +268,7 @@ enumeratorList
     : enumerator (Comma enumerator)*
     ;
 enumerator
-    : Identifier (Assign constantExpression)?
+    : Identifier (Assign constantExpression)? { registerEnumerator($ctx.Identifier()); }
     ;
 
 // ISO 6.7.3, Type Qualifiers
@@ -274,7 +283,7 @@ declarator
 directDeclarator
     : Identifier
     | LeftParen declarator RightParen
-    | directDeclarator LeftParen parameterTypeList RightParen
+    | directDeclarator LeftParen { enterParameterScope(); } parameterTypeList RightParen { exitParameterScope(); }
     | directDeclarator LeftBracket typeQualifier* constantExpression? RightBracket
     ;
 pointer
@@ -287,7 +296,7 @@ parameterList
     : parameterDeclaration (Comma parameterDeclaration)*
     ;
 parameterDeclaration
-    : declarationSpecifiers declarator
+    : declarationSpecifiers declarator { registerParameter($ctx.declarator()); }
     | declarationSpecifiers abstractDeclarator?
     ;
 
@@ -305,6 +314,11 @@ directAbstractDeclarator
     | directAbstractDeclarator LeftParen parameterTypeList RightParen
     | LeftBracket constantExpression? RightBracket
     | directAbstractDeclarator LeftBracket constantExpression? RightBracket
+    ;
+
+// ISO 6.7.7, Type Definitions
+typedefName
+    : { isTypedefName() }? Identifier
     ;
 
 // ISO 6.7.8, Initialization
@@ -342,7 +356,7 @@ labeledStatement
 
 // ISO 6.8.2, Compound Statements
 compoundStatement
-    : LeftBrace blockItemList? RightBrace
+    : LeftBrace { enterBlockScope(); } blockItemList? RightBrace { exitBlockScope(); }
     ;
 blockItemList:
     blockItem+
@@ -359,16 +373,30 @@ expressionStatement
 
 // ISO 6.8.4, Selection Statements
 selectionStatement
-    : If LeftParen expression RightParen statement (Else statement)?
-    | Switch LeftParen expression RightParen statement
+    : If LeftParen { enterBlockScope(); } expression RightParen
+      { enterBlockScope(); } statement { exitBlockScope(); }
+      (Else { enterBlockScope(); } statement { exitBlockScope(); })?
+      { exitBlockScope(); }
+    | Switch LeftParen { enterBlockScope(); } expression RightParen
+      { enterBlockScope(); } statement { exitBlockScope(); }
+      { exitBlockScope(); }
     ;
 
 // ISO 6.8.5, Iteration Statements
 iterationStatement
-    : While LeftParen expression RightParen statement
-    | Do statement While LeftParen expression RightParen Semicolon
-    | For LeftParen init=expression? Semicolon cond=expression? Semicolon step=expression? RightParen statement
-    | For LeftParen declaration cond=expression? Semicolon step=expression? RightParen statement
+    : While LeftParen { enterBlockScope(); } expression RightParen
+      { enterBlockScope(); } statement { exitBlockScope(); }
+      { exitBlockScope(); }
+    | Do { enterBlockScope(); } statement { exitBlockScope(); } While LeftParen
+      { enterBlockScope(); } expression RightParen Semicolon { exitBlockScope(); }
+    | For LeftParen
+      { enterBlockScope(); }
+      init=expression? Semicolon cond=expression? Semicolon step=expression? RightParen statement
+      { exitBlockScope(); }
+    | For LeftParen
+      { enterBlockScope(); }
+      declaration cond=expression? Semicolon step=expression? RightParen statement
+      { exitBlockScope(); }
     ;
 
 // ISO 6.8.6, Jump Statements
@@ -390,5 +418,10 @@ externalDeclaration
 
 // ISO 6.9.1, Function Definitions
 functionDefinition
-    : declarationSpecifiers declarator compoundStatement
+    : declarationSpecifiers
+      { enterFunctionScope(); }
+      declarator
+      { registerFunctionName($ctx.declarator()); }
+      compoundStatement
+      { exitFunctionScope(); }
     ;

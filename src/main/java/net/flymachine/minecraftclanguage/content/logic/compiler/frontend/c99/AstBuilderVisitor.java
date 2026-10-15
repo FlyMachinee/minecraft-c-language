@@ -290,6 +290,9 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
         } else if (typeSpecCtx.enumSpecifier() != null) {
             TypeNode enumType = visitEnumSpecifier(typeSpecCtx.enumSpecifier());
             helper.appendOtherType(enumType);
+        } else if (typeSpecCtx.typedefName() != null) {
+            TypeNode typedefName = visitTypedefName(typeSpecCtx.typedefName());
+            helper.appendOtherType(typedefName);
         } else {
             String typeSpecifierText = typeSpecCtx.getText();
             helper.append(typeSpecifierText, specLoc);
@@ -413,6 +416,12 @@ public final class AstBuilderVisitor extends C99ParserBaseVisitor<AstNode> {
             }
         }
         return new EnumTypeNode(getSourceLocation(ctx), tag, enumerators);
+    }
+
+    @Override
+    public TypedefNameNode visitTypedefName(C99Parser.TypedefNameContext ctx) {
+        IdentifierNode id = createIdentifierNode(ctx.Identifier());
+        return new TypedefNameNode(id);
     }
 
     private PointerTypeNode parsePointer(TypeNode baseType, C99Parser.PointerContext ctx) {

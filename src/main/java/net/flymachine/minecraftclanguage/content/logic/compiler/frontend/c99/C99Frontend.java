@@ -51,12 +51,19 @@ public final class C99Frontend {
             return null;
         }
 
+        ast.dump(System.out);
+        if (1 == 1) {
+            return null;
+        }
+
         IdentifierResolutionPass identifierResolutionPass = new IdentifierResolutionPass(reporter);
         ast.accept(identifierResolutionPass);
 
         if (reporter.getErrorCount() > 0) {
             return null;
         }
+
+        ast.dump(System.out);
 
         TypeCheckingPass typeCheckingPass = new TypeCheckingPass(reporter);
         ast.accept(typeCheckingPass);

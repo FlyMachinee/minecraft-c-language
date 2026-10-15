@@ -76,7 +76,7 @@ public abstract class TypeNode extends AstNode {
             return node;
         }
         if (type instanceof TypedefType tt) {
-            TypedefNameNode node = new TypedefNameNode(null, new IdentifierNode(null, tt.typename));
+            TypedefNameNode node = new TypedefNameNode(new IdentifierNode(null, tt.typename));
             if (tt.isConst()) {
                 node.constQualifier = new ConstQualifierNode(null);
             }

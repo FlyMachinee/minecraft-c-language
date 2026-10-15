@@ -32,6 +32,7 @@ Sizeof: 'sizeof';
 Static: 'static';
 Struct: 'struct';
 Switch: 'switch';
+Typedef: 'typedef';
 Union: 'union';
 Unsigned: 'unsigned';
 Void: 'void';

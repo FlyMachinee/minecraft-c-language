@@ -4,7 +4,6 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.TypedefType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.AstVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.IdentifierNode;
-import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -13,8 +12,8 @@ public final class TypedefNameNode extends TypeNode {
     public final @NotNull IdentifierNode id;
     private @Nullable TypeNode underlyingType;
 
-    public TypedefNameNode(SourceLocation wholeLocation, @NotNull IdentifierNode id) {
-        super(wholeLocation);
+    public TypedefNameNode(@NotNull IdentifierNode id) {
+        super(id.wholeLoc);
         this.id = id;
     }
 
