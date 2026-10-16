@@ -60,5 +60,5 @@ public record CompilerOptions(OptimizationOptions optimization, DumpOptions dump
         }
     }
 
-    public enum DumpKind {AST_RAW, AST_ANNOTATED, TAC_RAW, ASM}
+    public enum DumpKind {AST_RAW, AST_ANNOTATED, TAC_RAW, TAC_RAW_SYMTAB, ASM}
 }

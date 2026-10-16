@@ -62,6 +62,12 @@ public final class C99ToLA64Compiler {
             frontendResult.tacProgram().dumpPretty(System.out);
             System.out.println("=== Dumping complete ===");
             System.out.println();
+            if (options.dumping().contains(CompilerOptions.DumpKind.TAC_RAW_SYMTAB)) {
+                System.out.println("=== Dumping Symbol Table ===");
+                frontendResult.symbolTable().dump(System.out);
+                System.out.println("=== Dumping complete ===");
+                System.out.println();
+            }
         }
 
         if (options.optimization().level() != CompilerOptions.OptimizationLevel.O0) {
