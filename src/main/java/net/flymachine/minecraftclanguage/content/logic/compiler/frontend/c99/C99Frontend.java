@@ -2,6 +2,7 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99;
 
 import net.flymachine.minecraftclanguage.content.logger.ConsoleLogger;
 import net.flymachine.minecraftclanguage.content.logger.Logger;
+import net.flymachine.minecraftclanguage.content.logic.compiler.CompilerOptions;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.antlr.C99Lexer;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.antlr.C99Parser;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.ProgramNode;
@@ -23,7 +24,7 @@ public final class C99Frontend {
      * @param charStream 包含源文件内容的字符流
      * @return 前端编译后的中间表示以及符号表，如果遇到错误则返回 null
      */
-    public @Nullable Result compile(CharStream charStream) {
+    public @Nullable Result compile(CharStream charStream, CompilerOptions options) {
         Logger logger = new ConsoleLogger();
         SourceFile sourceFile = new SourceFile(charStream);
         DiagnosticReporter reporter = new DiagnosticReporter(logger, sourceFile);

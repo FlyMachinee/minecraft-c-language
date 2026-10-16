@@ -1,17 +1,28 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.optimizer;
 
+import net.flymachine.minecraftclanguage.content.logic.compiler.CompilerOptions;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.SymbolTable;
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.TacProgram;
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.topLevel.TacFunction;
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.topLevel.TacTopLevel;
 
 public final class TacOptimizer {
 
     public TacOptimizer() { }
 
-    public TacProgram optimize(TacProgram program) {
-        return program;
+    public void optimize(TacProgram program, SymbolTable symbolTable, CompilerOptions options) {
+        if (options.optimization().level() == CompilerOptions.OptimizationLevel.O0) { return; }
+        
+        int size = program.topLevels.size();
+        for (int i = 0; i < size; i++) {
+            TacTopLevel topLevel = program.topLevels.get(i);
+            if (topLevel instanceof TacFunction function) {
+                program.topLevels.set(i, optimize(function, symbolTable, options));
+            }
+        }
     }
 
-    private TacFunction optimize(TacFunction function) {
+    private TacFunction optimize(TacFunction function, SymbolTable symbolTable, CompilerOptions options) {
         return function;
     }
 }
