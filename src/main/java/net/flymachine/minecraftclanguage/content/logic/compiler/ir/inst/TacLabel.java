@@ -1,0 +1,34 @@
+package net.flymachine.minecraftclanguage.content.logic.compiler.ir.inst;
+
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.TacVisitor;
+
+import java.io.PrintStream;
+
+public class TacLabel implements TacInstruction {
+    public String name;
+
+    public TacLabel(String name) {
+        this.name = name;
+    }
+
+    @Override
+    public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            stream.print("  ".repeat(indentLevel));
+        }
+        stream.append("Label(").append(name).append(")");
+    }
+
+    @Override
+    public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            stream.print("  ".repeat(indentLevel - 1));
+        }
+        stream.append(name).append(":");
+    }
+
+    @Override
+    public <T> T accept(TacVisitor<T> visitor) {
+        return visitor.visit(this);
+    }
+}

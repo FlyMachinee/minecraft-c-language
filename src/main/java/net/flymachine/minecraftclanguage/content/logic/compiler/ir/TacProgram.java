@@ -1,5 +1,7 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.ir;
 
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.topLevel.TacTopLevel;
+
 import java.io.PrintStream;
 import java.util.List;
 

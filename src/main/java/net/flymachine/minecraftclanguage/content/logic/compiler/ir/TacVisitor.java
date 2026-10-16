@@ -1,5 +1,7 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.ir;
 
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.inst.*;
+
 public interface TacVisitor<T> {
     T visit(TacReturn inst);
 

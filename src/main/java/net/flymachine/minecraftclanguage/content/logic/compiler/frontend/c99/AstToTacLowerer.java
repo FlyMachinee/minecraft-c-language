@@ -26,7 +26,16 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.type.FunctionTypeNode;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast.node.type.TypeNode;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.helper.initHelper.InitializerHelper;
-import net.flymachine.minecraftclanguage.content.logic.compiler.ir.*;
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.TacProgram;
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.inst.*;
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.operand.TacAddressDescriptor;
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.operand.TacConstant;
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.operand.TacValue;
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.operand.TacVariable;
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.topLevel.TacFunction;
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.topLevel.TacStaticConstant;
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.topLevel.TacStaticVariable;
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.topLevel.TacTopLevel;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.DiagnosticReporter;
 import org.jetbrains.annotations.Nullable;
 

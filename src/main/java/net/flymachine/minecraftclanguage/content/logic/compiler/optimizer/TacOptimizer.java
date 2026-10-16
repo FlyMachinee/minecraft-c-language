@@ -1,7 +1,7 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.optimizer;
 
-import net.flymachine.minecraftclanguage.content.logic.compiler.ir.TacFunction;
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.TacProgram;
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.topLevel.TacFunction;
 
 public final class TacOptimizer {
 

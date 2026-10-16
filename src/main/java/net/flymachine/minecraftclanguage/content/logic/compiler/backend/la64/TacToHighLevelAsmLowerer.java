@@ -22,7 +22,17 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Func
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.PointerType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.SymbolTable;
-import net.flymachine.minecraftclanguage.content.logic.compiler.ir.*;
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.TacProgram;
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.TacVisitor;
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.inst.*;
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.operand.TacAddressDescriptor;
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.operand.TacConstant;
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.operand.TacValue;
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.operand.TacVariable;
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.topLevel.TacFunction;
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.topLevel.TacStaticConstant;
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.topLevel.TacStaticVariable;
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.topLevel.TacTopLevel;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
