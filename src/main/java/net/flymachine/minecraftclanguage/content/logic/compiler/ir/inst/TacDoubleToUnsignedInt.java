@@ -27,7 +27,7 @@ public class TacDoubleToUnsignedInt implements TacInstruction {
     @Override
     public void dump(java.io.PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stream.print("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
         stream.print("DoubleToUnsignedInt(src=");
         src.dump(stream);
@@ -39,7 +39,7 @@ public class TacDoubleToUnsignedInt implements TacInstruction {
     @Override
     public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stream.print("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
         // dst = (d2ui) src
         dst.dumpPretty(stream);

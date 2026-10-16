@@ -26,7 +26,7 @@ public class TacUnsignedIntToDouble implements TacInstruction {
     @Override
     public void dump(java.io.PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stream.print("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
         stream.print("UnsignedIntToDouble(src=");
         src.dump(stream);
@@ -38,7 +38,7 @@ public class TacUnsignedIntToDouble implements TacInstruction {
     @Override
     public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stream.print("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
         // dst = (ui2d) src
         dst.dumpPretty(stream);

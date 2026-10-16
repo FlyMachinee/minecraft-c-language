@@ -62,7 +62,7 @@ public record TacAddressDescriptor(
     @Override
     public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stream.print("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
         stream.print("AddrDesc[");
         base.dump(stream);
@@ -80,7 +80,7 @@ public record TacAddressDescriptor(
     @Override
     public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stream.print("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
         stream.print('(');
         base.dumpPretty(stream);

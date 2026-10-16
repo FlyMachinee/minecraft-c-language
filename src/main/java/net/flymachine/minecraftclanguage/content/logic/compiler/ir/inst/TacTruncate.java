@@ -25,7 +25,7 @@ public class TacTruncate implements TacInstruction {
     @Override
     public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stream.print("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
         stream.print("Truncate(src=");
         src.dump(stream);
@@ -37,7 +37,7 @@ public class TacTruncate implements TacInstruction {
     @Override
     public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stream.print("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
         // dst = (trunc) src
         dst.dumpPretty(stream);

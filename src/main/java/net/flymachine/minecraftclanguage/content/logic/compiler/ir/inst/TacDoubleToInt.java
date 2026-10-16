@@ -27,7 +27,7 @@ public class TacDoubleToInt implements TacInstruction {
     @Override
     public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stream.print("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
         stream.print("DoubleToInt(src=");
         src.dump(stream);
@@ -39,7 +39,7 @@ public class TacDoubleToInt implements TacInstruction {
     @Override
     public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stream.print("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
         // dst = (d2i) src
         dst.dumpPretty(stream);

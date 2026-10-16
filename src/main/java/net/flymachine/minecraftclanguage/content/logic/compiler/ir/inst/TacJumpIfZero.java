@@ -17,7 +17,7 @@ public class TacJumpIfZero implements TacInstruction {
     @Override
     public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stream.print("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
         stream.print("JumpIfZero(cond=");
         cond.dump(stream);
@@ -27,7 +27,7 @@ public class TacJumpIfZero implements TacInstruction {
     @Override
     public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stream.print("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
         stream.append("if (");
         cond.dumpPretty(stream);

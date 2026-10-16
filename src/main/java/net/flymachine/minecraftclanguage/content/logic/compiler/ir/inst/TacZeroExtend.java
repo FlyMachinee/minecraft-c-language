@@ -26,7 +26,7 @@ public class TacZeroExtend implements TacInstruction {
     @Override
     public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stream.print("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
         stream.print("ZeroExtend(src=");
         src.dump(stream);
@@ -38,7 +38,7 @@ public class TacZeroExtend implements TacInstruction {
     @Override
     public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stream.print("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
         // dst = (zero ext) src
         dst.dumpPretty(stream);

@@ -21,25 +21,31 @@ public class TacFunction implements TacTopLevel {
     @Override
     public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stream.print("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
         stream.println("TacFunction(");
-        stream.append("  ".repeat(indentLevel + 1)).append("name=").append(name).append(",\n");
-        stream.append("  ".repeat(indentLevel + 1)).append("global=").append(String.valueOf(global)).append(",\n");
-        stream.append("  ".repeat(indentLevel + 1)).append("params=").append(String.valueOf(params)).append(",\n");
-        stream.append("  ".repeat(indentLevel + 1)).append("instructions=[\n");
+        indent(stream, indentLevel + 1);
+        stream.append("name=").append(name).append(",\n");
+        indent(stream, indentLevel + 1);
+        stream.append("global=").append(String.valueOf(global)).append(",\n");
+        indent(stream, indentLevel + 1);
+        stream.append("params=").append(String.valueOf(params)).append(",\n");
+        indent(stream, indentLevel + 1);
+        stream.append("instructions=[\n");
         for (TacInstruction instruction : insts) {
             instruction.dump(stream, indentLevel + 2, true);
             stream.println(",");
         }
-        stream.append("  ".repeat(indentLevel + 1)).append("]\n");
-        stream.append("  ".repeat(indentLevel)).append(")");
+        indent(stream, indentLevel + 1);
+        stream.println(']');
+        indent(stream, indentLevel);
+        stream.append(")");
     }
 
     @Override
     public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stream.print("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
         if (global) {
             stream.print("global ");
@@ -56,6 +62,7 @@ public class TacFunction implements TacTopLevel {
             instruction.dumpPretty(stream, indentLevel + 1, true);
             stream.println();
         }
-        stream.append("  ".repeat(indentLevel)).append("}");
+        indent(stream, indentLevel);
+        stream.print('}');
     }
 }

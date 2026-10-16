@@ -14,7 +14,7 @@ public class TacConstant implements TacValue {
     @Override
     public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stream.print("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
         stream.append("Constant(").append(String.valueOf(value)).append(")");
     }
@@ -22,7 +22,7 @@ public class TacConstant implements TacValue {
     @Override
     public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stream.print("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
         stream.append(String.valueOf(value));
     }

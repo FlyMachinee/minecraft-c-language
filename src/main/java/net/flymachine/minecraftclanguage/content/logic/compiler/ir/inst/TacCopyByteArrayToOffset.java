@@ -25,7 +25,7 @@ public class TacCopyByteArrayToOffset implements TacInstruction {
     @Override
     public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stream.print("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
         stream.print("CopyByteArrayToOffset(data=");
         stream.print(Arrays.toString(data));
@@ -39,7 +39,7 @@ public class TacCopyByteArrayToOffset implements TacInstruction {
     @Override
     public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stream.print("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
         // dst[offset:] = data
         stream.print(dst);

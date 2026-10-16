@@ -19,7 +19,7 @@ public class TacStaticConstant implements TacTopLevel {
     @Override
     public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stream.print("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
         stream.append("StaticConst(")
               .append(name)
@@ -33,13 +33,11 @@ public class TacStaticConstant implements TacTopLevel {
     @Override
     public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stream.print("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
         // constexpr type name = init;
         stream.append("constexpr ")
-              .append(type.typename())
-              .append(" ")
-              .append(name)
+              .append(type.format(name))
               .append(" = ")
               .append(String.valueOf(init))
               .append(";");

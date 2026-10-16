@@ -22,7 +22,7 @@ public class TacStaticVariable implements TacTopLevel {
     @Override
     public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stream.print("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
         stream.append("StaticVar(")
               .append(name)
@@ -38,14 +38,12 @@ public class TacStaticVariable implements TacTopLevel {
     @Override
     public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stream.print("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
         if (global) {
             stream.print("global ");
         }
-        stream.append(type.typename())
-              .append(" ")
-              .append(name)
+        stream.append(type.format(name))
               .append(" = ")
               .append(String.valueOf(init))
               .append(";");

@@ -32,7 +32,7 @@ public class TacDirectCall implements TacInstruction {
     @Override
     public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stream.print("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
         stream.append("DirectCall(designator=").append(this.funcDesignator).append(", args=[");
         for (int i = 0; i < this.args.size(); i++) {
@@ -54,7 +54,7 @@ public class TacDirectCall implements TacInstruction {
     @Override
     public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stream.print("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
         // dst = @funcDesignator(args)
         if (dst != null) {

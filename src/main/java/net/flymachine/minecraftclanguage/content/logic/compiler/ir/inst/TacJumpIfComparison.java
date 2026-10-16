@@ -24,7 +24,7 @@ public class TacJumpIfComparison implements TacInstruction {
     @Override
     public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stream.print("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
         stream.append("JumpIf(").append(String.valueOf(cond)).append(", lhs=");
         lhs.dump(stream);
@@ -36,7 +36,7 @@ public class TacJumpIfComparison implements TacInstruction {
     @Override
     public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stream.print("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
         // if (lhs cond rhs) goto target
         stream.append("if (");

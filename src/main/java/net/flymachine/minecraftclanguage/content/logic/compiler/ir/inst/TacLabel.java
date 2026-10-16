@@ -14,7 +14,7 @@ public class TacLabel implements TacInstruction {
     @Override
     public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stream.print("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
         stream.append("Label(").append(name).append(")");
     }
@@ -22,7 +22,7 @@ public class TacLabel implements TacInstruction {
     @Override
     public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stream.print("  ".repeat(indentLevel - 1));
+            indent(stream, indentLevel - 1);
         }
         stream.append(name).append(":");
     }

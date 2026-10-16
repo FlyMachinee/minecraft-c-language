@@ -20,7 +20,7 @@ public class TacUnaryOperation implements TacInstruction {
     @Override
     public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stream.print("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
         stream.append("Unary(").append(String.valueOf(op)).append(", src=");
         src.dump(stream);
@@ -32,7 +32,7 @@ public class TacUnaryOperation implements TacInstruction {
     @Override
     public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stream.print("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
         // dst = op src
         dst.dumpPretty(stream);

@@ -22,7 +22,7 @@ public class TacBinaryOperation implements TacInstruction {
     @Override
     public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stream.print("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
         stream.append("Binary(").append(String.valueOf(op)).append(", lhs=");
         lhs.dump(stream);
@@ -36,7 +36,7 @@ public class TacBinaryOperation implements TacInstruction {
     @Override
     public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stream.print("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
         // dst = lhs op rhs
         dst.dumpPretty(stream);

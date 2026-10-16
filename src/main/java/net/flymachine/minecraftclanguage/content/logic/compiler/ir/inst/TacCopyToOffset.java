@@ -24,7 +24,7 @@ public class TacCopyToOffset implements TacInstruction {
     @Override
     public void dump(java.io.PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stream.print("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
         stream.print("CopyToOffset(src=");
         src.dump(stream);
@@ -38,7 +38,7 @@ public class TacCopyToOffset implements TacInstruction {
     @Override
     public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stream.print("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
         // dst[offset:] = src
         stream.print(dst);

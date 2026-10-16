@@ -15,21 +15,21 @@ public class TacProgram implements TacDataStructure {
     @Override
     public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stream.print("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
         stream.println("TacProgram([");
         for (TacTopLevel topLevel : topLevels) {
             topLevel.dump(stream, indentLevel + 1, true);
             stream.println(",");
         }
-        stream.print("  ".repeat(indentLevel));
+        indent(stream, indentLevel);
         stream.print("])");
     }
 
     @Override
     public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stream.print("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
         for (TacTopLevel topLevel : topLevels) {
             topLevel.dumpPretty(stream, indentLevel, true);

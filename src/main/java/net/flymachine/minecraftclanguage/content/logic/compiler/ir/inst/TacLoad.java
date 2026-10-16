@@ -24,7 +24,7 @@ public class TacLoad implements TacInstruction {
     public void dump(PrintStream stream, int indentLevel, boolean indentFirstLine) {
 
         if (indentFirstLine) {
-            stream.print("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
         stream.print("Load(srcAddr=");
         srcAddr.dump(stream);
@@ -36,7 +36,7 @@ public class TacLoad implements TacInstruction {
     @Override
     public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
         if (indentFirstLine) {
-            stream.print("  ".repeat(indentLevel));
+            indent(stream, indentLevel);
         }
         // dst = *srcAddr
         dst.dumpPretty(stream);

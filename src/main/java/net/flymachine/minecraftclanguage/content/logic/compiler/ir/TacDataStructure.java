@@ -17,4 +17,8 @@ public interface TacDataStructure {
     default void dumpPretty(PrintStream stream) {
         dumpPretty(stream, 0, false);
     }
+
+    default void indent(PrintStream stream, int indentLevel) {
+        stream.print("    ".repeat(indentLevel));
+    }
 }
