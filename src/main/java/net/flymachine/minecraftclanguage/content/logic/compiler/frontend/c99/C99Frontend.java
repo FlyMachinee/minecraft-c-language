@@ -52,6 +52,13 @@ public final class C99Frontend {
             return null;
         }
 
+        if (options.dumping().contains(CompilerOptions.DumpKind.AST_RAW)) {
+            System.out.println("=== Dumping AST before semantic analysis ===");
+            ast.dump(System.out);
+            System.out.println("=== Dumping complete ===");
+            System.out.println();
+        }
+
         IdentifierResolutionPass identifierResolutionPass = new IdentifierResolutionPass(reporter);
         ast.accept(identifierResolutionPass);
 
@@ -79,6 +86,13 @@ public final class C99Frontend {
 
         if (reporter.getErrorCount() > 0) {
             return null;
+        }
+
+        if (options.dumping().contains(CompilerOptions.DumpKind.AST_ANNOTATED)) {
+            System.out.println("=== Dumping AST after semantic analysis ===");
+            ast.dump(System.out);
+            System.out.println("=== Dumping complete ===");
+            System.out.println();
         }
 
         AstToTacLowerer astToTacLowerer = new AstToTacLowerer(symbolTable, reporter);

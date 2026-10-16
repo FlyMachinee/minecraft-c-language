@@ -1,5 +1,6 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler;
 
+import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.LA64AsmLabel;
 import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.LA64AsmStatement;
 import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.LA64Assembly;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.LA64Backend;
@@ -56,6 +57,13 @@ public final class C99ToLA64Compiler {
             return null;
         }
 
+        if (options.dumping().contains(CompilerOptions.DumpKind.TAC_RAW)) {
+            System.out.println("=== Dumping TAC before optimization ===");
+            frontendResult.tacProgram().dumpPretty(System.out);
+            System.out.println("=== Dumping complete ===");
+            System.out.println();
+        }
+
         if (options.optimization().level() != CompilerOptions.OptimizationLevel.O0) {
             TacOptimizer optimizer = new TacOptimizer();
             optimizer.optimize(frontendResult.tacProgram(), frontendResult.symbolTable(), options);
@@ -63,6 +71,20 @@ public final class C99ToLA64Compiler {
 
         String newName = charStream.getSourceName().replaceAll("\\.[^.]+$", "") + ".s";
         List<LA64AsmStatement> asm = new LA64Backend().compile(frontendResult, options);
+
+        if (options.dumping().contains(CompilerOptions.DumpKind.ASM)) {
+            System.out.println("=== Dumping LA64 Assembly ===");
+            for (LA64AsmStatement stmt : asm) {
+                if (stmt instanceof LA64AsmLabel label) {
+                    System.out.println(label);
+                } else {
+                    System.out.println("    " + stmt);
+                }
+            }
+            System.out.println("=== Dumping complete ===");
+            System.out.println();
+        }
+
         return new LA64Assembly(asm, newName);
     }
 
