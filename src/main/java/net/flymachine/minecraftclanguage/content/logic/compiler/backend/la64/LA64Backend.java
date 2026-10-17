@@ -21,6 +21,12 @@ public final class LA64Backend {
             highLevelProgram.dumpPretty(System.out);
             System.out.println("=== Dumping Complete ===");
             System.out.println();
+            if (options.dumping().contains(CompilerOptions.DumpKind.HL_ASM_RAW_SYMTAB)) {
+                System.out.println("=== Dumping Backend Symbol Table ===");
+                backendSymbolTable.dump(System.out);
+                System.out.println("=== Dumping Complete ===");
+                System.out.println();
+            }
         }
 
         ReplacePseudoOperandPass replacePseudoOperandPass = new ReplacePseudoOperandPass(backendSymbolTable);
