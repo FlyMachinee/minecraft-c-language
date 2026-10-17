@@ -1,5 +1,6 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.instruction;
 
+import java.io.PrintStream;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.HighLevelOperand;
 
 /**
@@ -17,6 +18,16 @@ public class LoadAddress implements HighLevelInstruction {
     public LoadAddress(HighLevelOperand obj, HighLevelOperand dst) {
         this.obj = obj;
         this.dst = dst;
+    }
+
+    @Override
+    public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            indent(stream, indentLevel);
+        }
+        dst.dumpPretty(stream);
+        stream.print(" = &");
+        obj.dumpPretty(stream);
     }
 
     @Override

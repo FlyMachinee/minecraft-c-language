@@ -3,6 +3,8 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.hi
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.AsmType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.HighLevelOperand;
 
+import java.io.PrintStream;
+
 /**
  * 进行符号拓展
  * <p>
@@ -31,6 +33,21 @@ public class SignExtend implements HighLevelInstruction {
         this.dstType = dstType;
         this.src = src;
         this.dst = dst;
+    }
+
+    @Override
+    public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            indent(stream, indentLevel);
+        }
+        dst.dumpPretty(stream);
+        stream.print(" = sign-ext(");
+        src.dumpPretty(stream);
+        stream.print(") [");
+        stream.print(srcType);
+        stream.print(" -> ");
+        stream.print(dstType);
+        stream.print("]");
     }
 
     @Override

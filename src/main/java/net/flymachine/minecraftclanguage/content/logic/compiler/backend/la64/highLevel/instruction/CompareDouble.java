@@ -4,6 +4,8 @@ import net.flymachine.minecraftclanguage.content.logic.architecture.la64.isa.ins
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.register.ConditionFlagRegister;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.HighLevelOperand;
 
+import java.io.PrintStream;
+
 /**
  * 如有需要，会将 lhs 加载至 FT0，rhs 加载至 FT1
  * <p>
@@ -27,6 +29,21 @@ public class CompareDouble implements HighLevelInstruction {
         this.lhs = lhs;
         this.rhs = rhs;
         this.cc = cc;
+    }
+
+    @Override
+    public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            indent(stream, indentLevel);
+        }
+        stream.append('$');
+        stream.print(cc);
+        stream.print(" = ");
+        lhs.dumpPretty(stream);
+        stream.print(" ");
+        stream.print(cond);
+        stream.print(" ");
+        rhs.dumpPretty(stream);
     }
 
     @Override

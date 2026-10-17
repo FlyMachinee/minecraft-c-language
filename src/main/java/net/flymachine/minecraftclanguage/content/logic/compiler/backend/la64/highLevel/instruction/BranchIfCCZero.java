@@ -2,6 +2,8 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.hi
 
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.register.ConditionFlagRegister;
 
+import java.io.PrintStream;
+
 public class BranchIfCCZero implements HighLevelInstruction {
 
     public ConditionFlagRegister cc;
@@ -10,6 +12,17 @@ public class BranchIfCCZero implements HighLevelInstruction {
     public BranchIfCCZero(ConditionFlagRegister cc, String target) {
         this.cc = cc;
         this.target = target;
+    }
+
+    @Override
+    public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            indent(stream, indentLevel);
+        }
+        stream.print("if $");
+        stream.print(cc);
+        stream.print(" == 0 goto ");
+        stream.print(target);
     }
 
     @Override

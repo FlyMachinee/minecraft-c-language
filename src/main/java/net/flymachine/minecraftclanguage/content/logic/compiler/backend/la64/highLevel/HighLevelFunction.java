@@ -1,7 +1,9 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel;
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.instruction.HighLevelInstruction;
+import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.instruction.Label;
 
+import java.io.PrintStream;
 import java.util.List;
 
 /**
@@ -62,5 +64,30 @@ public class HighLevelFunction implements HighLevelTopLevel {
         long size = savedRegisters * 8 + variableSize + maxCallStackArgSize;
         return (size + STACK_ALIGNMENT - 1) & -STACK_ALIGNMENT;
     }
-}
 
+    @Override
+    public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) { indent(stream, indentLevel); }
+        if (global) { stream.print("global "); }
+        stream.print("function #");
+        stream.print(name);
+        stream.println(" {");
+        indent(stream, indentLevel + 1);
+        stream.print("#frame=");
+        stream.print(getStackFrameSize());
+        stream.print(", #localVar=");
+        stream.print(variableSize);
+        stream.print(", #maxCallStack=");
+        stream.println(maxCallStackArgSize);
+        for (var instruction : insts) {
+            if (instruction instanceof Label l) {
+                instruction.dumpPretty(stream, indentLevel, true);
+            } else {
+                instruction.dumpPretty(stream, indentLevel + 1, true);
+            }
+            stream.println();
+        }
+        indent(stream, indentLevel);
+        stream.print("}");
+    }
+}

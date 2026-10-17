@@ -3,6 +3,8 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.hi
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.AsmType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.HighLevelOperand;
 
+import java.io.PrintStream;
+
 /**
  * 如有需要，会将 src 加载至 T0，结果存放在 T0
  * <p>
@@ -28,6 +30,21 @@ public class AddSi12 implements HighLevelInstruction {
         this.src = src;
         this.si12 = si12;
         this.dst = dst;
+    }
+
+    @Override
+    public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            indent(stream, indentLevel);
+        }
+        dst.dumpPretty(stream);
+        stream.print(" = ");
+        src.dumpPretty(stream);
+        stream.print(" + ");
+        stream.print(si12);
+        stream.print(" [");
+        stream.print(asmType);
+        stream.print("]");
     }
 
     @Override

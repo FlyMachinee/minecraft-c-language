@@ -15,8 +15,24 @@ public final class LA64Backend {
         TacToHighLevelAsmLowerer tacToHLAsm = new TacToHighLevelAsmLowerer(frontendResult.symbolTable());
         HighLevelProgram highLevelProgram = tacToHLAsm.lower(frontendResult.tacProgram());
         BackendSymbolTable backendSymbolTable = tacToHLAsm.getBackendSymbolTable();
+
+        if (options.dumping().contains(CompilerOptions.DumpKind.HL_ASM_RAW)) {
+            System.out.println("=== Dumping High-Level Assembly before pseudo operand replacement ===");
+            highLevelProgram.dumpPretty(System.out);
+            System.out.println("=== Dumping Complete ===");
+            System.out.println();
+        }
+
         ReplacePseudoOperandPass replacePseudoOperandPass = new ReplacePseudoOperandPass(backendSymbolTable);
         replacePseudoOperandPass.runOnProgram(highLevelProgram);
+
+        if (options.dumping().contains(CompilerOptions.DumpKind.HL_ASM_PSEUDO)) {
+            System.out.println("=== Dumping High-Level Assembly after pseudo operand replacement ===");
+            highLevelProgram.dumpPretty(System.out);
+            System.out.println("=== Dumping Complete ===");
+            System.out.println();
+        }
+
         return new HighLevelAsmToAsmLowerer(backendSymbolTable).lower(highLevelProgram);
     }
 }

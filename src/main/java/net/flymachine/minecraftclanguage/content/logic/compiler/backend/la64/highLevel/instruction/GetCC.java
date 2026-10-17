@@ -3,6 +3,8 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.hi
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.register.ConditionFlagRegister;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.HighLevelOperand;
 
+import java.io.PrintStream;
+
 /**
  * 如有需要，会将结果存放至 T0 中
  * <p>
@@ -18,6 +20,16 @@ public class GetCC implements HighLevelInstruction {
     public GetCC(ConditionFlagRegister cc, HighLevelOperand dst) {
         this.cc = cc;
         this.dst = dst;
+    }
+
+    @Override
+    public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            indent(stream, indentLevel);
+        }
+        dst.dumpPretty(stream);
+        stream.print(" = $");
+        stream.print(cc);
     }
 
     @Override

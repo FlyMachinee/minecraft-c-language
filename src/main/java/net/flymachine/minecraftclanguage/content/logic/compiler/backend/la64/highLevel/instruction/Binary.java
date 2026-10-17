@@ -4,6 +4,8 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.hig
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.HighLevelOperand;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.BinaryOperator;
 
+import java.io.PrintStream;
+
 /**
  * 如有需要，会将 lhs 加载至 T0/FT0，rhs 加载至 T1/FT1，结果存放在 T0/FT0
  * <p>
@@ -50,6 +52,19 @@ public class Binary implements HighLevelInstruction {
         this.lhs = lhs;
         this.rhs = rhs;
         this.dst = dst;
+    }
+
+    @Override
+    public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            indent(stream, indentLevel);
+        }
+        String op = switch (this.op) {
+            case ADD -> "+";
+            case SUB -> "-";
+            case MUL -> "*";
+        };
+        dumpBinaryLike(stream, dst, lhs, rhs, op, asmType);
     }
 
     public Binary(

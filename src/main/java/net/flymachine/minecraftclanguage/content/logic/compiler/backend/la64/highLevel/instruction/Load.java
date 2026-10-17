@@ -1,5 +1,6 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.instruction;
 
+import java.io.PrintStream;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.AsmType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.HighLevelOperand;
 
@@ -30,6 +31,20 @@ public class Load implements HighLevelInstruction {
         this.ptr = ptr;
         this.offset = offset;
         this.dst = dst;
+    }
+
+    @Override
+    public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            indent(stream, indentLevel);
+        }
+        dst.dumpPretty(stream);
+        stream.print(" = load[");
+        stream.print(dstAsmType);
+        stream.print("] ");
+        ptr.dumpPretty(stream);
+        stream.print(" + ");
+        offset.dumpPretty(stream);
     }
 
     @Override

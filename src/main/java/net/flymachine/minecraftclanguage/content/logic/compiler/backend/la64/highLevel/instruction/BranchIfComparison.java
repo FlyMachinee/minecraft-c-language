@@ -4,6 +4,8 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.hig
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.HighLevelOperand;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.Comparison;
 
+import java.io.PrintStream;
+
 /**
  * 如有需要，会将 lhs 加载至 T0，rhs 加载至 T1
  * <p>
@@ -36,6 +38,25 @@ public class BranchIfComparison implements HighLevelInstruction {
         this.lhs = lhs;
         this.rhs = rhs;
         this.target = target;
+    }
+
+    @Override
+    public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            indent(stream, indentLevel);
+        }
+        stream.print("if ");
+        lhs.dumpPretty(stream);
+        stream.print(" ");
+        stream.print(cond);
+        stream.print(" ");
+        rhs.dumpPretty(stream);
+        stream.print(" goto ");
+        stream.print(target);
+        stream.print(" [");
+        stream.print(asmType);
+        if (isUnsigned) { stream.print(", unsigned"); }
+        stream.print("]");
     }
 
     @Override

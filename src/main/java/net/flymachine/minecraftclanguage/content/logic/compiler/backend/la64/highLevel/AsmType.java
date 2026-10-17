@@ -1,5 +1,7 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel;
 
+import org.jetbrains.annotations.NotNull;
+
 public sealed interface AsmType permits AsmType.ByteArray, AsmType.Dummy, AsmType.PrimitiveType {
 
     /**
@@ -69,6 +71,11 @@ public sealed interface AsmType permits AsmType.ByteArray, AsmType.Dummy, AsmTyp
         public long alignment() {
             return size();
         }
+
+        @Override
+        public @NotNull String toString() {
+            return p.name();
+        }
     }
 
     enum Primitive {
@@ -90,7 +97,12 @@ public sealed interface AsmType permits AsmType.ByteArray, AsmType.Dummy, AsmTyp
         }
     }
 
-    record ByteArray(long size, long alignment) implements AsmType { }
+    record ByteArray(long size, long alignment) implements AsmType {
+        @Override
+        public @NotNull String toString() {
+            return "BYTE_ARRAY[" + size + ", align=" + alignment + "]";
+        }
+    }
 
     record Dummy() implements AsmType {
         @Override
@@ -101,6 +113,11 @@ public sealed interface AsmType permits AsmType.ByteArray, AsmType.Dummy, AsmTyp
         @Override
         public long alignment() {
             throw new UnsupportedOperationException("Dummy type has no alignment");
+        }
+
+        @Override
+        public @NotNull String toString() {
+            return "DUMMY";
         }
     }
 

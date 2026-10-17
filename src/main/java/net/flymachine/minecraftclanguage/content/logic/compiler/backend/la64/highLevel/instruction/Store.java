@@ -1,5 +1,6 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.instruction;
 
+import java.io.PrintStream;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.AsmType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.HighLevelOperand;
 
@@ -30,6 +31,21 @@ public class Store implements HighLevelInstruction {
         this.src = src;
         this.ptr = ptr;
         this.offset = offset;
+    }
+
+    @Override
+    public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            indent(stream, indentLevel);
+        }
+        stream.print("store[");
+        stream.print(srcAsmType);
+        stream.print("] ");
+        src.dumpPretty(stream);
+        stream.print(" -> ");
+        ptr.dumpPretty(stream);
+        stream.print(" + ");
+        offset.dumpPretty(stream);
     }
 
     @Override

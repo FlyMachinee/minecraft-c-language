@@ -1,5 +1,6 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.instruction;
 
+import java.io.PrintStream;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.AsmType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.HighLevelOperand;
 
@@ -34,12 +35,30 @@ public class DivOrMod implements HighLevelInstruction {
         if (!isDiv && asmType == AsmType.DOUBLE) {
             throw new IllegalArgumentException("Mod does not support DOUBLE type");
         }
+
         this.isDiv = isDiv;
         this.asmType = asmType;
         this.isUnsigned = isUnsigned;
         this.lhs = lhs;
         this.rhs = rhs;
         this.dst = dst;
+    }
+
+    @Override
+    public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            indent(stream, indentLevel);
+        }
+        dst.dumpPretty(stream);
+        stream.print(" = ");
+        lhs.dumpPretty(stream);
+        stream.print(isDiv ? "/" : "%");
+        if (isUnsigned) stream.print("u");
+        stream.print(" ");
+        rhs.dumpPretty(stream);
+        stream.print(" [");
+        stream.print(asmType);
+        stream.print("]");
     }
 
     @Override

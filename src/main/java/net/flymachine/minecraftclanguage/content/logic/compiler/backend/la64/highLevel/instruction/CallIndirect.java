@@ -1,5 +1,6 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.instruction;
 
+import java.io.PrintStream;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.HighLevelOperand;
 
 /**
@@ -15,6 +16,15 @@ public class CallIndirect implements HighLevelInstruction {
 
     public CallIndirect(HighLevelOperand funcPtr) {
         this.funcPtr = funcPtr;
+    }
+
+    @Override
+    public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            indent(stream, indentLevel);
+        }
+        stream.print("call *");
+        funcPtr.dumpPretty(stream);
     }
 
     @Override

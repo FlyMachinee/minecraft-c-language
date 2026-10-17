@@ -2,6 +2,8 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.hi
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.HighLevelOperand;
 
+import java.io.PrintStream;
+
 /**
  * 如有需要，会将 base 加载至 T0，index 加载至 T1，结果存放至 T0
  * <p>
@@ -30,6 +32,21 @@ public class AddLeftShift implements HighLevelInstruction {
         this.index = index;
         this.shiftAmount = shiftAmount;
         this.dst = dst;
+    }
+
+    @Override
+    public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            indent(stream, indentLevel);
+        }
+        dst.dumpPretty(stream);
+        stream.print(" = ");
+        base.dumpPretty(stream);
+        stream.print(" + (");
+        index.dumpPretty(stream);
+        stream.print(" << ");
+        stream.print(shiftAmount);
+        stream.print(")");
     }
 
     @Override

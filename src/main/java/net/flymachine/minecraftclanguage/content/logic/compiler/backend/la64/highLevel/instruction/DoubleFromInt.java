@@ -1,5 +1,6 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.instruction;
 
+import java.io.PrintStream;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.AsmType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.HighLevelOperand;
 
@@ -23,9 +24,23 @@ public class DoubleFromInt implements HighLevelInstruction {
         if (srcAsmType == AsmType.DOUBLE) {
             throw new IllegalArgumentException("Invalid AsmType for DoubleFromInt");
         }
+
         this.src = src;
         this.dst = dst;
         this.srcAsmType = srcAsmType;
+    }
+
+    @Override
+    public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            indent(stream, indentLevel);
+        }
+        dst.dumpPretty(stream);
+        stream.print(" = double(");
+        src.dumpPretty(stream);
+        stream.print(") [");
+        stream.print(srcAsmType);
+        stream.print("]");
     }
 
     @Override

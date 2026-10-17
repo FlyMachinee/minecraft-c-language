@@ -3,6 +3,8 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.hi
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.AsmType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.operand.HighLevelOperand;
 
+import java.io.PrintStream;
+
 /**
  * 如有需要，会将 src 加载至 FT0，结果存放至 T0 中
  * <p>
@@ -23,6 +25,19 @@ public class DoubleToIntRoundZero implements HighLevelInstruction {
         this.src = src;
         this.dst = dst;
         this.dstAsmType = dstAsmType;
+    }
+
+    @Override
+    public void dumpPretty(PrintStream stream, int indentLevel, boolean indentFirstLine) {
+        if (indentFirstLine) {
+            indent(stream, indentLevel);
+        }
+        dst.dumpPretty(stream);
+        stream.print(" = int(");
+        src.dumpPretty(stream);
+        stream.print(") [");
+        stream.print(dstAsmType);
+        stream.print("]");
     }
 
     @Override
