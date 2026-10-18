@@ -234,7 +234,7 @@ public final class LA64EmulatorProfiler implements CostRecorder {
         out.printf("%-20s: %d%n", "Insts", cost.instructions());
         out.printf("%-20s: %d/%d/%d%n", "  ALU/MUL/DIV", cost.aluOps(), cost.mulOps(), cost.divOps());
         out.printf("%-20s: %d/%d%n", "  FLOAT/FDIV", cost.floatOps(), cost.floatDivOps());
-        out.printf("%-20s: %d/%d%n", "  MEMORY/CALL", cost.memoryOps(), cost.callOps());
+        out.printf("%-20s: %d/%d%n", "  MEMORY/CALLRET", cost.memoryOps(), cost.callOps());
         out.printf("%-20s: %d/%d%n", "Branch (T/NT)", cost.branchesTaken(), cost.branchesNotTaken());
         out.printf("%-20s: %d/%d/%d%n", "Addr Trans (F/L/S)",
                    cost.fetchTranslations(), cost.loadTranslations(), cost.storeTranslations());
