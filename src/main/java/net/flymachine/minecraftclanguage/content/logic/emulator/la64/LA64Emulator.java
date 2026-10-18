@@ -8,6 +8,7 @@ import net.flymachine.minecraftclanguage.content.logic.cpu.la64.LA64CpuState;
 import net.flymachine.minecraftclanguage.content.logic.cpu.la64.LA64FpuState;
 import net.flymachine.minecraftclanguage.content.logic.cpu.la64.LA64MemoryManagementUnit;
 import net.flymachine.minecraftclanguage.content.logic.cpu.la64.exception.LA64RuntimeException;
+import net.flymachine.minecraftclanguage.content.logic.cpu.la64.profiler.LA64MmuWrapper;
 import net.flymachine.minecraftclanguage.content.logic.device.la64.Teletypewriter;
 import net.flymachine.minecraftclanguage.content.logic.emulator.AslrBaseGenerator;
 import net.flymachine.minecraftclanguage.content.logic.executable.Segment;
@@ -15,8 +16,14 @@ import net.flymachine.minecraftclanguage.content.logic.executable.la64.LA64Execu
 import net.flymachine.minecraftclanguage.content.logic.memory.MemoryCrossbar;
 import net.flymachine.minecraftclanguage.content.logic.memory.MemoryLikeDevice;
 import net.flymachine.minecraftclanguage.content.logic.memory.SimpleRam;
+import net.flymachine.minecraftclanguage.content.logic.memory.profiler.MemoryCrossbarWrapper;
 import net.flymachine.minecraftclanguage.content.logic.object.RelocationEntry;
 import net.flymachine.minecraftclanguage.content.logic.object.RelocationType;
+import net.flymachine.minecraftclanguage.content.logic.profiler.CostModel;
+import net.flymachine.minecraftclanguage.content.logic.profiler.LA64EmulatorProfiler;
+import net.flymachine.minecraftclanguage.content.logic.profiler.SimulationCost;
+
+import java.io.PrintStream;
 
 public final class LA64Emulator {
 
@@ -26,12 +33,19 @@ public final class LA64Emulator {
     private final MemoryCrossbar memoryCrossbar = new MemoryCrossbar(ram);
     private final LA64MemoryManagementUnit mmu = new LA64MemoryManagementUnit();
 
+    private final LA64EmulatorProfiler profiler = new LA64EmulatorProfiler();
+    private final LA64MmuWrapper profiledMmu = new LA64MmuWrapper(mmu, profiler);
+    private final MemoryCrossbarWrapper profiledMemory = new MemoryCrossbarWrapper(memoryCrossbar, profiler);
+
     private final AslrBaseGenerator aslrBaseGenerator = new AslrBaseGenerator();
 
     private int ppn = 0;
 
     // 目前，当从 0 地址取指时，停止执行并返回 a0
     private boolean stopFlag = false;
+
+    // 指令数上限，用于防止死循环把模拟卡死；负数表示不限制
+    private long maxSteps = -1;
 
     public LA64Emulator() {
         reset();
@@ -43,6 +57,7 @@ public final class LA64Emulator {
     public void reset() {
         cpuState.reset();
         mmu.clearPageTable();
+        profiler.reset();
         ppn = 0;
         long ttyPageNumber = Teletypewriter.BASE_ADDRESS / SimpleRam.PAGE_SIZE;
         mmu.addPageTableEntry(ttyPageNumber, new LA64MemoryManagementUnit.LA64PageTableEntry(ttyPageNumber, true));
@@ -94,25 +109,71 @@ public final class LA64Emulator {
     }
 
     public long start() {
+        long executedSteps = 0;
         try {
             while (!stopFlag) {
+                if (maxSteps >= 0 && executedSteps >= maxSteps) {
+                    System.err.println(
+                        "Emulator stopped: step limit " + maxSteps + " reached at pc=0x" +
+                        Long.toHexString(cpuState.getPc()));
+                    dumpFailureState();
+                    break;
+                }
                 step();
+                ++executedSteps;
             }
         } catch (LA64RuntimeException e) {
             System.err.println("Emulator stopped with exception: " + e.getCode());
-            try {
-                if ((cpuState.getPc() & 0b11) == 0) {
-                    long fetchPA = mmu.translateVirtualAddress(cpuState.getPc(),
-                                                               LA64MemoryManagementUnit.LA64MemoryAccessType.FETCH);
-                    int instruction = ram.loadWord(fetchPA);
-                    LA64Instruction decoded = LA64Decoder.decode(instruction);
-                    System.err.println("Instruction: " + decoded);
-                }
-            } catch (Exception ignore) { }
-            cpuState.dump(System.err);
-            fpuState.dump(System.err);
+            dumpFailureState();
         }
         return cpuState.getGr(GeneralPurposeRegister.A0.getNumber()); // 返回 a0 寄存器的值
+    }
+
+    /**
+     * 打印当前 PC 处的指令与寄存器状态，用于诊断异常终止或超出步数上限
+     */
+    private void dumpFailureState() {
+        try {
+            if ((cpuState.getPc() & 0b11) == 0) {
+                long fetchPA = mmu.translateVirtualAddress(
+                    cpuState.getPc(), LA64MemoryManagementUnit.LA64MemoryAccessType.FETCH);
+                int instruction = ram.loadWord(fetchPA);
+                LA64Instruction decoded = LA64Decoder.decode(instruction);
+                System.err.println("Instruction: " + decoded);
+            }
+        } catch (Exception ignore) { }
+        cpuState.dump(System.err);
+        fpuState.dump(System.err);
+    }
+
+    /**
+     * 本次模拟的代价计数快照
+     */
+    public SimulationCost getCost() {
+        return profiler.snapshot();
+    }
+
+    /**
+     * 代价计数器本体，可用于打印报告或自定义权重
+     */
+    public LA64EmulatorProfiler getProfiler() {
+        return profiler;
+    }
+
+    /**
+     * 按默认权重打印本次模拟的代价报告
+     */
+    public void reportCost(PrintStream out) {
+        profiler.report(out, CostModel.LA64_DEFAULT);
+    }
+
+    /**
+     * 设置单次模拟允许执行的最大指令数，避免死循环
+     *
+     * @param maxSteps 指令数上限，负数表示不限制
+     */
+    public void setMaxSteps(long maxSteps) {
+        this.maxSteps = maxSteps;
     }
 
     public void step() {
@@ -124,7 +185,7 @@ public final class LA64Emulator {
 
         long fetchPA;
         try {
-            fetchPA = mmu.translateVirtualAddress(fetchVA, LA64MemoryManagementUnit.LA64MemoryAccessType.FETCH);
+            fetchPA = profiledMmu.translateVirtualAddress(fetchVA, LA64MemoryManagementUnit.LA64MemoryAccessType.FETCH);
         } catch (LA64RuntimeException e) {
             switch (e.getCode()) {
                 case PIF -> {
@@ -141,7 +202,9 @@ public final class LA64Emulator {
 
         int instruction = ram.loadWord(fetchPA);
         LA64Instruction decoded = LA64Decoder.decode(instruction);
+        profiler.beforeExecute(fetchVA, decoded.inst().mnemonic());
         decoded.execute(handler);
+        profiler.afterExecute(cpuState.getPc());
     }
 
     public void step(int cnt) {
@@ -160,11 +223,11 @@ public final class LA64Emulator {
         }
 
         public LA64MemoryManagementUnit getMemoryManagementUnit() {
-            return emulator.mmu;
+            return emulator.profiledMmu;
         }
 
         public MemoryLikeDevice getMemory() {
-            return emulator.memoryCrossbar;
+            return emulator.profiledMemory;
         }
 
         @Override

@@ -39,7 +39,7 @@ public class MemoryCrossbar implements MemoryLikeDevice {
         entries.add(new MappingEntry(startAddress, endAddress, device));
     }
 
-    private MemoryLikeDevice getDevice(long address) {
+    public MemoryLikeDevice getDevice(long address) {
         for (MappingEntry entry : entries) {
             if (entry.matches(address)) {
                 return entry.device;
@@ -48,7 +48,7 @@ public class MemoryCrossbar implements MemoryLikeDevice {
         return defaultDevice;
     }
 
-    private @NotNull MemoryLikeDevice getDeviceOrThrow(long address) {
+    public @NotNull MemoryLikeDevice getDeviceOrThrow(long address) {
         MemoryLikeDevice device = getDevice(address);
         if (device == null) {
             throw new IllegalStateException(String.format("No device mapped for address 0x%X", address));
