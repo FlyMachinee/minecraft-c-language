@@ -1,5 +1,10 @@
 package net.flymachine.minecraftclanguage.content.logic.profiler;
 
+import net.flymachine.minecraftclanguage.content.logic.profiler.branchPredictor.BranchInfo;
+import net.flymachine.minecraftclanguage.content.logic.profiler.branchPredictor.BranchKind;
+import net.flymachine.minecraftclanguage.content.logic.profiler.branchPredictor.BranchPredictionStatus;
+import net.flymachine.minecraftclanguage.content.logic.profiler.branchPredictor.BranchPredictor;
+
 import java.io.PrintStream;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -14,10 +19,25 @@ public final class LA64EmulatorProfiler implements CostRecorder {
 
     private final Map<String, CostClass> classCache = new HashMap<>();
 
+    /**
+     * 分支预测器（BTB + RAS），状态在每次模拟开始时复位
+     */
+    private final BranchPredictor branchPredictor = new BranchPredictor();
+
     private long instructions;
 
     private long branchesTaken;
     private long branchesNotTaken;
+
+    // ---- 分支预测结果计数，六项互斥 ----
+    private long btbHitTaken;
+    private long btbHitNotTaken;
+    private long rasHits;
+    private long btbMisses;
+    private long directionMispredicts;
+    private long targetMispredicts;
+    private long rasMispredicts;
+    private long indirectJumpCount;
 
     private long fetchTranslations;
     private long loadTranslations;
@@ -44,9 +64,18 @@ public final class LA64EmulatorProfiler implements CostRecorder {
 
     public void reset() {
         Arrays.fill(classCounts, 0L);
+        branchPredictor.reset();
         instructions = 0;
         branchesTaken = 0;
         branchesNotTaken = 0;
+        btbHitTaken = 0;
+        btbHitNotTaken = 0;
+        rasHits = 0;
+        btbMisses = 0;
+        directionMispredicts = 0;
+        targetMispredicts = 0;
+        rasMispredicts = 0;
+        indirectJumpCount = 0;
         fetchTranslations = 0;
         loadTranslations = 0;
         storeTranslations = 0;
@@ -92,6 +121,23 @@ public final class LA64EmulatorProfiler implements CostRecorder {
             ++branchesNotTaken;
         } else {
             ++branchesTaken;
+        }
+    }
+
+    @Override
+    public void resolveBranch(BranchInfo info, long actualNextPc) {
+        BranchPredictionStatus outcome = branchPredictor.resolve(info, actualNextPc);
+        switch (outcome) {
+            case BTB_HIT_TAKEN -> ++btbHitTaken;
+            case BTB_HIT_NOT_TAKEN -> ++btbHitNotTaken;
+            case RAS_HIT -> ++rasHits;
+            case BTB_MISS -> ++btbMisses;
+            case DIRECTION_MISMATCH -> ++directionMispredicts;
+            case TARGET_MISMATCH -> ++targetMispredicts;
+            case RAS_MISPREDICT -> ++rasMispredicts;
+        }
+        if (info.kind().isJirl() && info.kind() != BranchKind.RETURN) {
+            ++indirectJumpCount;
         }
     }
 
@@ -162,7 +208,16 @@ public final class LA64EmulatorProfiler implements CostRecorder {
             new SimulationCost.AccessCounts(byteLoads, halfWordLoads, wordLoads, doubleWordLoads),
             new SimulationCost.AccessCounts(byteStores, halfWordStores, wordStores, doubleWordStores),
             ioLoads,
-            ioStores);
+            ioStores,
+            new SimulationCost.BranchPredictionStats(
+                btbHitTaken,
+                btbHitNotTaken,
+                rasHits,
+                btbMisses,
+                directionMispredicts,
+                targetMispredicts,
+                rasMispredicts,
+                indirectJumpCount));
     }
 
     /**
@@ -173,6 +228,7 @@ public final class LA64EmulatorProfiler implements CostRecorder {
      */
     public void report(PrintStream out, CostModel model) {
         SimulationCost cost = snapshot();
+        SimulationCost.BranchPredictionStats bp = cost.branchPrediction();
 
         out.println("=== Simulation Report ===");
         out.printf("%-20s: %d%n", "Insts", cost.instructions());
@@ -191,6 +247,16 @@ public final class LA64EmulatorProfiler implements CostRecorder {
                    cost.stores().bytes(), cost.stores().halfWords(),
                    cost.stores().words(), cost.stores().doubleWords());
         out.printf("%-20s: %d/%d%n", "Device I/O (R/W)", cost.ioLoads(), cost.ioStores());
+
+        out.printf("%-20s: %d%n", "Predicted Branches", bp.totalBranches());
+        out.printf("%-20s: %d/%d%n", "  BTB Hit (T/NT)", bp.btbHitTaken(), bp.btbHitNotTaken());
+        out.printf("%-20s: %d%n", "  RAS Hit", bp.rasHits());
+        out.printf("%-20s: %d%n", "  BTB Miss", bp.btbMisses());
+        out.printf("%-20s: %d/%d/%d%n", "  Mis (Dir/Tgt/RAS)",
+                   bp.directionMispredict(), bp.targetMispredict(), bp.rasMispredict());
+        out.printf("%-20s: %d%n", "  Indirect", bp.indirectJumpCount());
+        out.printf("%-20s: %.3f%n", "  Acc", bp.accuracy());
+
         out.printf("%-20s: %.1f%n", "Weighted Cost", cost.weightedCost(model));
         out.println("=== End of Report ===");
         out.println();

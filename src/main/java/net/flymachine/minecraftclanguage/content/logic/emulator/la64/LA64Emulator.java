@@ -22,6 +22,7 @@ import net.flymachine.minecraftclanguage.content.logic.object.RelocationType;
 import net.flymachine.minecraftclanguage.content.logic.profiler.CostModel;
 import net.flymachine.minecraftclanguage.content.logic.profiler.LA64EmulatorProfiler;
 import net.flymachine.minecraftclanguage.content.logic.profiler.SimulationCost;
+import net.flymachine.minecraftclanguage.content.logic.profiler.branchPredictor.BranchInfo;
 
 import java.io.PrintStream;
 
@@ -202,9 +203,16 @@ public final class LA64Emulator {
 
         int instruction = ram.loadWord(fetchPA);
         LA64Instruction decoded = LA64Decoder.decode(instruction);
+        BranchInfo branch = BranchAnalyzer.analyze(decoded, fetchVA);
+
         profiler.beforeExecute(fetchVA, decoded.inst().mnemonic());
         decoded.execute(handler);
-        profiler.afterExecute(cpuState.getPc());
+
+        long nextPc = cpuState.getPc();
+        profiler.afterExecute(nextPc);
+        if (branch != null) {
+            profiler.resolveBranch(branch, nextPc);
+        }
     }
 
     public void step(int cnt) {

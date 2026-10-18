@@ -1,5 +1,7 @@
 package net.flymachine.minecraftclanguage.content.logic.profiler;
 
+import net.flymachine.minecraftclanguage.content.logic.profiler.branchPredictor.BranchInfo;
+
 /**
  * 代价计数的接收端
  * <p>
@@ -57,4 +59,12 @@ public interface CostRecorder {
      * 一次设备（终端）访问
      */
     void recordIo(boolean isLoad);
+
+    /**
+     * 结算分支预测结果，更新预测器状态
+     *
+     * @param info         分支信息
+     * @param actualNextPc 执行后的实际 PC
+     */
+    void resolveBranch(BranchInfo info, long actualNextPc);
 }
