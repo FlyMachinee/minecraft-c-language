@@ -12,4 +12,11 @@ public record BasicBlock(
     public NodeType type() {
         return NodeType.BASIC_BLOCK;
     }
+
+    public TacInstruction lastInstruction() {
+        if (instructions.isEmpty()) {
+            return null;
+        }
+        return instructions.get(instructions.size() - 1);
+    }
 }
