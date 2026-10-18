@@ -1,7 +1,7 @@
 package net.flymachine.minecraftclanguage.content.logic.profiler.branchPredictor;
 
 /**
- * 直接映射 BTB + RAS
+ * 直接映射 BTB + 环形 RAS
  * <p>
  * BTB 采用直接映射：index 取 {@code (pc >>> 2) & (SIZE-1)}
  */
@@ -19,7 +19,8 @@ public final class BranchPredictor {
     private final int[] btbDirection = new int[BTB_SIZE];
 
     private final long[] ras = new long[RAS_DEPTH];
-    private int rasDepth = 0;
+    private int rasNext = 0;
+    private int rasSize = 0;
 
     public BranchPredictor() { }
 
@@ -32,11 +33,31 @@ public final class BranchPredictor {
         java.util.Arrays.fill(btbTarget, 0L);
         java.util.Arrays.fill(btbDirection, 0);
         java.util.Arrays.fill(ras, 0L);
-        rasDepth = 0;
+        rasNext = 0;
+        rasSize = 0;
     }
 
     private static int index(long pc) {
         return (((int) pc) >>> 2) & (BTB_SIZE - 1);
+    }
+
+    private long rasPeek() {
+        return ras[(rasNext - 1 + RAS_DEPTH) % RAS_DEPTH];
+    }
+
+    private void rasPush(long returnAddress) {
+        ras[rasNext] = returnAddress;
+        rasNext = (rasNext + 1) % RAS_DEPTH;
+        if (rasSize < RAS_DEPTH) {
+            rasSize++;
+        }
+    }
+
+    private void rasPop() {
+        if (rasSize > 0) {
+            rasNext = (rasNext - 1 + RAS_DEPTH) % RAS_DEPTH;
+            rasSize--;
+        }
     }
 
     public BranchPredictionStatus resolve(BranchInfo info, long actualNextPc) {
@@ -56,10 +77,10 @@ public final class BranchPredictor {
         BranchKind kind = info.kind();
 
         if (kind.predictedByRas()) {
-            if (rasDepth == 0) {
+            if (rasSize == 0) {
                 return BranchPredictionStatus.RAS_MISPREDICT;
             }
-            boolean hit = ras[rasDepth - 1] == actualNextPc;
+            boolean hit = rasPeek() == actualNextPc;
             return hit ? BranchPredictionStatus.RAS_HIT : BranchPredictionStatus.RAS_MISPREDICT;
         }
 
@@ -95,13 +116,9 @@ public final class BranchPredictor {
         }
 
         if (kind.pushesReturnAddress()) {
-            if (rasDepth < RAS_DEPTH) {
-                ras[rasDepth++] = info.fallThrough();
-            }
+            rasPush(info.fallThrough());
         } else if (kind.popsReturnAddress()) {
-            if (rasDepth > 0) {
-                rasDepth--;
-            }
+            rasPop();
         }
     }
 }
