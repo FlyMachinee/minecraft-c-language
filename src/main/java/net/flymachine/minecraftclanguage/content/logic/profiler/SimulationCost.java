@@ -126,11 +126,11 @@ public record SimulationCost(
                + model.memoryAccess() * (totalLoads() + totalStores())
                + model.mmuTranslation() * totalDataTranslations()
                + model.ioAccess() * (ioLoads + ioStores)
-               + prediction.btbHitTaken() * branches.btbHitTaken()
-               + prediction.btbHitNotTaken() * branches.btbHitNotTaken()
-               + prediction.rasHit() * branches.rasHits()
-               + prediction.miss() * branches.btbMisses()
-               + prediction.mispredict() * branches.totalMispredicts()
-               + prediction.indirect() * branches.indirectJumpCount();
+               + prediction.base() * branches.totalBranches()
+               + prediction.takenRedirect() * branches.btbHitTaken()
+               + prediction.rasRedirect() * branches.rasHits()
+               + prediction.missPenalty() * branches.btbMisses()
+               + prediction.mispredictPenalty() * branches.totalMispredicts()
+               + prediction.indirectPenalty() * branches.indirectJumpCount();
     }
 }

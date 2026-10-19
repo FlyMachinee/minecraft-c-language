@@ -58,31 +58,28 @@ public record CostModel(
     /**
      * 控制转移的权重
      *
-     * @param btbHitTaken    BTB 命中且预测 taken 正确
-     * @param btbHitNotTaken BTB 命中且预测 not-taken 正确
-     * @param rasHit         RAS 命中且返回地址正确
-     * @param miss           BTB 无有效条目 (首次执行或索引冲突)，没有可用预测
-     * @param mispredict     预测失败，需要冲刷流水线
-     * @param indirect       每次间接跳转 ({@code jirl} 且目标不确定) 的额外代价，目标从寄存器来
+     * @param base              分支指令自身的执行成本，与 ALU 同量级
+     * @param takenRedirect     预测 taken 成功时的取指重定向
+     * @param rasRedirect       RAS 命中时的取指重定向 (返回地址在调用时已压栈，几乎为零)
+     * @param missPenalty       BTB 无有效条目时等待目标解析
+     * @param mispredictPenalty 预测失败时冲刷流水线
+     * @param indirectPenalty   每次间接跳转的额外目标解析代价 (与预测成败无关)
      */
     public record BranchPredictionCosts(
-        double btbHitTaken,
-        double btbHitNotTaken,
-        double rasHit,
-        double miss,
-        double mispredict,
-        double indirect
+        double base,
+        double takenRedirect,
+        double rasRedirect,
+        double missPenalty,
+        double mispredictPenalty,
+        double indirectPenalty
     ) {
 
         public static final BranchPredictionCosts ZERO =
             new BranchPredictionCosts(0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
 
-        /**
-         * rasHit < btbHitNotTaken < btbHitTaken < miss << mispredict
-         */
         public static final BranchPredictionCosts LA64_DEFAULT =
             new BranchPredictionCosts(
-                1.5,
+                1.0,
                 0.5,
                 0.2,
                 3.0,
@@ -91,12 +88,12 @@ public record CostModel(
             );
 
         public BranchPredictionCosts {
-            requireNonNegative(btbHitTaken, "branchPrediction.btbHitTaken");
-            requireNonNegative(btbHitNotTaken, "branchPrediction.btbHitNotTaken");
-            requireNonNegative(rasHit, "branchPrediction.rasHit");
-            requireNonNegative(miss, "branchPrediction.miss");
-            requireNonNegative(mispredict, "branchPrediction.mispredict");
-            requireNonNegative(indirect, "branchPrediction.indirect");
+            requireNonNegative(base, "branchPrediction.base");
+            requireNonNegative(takenRedirect, "branchPrediction.takenRedirect");
+            requireNonNegative(rasRedirect, "branchPrediction.rasRedirect");
+            requireNonNegative(missPenalty, "branchPrediction.missPenalty");
+            requireNonNegative(mispredictPenalty, "branchPrediction.mispredictPenalty");
+            requireNonNegative(indirectPenalty, "branchPrediction.indirectPenalty");
         }
     }
 
