@@ -1,5 +1,6 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.algorithm.simple;
 
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.SymbolTable;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.cfg.ControlFlowGraph;
 
 /**
@@ -10,8 +11,9 @@ public interface SimpleTraversalPass {
     /**
      * 执行优化算法
      *
-     * @param cfg 控制流图
+     * @param cfg         控制流图
+     * @param symbolTable 符号表
      * @return 是否对控制流图进行了修改
      */
-    boolean runOn(ControlFlowGraph cfg);
+    boolean runOn(ControlFlowGraph cfg, SymbolTable symbolTable);
 }

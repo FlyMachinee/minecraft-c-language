@@ -6,6 +6,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.ir.TacProgram;
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.topLevel.TacFunction;
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.topLevel.TacTopLevel;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.algorithm.simple.BasicBlockMergence;
+import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.algorithm.simple.ConstantFolding;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.algorithm.simple.UnreachableBlockElimination;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.algorithm.simple.UselessLabelElimination;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.cfg.ControlFlowGraph;
@@ -29,9 +30,10 @@ public final class TacOptimizer {
     private TacFunction optimize(TacFunction function, SymbolTable symbolTable, CompilerOptions options) {
         ControlFlowGraph cfg = ControlFlowGraph.build(function);
 
-        new UnreachableBlockElimination().runOn(cfg);
-        new UselessLabelElimination().runOn(cfg);
-        new BasicBlockMergence().runOn(cfg);
+        new ConstantFolding().runOn(cfg, symbolTable);
+        new UnreachableBlockElimination().runOn(cfg, symbolTable);
+        new UselessLabelElimination().runOn(cfg, symbolTable);
+        new BasicBlockMergence().runOn(cfg, symbolTable);
 
         cfg.flattenInto(function);
         return function;
