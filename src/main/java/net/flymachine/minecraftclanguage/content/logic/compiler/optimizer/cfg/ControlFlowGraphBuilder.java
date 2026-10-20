@@ -6,6 +6,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.cfg.no
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.cfg.node.EntryNode;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.cfg.node.ExitNode;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.cfg.node.GraphNode;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -86,7 +87,7 @@ public final class ControlFlowGraphBuilder {
                 addEdge(block, cfg.exit());
             } else if (last instanceof TacJump jump) {
                 int targetId = labelToId.get(jump.target);
-                addEdge(block, cfg.node(targetId));
+                addEdge(block, cfg.requireNode(targetId));
             } else if (last instanceof TacJumpIfComparison conditional) {
                 processConditionalJump(cfg, block, conditional.target);
             } else if (last instanceof TacJumpIfZero conditional) {
@@ -103,13 +104,13 @@ public final class ControlFlowGraphBuilder {
 
     private void processConditionalJump(ControlFlowGraph cfg, BasicBlock block, String target) {
         int targetId = labelToId.get(target);
-        addEdge(block, cfg.node(targetId));
+        addEdge(block, cfg.requireNode(targetId));
         addEdge(block, fallthroughNode(cfg, block));
     }
 
-    private GraphNode fallthroughNode(ControlFlowGraph cfg, BasicBlock block) {
+    private @NotNull GraphNode fallthroughNode(ControlFlowGraph cfg, BasicBlock block) {
         int id = block.id();
-        return id == cfg.nodes().size() - 1 ? cfg.exit() : cfg.node(id + 1);
+        return id == cfg.slotCount() - 1 ? cfg.exit() : cfg.requireNode(id + 1);
     }
 
     private void addEdge(GraphNode from, GraphNode to) {
