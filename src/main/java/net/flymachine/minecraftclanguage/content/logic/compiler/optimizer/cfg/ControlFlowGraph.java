@@ -1,7 +1,12 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.cfg;
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.inst.TacInstruction;
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.inst.TacJump;
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.inst.TacJumpIfComparison;
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.inst.TacJumpIfNotZero;
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.inst.TacJumpIfZero;
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.inst.TacLabel;
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.inst.TacReturn;
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.topLevel.TacFunction;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.cfg.node.BasicBlock;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.cfg.node.EntryNode;
@@ -159,5 +164,162 @@ public final class ControlFlowGraph {
             }
             function.insts.addAll(block.instructions());
         }
+    }
+
+    /**
+     * 检查控制流图的一致性，返回发现的问题列表，空列表表示通过
+     */
+    public List<String> validate() {
+        List<String> problems = new ArrayList<>();
+        checkSlots(problems);
+        checkEdges(problems);
+        checkSuccessorCounts(problems);
+        checkLabels(problems);
+        checkInstructions(problems);
+        return problems;
+    }
+
+    private void checkSlots(List<String> problems) {
+        if (slots.size() < 2) {
+            problems.add("graph must have at least the entry and exit slots, found " + slots.size());
+            return;
+        }
+        if (!(slots.get(0) instanceof EntryNode)) {
+            problems.add("slot 0 must be an entry node, found " + describe(slots.get(0)));
+        }
+        if (!(slots.get(1) instanceof ExitNode)) {
+            problems.add("slot 1 must be an exit node, found " + describe(slots.get(1)));
+        }
+        for (int id = 0; id < slots.size(); id++) {
+            GraphNode node = slots.get(id);
+            if (node == null) {
+                continue;
+            }
+            if (node.id() != id) {
+                problems.add("node in slot " + id + " reports id " + node.id());
+            }
+            if (id >= 2 && node.type() != GraphNode.NodeType.BASIC_BLOCK) {
+                problems.add("slot " + id + " holds a " + node.type() + " node, expected a basic block");
+            }
+        }
+    }
+
+    private void checkEdges(List<String> problems) {
+        for (GraphNode node : nodes()) {
+            for (int successorId : node.successors()) {
+                GraphNode successor = node(successorId);
+                if (successor == null) {
+                    problems.add("node " + node.id() + " has dangling successor " + successorId);
+                } else if (!successor.predecessors().contains(node.id())) {
+                    problems.add("edge " + node.id() + " -> " + successorId
+                                 + " has no matching entry in the successor's predecessors");
+                }
+            }
+            for (int predecessorId : node.predecessors()) {
+                GraphNode predecessor = node(predecessorId);
+                if (predecessor == null) {
+                    problems.add("node " + node.id() + " has dangling predecessor " + predecessorId);
+                } else if (!predecessor.successors().contains(node.id())) {
+                    problems.add("edge " + predecessorId + " -> " + node.id()
+                                 + " has no matching entry in the predecessor's successors");
+                }
+            }
+        }
+    }
+
+    private void checkSuccessorCounts(List<String> problems) {
+        for (GraphNode node : nodes()) {
+            int expected = expectedSuccessorCount(node);
+            if (expected < 0) {
+                continue;
+            }
+            int actual = node.successors().size();
+            if (actual != expected) {
+                problems.add("node " + node.id() + " (" + node.type() + ") has " + actual
+                             + " successors, expected " + expected);
+            }
+        }
+    }
+
+    private int expectedSuccessorCount(GraphNode node) {
+        if (node.isExit()) {
+            return 0;
+        }
+        if (node.isEntry()) {
+            return 1;
+        }
+        if (!(node instanceof BasicBlock block)) {
+            return -1;
+        }
+        TacInstruction last = block.lastInstruction();
+        if (last == null || last instanceof TacReturn || last instanceof TacJump) {
+            return 1;
+        }
+        if (last instanceof TacJumpIfZero
+            || last instanceof TacJumpIfNotZero
+            || last instanceof TacJumpIfComparison) {
+            return 2;
+        }
+        return 1;
+    }
+
+    private void checkLabels(List<String> problems) {
+        for (BasicBlock block : blocks()) {
+            for (String label : block.labels()) {
+                Integer mapped = labelToId.get(label);
+                if (mapped == null) {
+                    problems.add("label '" + label + "' owned by node " + block.id()
+                                 + " is missing from the label map");
+                } else if (mapped != block.id()) {
+                    problems.add("label '" + label + "' maps to node " + mapped
+                                 + " but is owned by node " + block.id());
+                }
+            }
+        }
+        for (Map.Entry<String, Integer> entry : labelToId.entrySet()) {
+            if (node(entry.getValue()) == null) {
+                problems.add("label '" + entry.getKey() + "' maps to missing node " + entry.getValue());
+            }
+        }
+    }
+
+    private void checkInstructions(List<String> problems) {
+        for (BasicBlock block : blocks()) {
+            for (TacInstruction instruction : block.instructions()) {
+                if (instruction instanceof TacLabel) {
+                    problems.add("node " + block.id() + " holds a label inside its instruction list");
+                }
+            }
+            checkJumpTarget(block, problems);
+        }
+    }
+
+    private void checkJumpTarget(BasicBlock block, List<String> problems) {
+        TacInstruction last = block.lastInstruction();
+        String target = null;
+        if (last instanceof TacJump jump) {
+            target = jump.target;
+        } else if (last instanceof TacJumpIfZero jump) {
+            target = jump.target;
+        } else if (last instanceof TacJumpIfNotZero jump) {
+            target = jump.target;
+        } else if (last instanceof TacJumpIfComparison jump) {
+            target = jump.target;
+        }
+        if (target == null) {
+            return;
+        }
+
+        Integer targetId = labelToId.get(target);
+        if (targetId == null) {
+            problems.add("node " + block.id() + " jumps to unknown label '" + target + "'");
+        } else if (!block.successors().contains(targetId)) {
+            problems.add("node " + block.id() + " jumps to '" + target + "' (node " + targetId
+                         + ") which is not among its successors");
+        }
+    }
+
+    private static String describe(GraphNode node) {
+        return node == null ? "null" : node.type().toString();
     }
 }
