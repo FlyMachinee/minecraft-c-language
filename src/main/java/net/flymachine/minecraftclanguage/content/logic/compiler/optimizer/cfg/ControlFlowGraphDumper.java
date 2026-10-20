@@ -4,7 +4,9 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.ir.inst.TacInstr
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.cfg.node.BasicBlock;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.cfg.node.GraphNode;
 
+import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 public final class ControlFlowGraphDumper {
@@ -114,5 +116,121 @@ public final class ControlFlowGraphDumper {
 
     private static void indent(PrintStream stream, int indentLevel) {
         stream.print("    ".repeat(indentLevel));
+    }
+
+    /**
+     * 生成只含节点名称的概览图 DOT 文本
+     */
+    public static String toDotOverview(ControlFlowGraph cfg, String graphName) {
+        StringBuilder dot = new StringBuilder(512);
+        appendDotHeader(dot, graphName + "_overview");
+        appendDotNodes(dot, cfg, false);
+        appendDotEdges(dot, cfg);
+        dot.append("}\n");
+        return dot.toString();
+    }
+
+    /**
+     * 生成带指令序列的完整图 DOT 文本
+     */
+    public static String toDotDetailed(ControlFlowGraph cfg, String graphName) {
+        StringBuilder dot = new StringBuilder(1024);
+        appendDotHeader(dot, graphName + "_detailed");
+        appendDotNodes(dot, cfg, true);
+        appendDotEdges(dot, cfg);
+        dot.append("}\n");
+        return dot.toString();
+    }
+
+    private static void appendDotHeader(StringBuilder dot, String graphName) {
+        dot.append("digraph \"").append(graphName).append("\" {\n");
+        dot.append("    graph [bgcolor=\"transparent\", splines=true, rankdir=TB, dpi=300,"
+                   + " fontname=\"Fira Code\", fontcolor=\"black\"];\n");
+        dot.append("    node [shape=box, style=rounded, fontname=\"Fira Code\","
+                   + " fontcolor=\"black\", color=\"black\"];\n");
+        dot.append("    edge [color=\"black\", dir=forward, fontname=\"Fira Code\","
+                   + " fontcolor=\"black\"];\n");
+    }
+
+    private static void appendDotNodes(StringBuilder dot, ControlFlowGraph cfg, boolean detailed) {
+        dot.append("    ").append(dotId(cfg.entry())).append(" [label=<<B>Entry</B>>];\n");
+        dot.append("    ").append(dotId(cfg.exit())).append(" [label=<<B>Exit</B>>];\n");
+
+        for (BasicBlock block : cfg.blocks()) {
+            dot.append("    ").append(dotId(block));
+            if (detailed) {
+                dot.append(" [xlabel=").append(blockTitle(block))
+                   .append(", label=").append(detailedLabel(block)).append("]");
+            } else {
+                dot.append(" [label=").append(blockTitle(block)).append("]");
+            }
+            dot.append(";\n");
+        }
+    }
+
+    private static void appendDotEdges(StringBuilder dot, ControlFlowGraph cfg) {
+        for (GraphNode node : cfg.nodes()) {
+            for (int successorId : node.successors()) {
+                GraphNode successor = cfg.node(successorId);
+                if (successor == null) {
+                    continue;
+                }
+                dot.append("    ").append(dotId(node))
+                   .append(" -> ").append(dotId(successor)).append(";\n");
+            }
+        }
+    }
+
+    private static String dotId(GraphNode node) {
+        if (node.isEntry()) {
+            return "Entry";
+        }
+        if (node.isExit()) {
+            return "Exit";
+        }
+        return "B" + node.id();
+    }
+
+    private static String blockTitle(BasicBlock block) {
+        return "<<B>B</B><SUB>" + block.id() + "</SUB>>";
+    }
+
+    private static String detailedLabel(BasicBlock block) {
+        StringBuilder html = new StringBuilder();
+        html.append("<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\">");
+
+        if (block.labels().isEmpty() && block.instructions().isEmpty()) {
+            html.append("<TR><TD ALIGN=\"LEFT\">&lt;empty&gt;</TD></TR>");
+        } else {
+            for (String label : block.labels()) {
+                html.append("<TR><TD ALIGN=\"LEFT\"><I>")
+                    .append(escapeHtml(label))
+                    .append(":</I></TD></TR>");
+            }
+            for (TacInstruction instruction : block.instructions()) {
+                html.append("<TR><TD ALIGN=\"LEFT\">")
+                    .append(escapeHtml(prettyOf(instruction)))
+                    .append("</TD></TR>");
+            }
+        }
+
+        html.append("</TABLE>>");
+        return html.toString();
+    }
+
+    private static String prettyOf(TacInstruction instruction) {
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        PrintStream stream = new PrintStream(buffer, true, StandardCharsets.UTF_8);
+        instruction.dumpPretty(stream, 0, false);
+        stream.flush();
+        return buffer.toString(StandardCharsets.UTF_8);
+    }
+
+    private static String escapeHtml(String raw) {
+        return raw.replace("\r", "")
+                  .replace("\n", " ")
+                  .replace("&", "&amp;")
+                  .replace("<", "&lt;")
+                  .replace(">", "&gt;");
     }
 }
