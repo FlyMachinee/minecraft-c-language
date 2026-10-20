@@ -1,12 +1,6 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.cfg;
 
-import net.flymachine.minecraftclanguage.content.logic.compiler.ir.inst.TacInstruction;
-import net.flymachine.minecraftclanguage.content.logic.compiler.ir.inst.TacJump;
-import net.flymachine.minecraftclanguage.content.logic.compiler.ir.inst.TacJumpIfComparison;
-import net.flymachine.minecraftclanguage.content.logic.compiler.ir.inst.TacJumpIfNotZero;
-import net.flymachine.minecraftclanguage.content.logic.compiler.ir.inst.TacJumpIfZero;
-import net.flymachine.minecraftclanguage.content.logic.compiler.ir.inst.TacLabel;
-import net.flymachine.minecraftclanguage.content.logic.compiler.ir.inst.TacReturn;
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.inst.*;
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.topLevel.TacFunction;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.cfg.node.BasicBlock;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.cfg.node.EntryNode;
@@ -41,7 +35,7 @@ public final class ControlFlowGraph {
     }
 
     /**
-     * 返回按照节点 ID 排序的所有节点的不可变列表视图，已经排除了被删除的节点
+     * 返回按照节点 ID 排序的所有节点的不可变列表快照，已经排除了被删除的节点
      */
     public List<GraphNode> nodes() {
         if (liveNodes == null) {
@@ -57,7 +51,7 @@ public final class ControlFlowGraph {
     }
 
     /**
-     * 返回按照节点 ID 排序的所有基本块的不可变列表视图，已经排除了被删除的节点
+     * 返回按照节点 ID 排序的所有基本块的不可变列表快照，已经排除了被删除的节点
      */
     public List<BasicBlock> blocks() {
         if (liveBlocks == null) {
@@ -132,12 +126,35 @@ public final class ControlFlowGraph {
         }
     }
 
+    public Map<String, Integer> labelToIdMap() {
+        return Collections.unmodifiableMap(labelToId);
+    }
+
     public BasicBlock blockByLabel(String label) {
         Integer id = labelToId.get(label);
         if (id == null) {
             throw new IllegalStateException("No block found for label: " + label);
         }
         return (BasicBlock) requireNode(id);
+    }
+
+    public boolean hasLabel(String label) {
+        return labelToId.containsKey(label);
+    }
+
+    /**
+     * 移除指定标签（基本块以及映射），返回是否成功移除
+     * <p>
+     * 需保证标签已不被语句使用
+     */
+    public boolean removeLabel(String label) {
+        Integer id = labelToId.remove(label);
+        if (id == null) {
+            return false;
+        }
+        BasicBlock block = (BasicBlock) requireNode(id);
+        block.labels().remove(label);
+        return true;
     }
 
     public static ControlFlowGraph build(TacFunction function) {

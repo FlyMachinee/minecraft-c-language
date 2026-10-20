@@ -45,7 +45,9 @@ public final class ControlFlowGraphBuilder {
                     current = emptyBlock();
                 }
                 current.labels().add(label.name);
-                labelToId.put(label.name, current.id());
+                if (labelToId.put(label.name, current.id()) != null) {
+                    throw new IllegalStateException("Duplicate label: " + label.name);
+                }
             } else if (isJump(inst)) {
                 current.instructions().add(inst);
                 finished.add(current);
