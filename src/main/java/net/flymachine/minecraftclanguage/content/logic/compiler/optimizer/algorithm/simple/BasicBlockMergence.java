@@ -1,6 +1,9 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.algorithm.simple;
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.SymbolTable;
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.inst.TacInstruction;
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.inst.TacJump;
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.inst.TacReturn;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.cfg.ControlFlowGraph;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.cfg.node.BasicBlock;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.cfg.node.GraphNode;
@@ -54,6 +57,16 @@ public final class BasicBlockMergence implements SimpleTraversalPass {
                 throw new IllegalStateException("Inconsistent graph");
             }
 
+            // ... -> A -> B -> ...
+            // 合并后 A 的末尾会直接接上 B 的指令
+            // 若 B 可能以 fallthrough 结束，则语义将变为 A 可能以 fallthrough 结束
+            // 但 A 合并后的 fallthrough 不一定和 B 的 fallthrough 相同
+            // 当且仅当 A B 相邻时，才可以保证 fallthrough 的语义不变
+            if (hasFallThrough(successorBlock) && successorBlock.id() != nextLiveId(cfg, block.id())) {
+                i++;
+                continue;
+            }
+
             // 合并基本块
             changed = true;
 
@@ -97,5 +110,19 @@ public final class BasicBlockMergence implements SimpleTraversalPass {
             }
         }
         return first;
+    }
+
+    private boolean hasFallThrough(BasicBlock block) {
+        TacInstruction last = block.lastInstruction();
+        return !(last instanceof TacReturn || last instanceof TacJump);
+    }
+
+    private int nextLiveId(ControlFlowGraph cfg, int id) {
+        for (int next = id + 1; next < cfg.slotCount(); next++) {
+            if (cfg.node(next) != null) {
+                return next;
+            }
+        }
+        return -1;
     }
 }
