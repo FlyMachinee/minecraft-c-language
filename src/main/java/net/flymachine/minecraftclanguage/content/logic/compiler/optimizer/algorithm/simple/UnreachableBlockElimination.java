@@ -22,7 +22,8 @@ public final class UnreachableBlockElimination implements SimpleTraversalPass {
 
         IntSet reachableNodes = bfs(cfg);
 
-        if (allBlocks.removeAll(reachableNodes)) {
+        allBlocks.removeAll(reachableNodes);
+        if (!allBlocks.isEmpty()) {
             for (int unreachableId : allBlocks) {
                 cfg.deleteNode(unreachableId);
             }
