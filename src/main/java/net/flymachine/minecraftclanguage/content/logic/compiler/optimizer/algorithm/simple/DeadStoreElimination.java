@@ -13,6 +13,7 @@ public final class DeadStoreElimination implements SimpleTraversalPass {
     @Override
     public boolean runOn(FunctionContext ctx) {
         LivenessResult live = LivenessAnalysis.analyze(ctx);
+        BitSet state = new BitSet();
         BitSet use = new BitSet();
         BitSet def = new BitSet();
         BitSet tmpDef = new BitSet();
@@ -20,7 +21,8 @@ public final class DeadStoreElimination implements SimpleTraversalPass {
 
         for (BasicBlock block : ctx.cfg().blocks()) {
             // 块出口处的活跃变量集合
-            BitSet state = (BitSet) live.out(block).clone();
+            state.clear();
+            state.or(live.out(block));
 
             for (int i = block.instructions().size() - 1; i >= 0; i--) {
                 TacInstruction inst = block.instructions().get(i);

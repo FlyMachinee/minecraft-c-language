@@ -114,7 +114,7 @@ public final class LivenessAnalysis {
             useSet.or(ctx.memoryEscapedVars());
             defSet.or(ctx.memoryEscapedVars());
         } else if (inst instanceof TacLoad) {
-            // 读取内存可能会读写静态变量、通过指针访问等
+            // 读取内存可能会读静态变量、通过指针访问等
             useSet.or(ctx.memoryEscapedVars());
         }
     }
