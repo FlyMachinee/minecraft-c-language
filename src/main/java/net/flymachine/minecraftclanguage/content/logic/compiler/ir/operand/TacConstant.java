@@ -26,4 +26,16 @@ public class TacConstant implements TacValue {
         }
         stream.append(String.valueOf(value));
     }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) { return true; }
+        if (!(obj instanceof TacConstant o)) { return false; }
+        return value.equals(o.value);
+    }
+
+    @Override
+    public int hashCode() {
+        return value.hashCode();
+    }
 }

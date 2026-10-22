@@ -35,4 +35,16 @@ public class TacVariable implements TacValue {
         }
         stream.append(name);
     }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) { return true; }
+        if (!(obj instanceof TacVariable o)) { return false; }
+        return name.equals(o.name);
+    }
+
+    @Override
+    public int hashCode() {
+        return name.hashCode();
+    }
 }
