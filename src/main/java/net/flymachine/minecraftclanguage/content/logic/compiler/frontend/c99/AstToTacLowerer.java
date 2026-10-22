@@ -923,19 +923,8 @@ public final class AstToTacLowerer implements
             step = new TacConstant(new ConstantLong(scale));
         }
 
-        TacVariable storage;
-        TacAddressDescriptor derefAddr = null;
-
         // 加载操作数
-        if (dst instanceof PlainOperand objDst) {
-            storage = (TacVariable) objDst.object(); // 直接获取
-        } else if (dst instanceof DereferencedPointer derefPtr) {
-            storage = makeTempVar(operandType);
-            emitTacLoad(derefPtr.addr(), storage); // 进行 Load
-            derefAddr = derefPtr.addr();
-        } else {
-            throw new IllegalStateException("Control should never reach here");
-        }
+        TacValue storage = toPlainValue(dst, operandType);
 
         // 后缀保留旧值
         TacVariable oldValue = null;
@@ -957,8 +946,10 @@ public final class AstToTacLowerer implements
         }
 
         // 如果是内存位置，写回
-        if (derefAddr != null) {
-            emitTacStore(storage, derefAddr);
+        if (dst instanceof DereferencedPointer derefPtr) {
+            emitTacStore(storage, derefPtr.addr());
+        } else if (dst instanceof SubObject subObj) {
+            emitTac(new TacCopyToOffset(storage, subObj.base(), subObj.offset()));
         }
 
         // 前缀返回新值，后缀返回旧值
