@@ -8,6 +8,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.ir.topLevel.TacT
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.algorithm.common.FunctionContext;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.algorithm.simple.*;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.cfg.ControlFlowGraph;
+import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.cfg.ControlFlowGraphDumper;
 
 public final class TacOptimizer {
 
@@ -32,10 +33,17 @@ public final class TacOptimizer {
         }
     }
 
-    private TacFunction optimize(TacFunction function, SymbolTable symbolTable, CompilerOptions options) {
+    public TacFunction optimize(TacFunction function, SymbolTable symbolTable, CompilerOptions options) {
         if (function.insts.isEmpty()) { return function; }
 
         ControlFlowGraph cfg = ControlFlowGraph.build(function);
+        if (options.dumping().contains(CompilerOptions.DumpKind.CFG_RAW)) {
+            System.out.println("=== Dumping raw CFG for function " + function.name + " ===");
+            System.out.print(ControlFlowGraphDumper.toDotDetailed(cfg, function.name + " raw"));
+            System.out.println("=== Dumping complete ===");
+            System.out.println();
+        }
+
         FunctionContext ctx = new FunctionContext(cfg, symbolTable);
 
         boolean changed;
@@ -47,6 +55,13 @@ public final class TacOptimizer {
             changed |= new DeadStoreElimination().runOn(ctx);
             changed |= new BasicBlockMergence().runOn(ctx);
         } while (changed);
+
+        if (options.dumping().contains(CompilerOptions.DumpKind.CFG_OPTIMIZED)) {
+            System.out.println("=== Dumping optimized CFG for function " + function.name + " ===");
+            System.out.print(ControlFlowGraphDumper.toDotDetailed(cfg, function.name + " optimized"));
+            System.out.println("=== Dumping complete ===");
+            System.out.println();
+        }
 
         cfg.flattenInto(function);
         return function;
