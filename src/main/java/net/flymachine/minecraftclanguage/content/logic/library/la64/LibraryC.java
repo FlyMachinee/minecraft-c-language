@@ -47,6 +47,26 @@ public final class LibraryC {
                               }
                               return *(unsigned char*)str1 - *(unsigned char*)str2;
                           }
+                          int strncmp(const char *s1, const char *s2, unsigned long n) {
+                              const unsigned char *p1 = (const unsigned char *)s1;
+                              const unsigned char *p2 = (const unsigned char *)s2;
+                          
+                              if (n == 0) {
+                                  return 0;
+                              }
+                          
+                              while (n-- > 0) {
+                                  unsigned char c1 = *p1++;
+                                  unsigned char c2 = *p2++;
+                                  if (c1 != c2) {
+                                      return (int)c1 - (int)c2;
+                                  }
+                                  if (c1 == '\\0') {
+                                      return 0;
+                                  }
+                              }
+                              return 0;
+                          }
                           int atoi(const char* str) {
                               int result = 0;
                               int sign = 1;
