@@ -3,13 +3,15 @@ package net.flymachine.minecraftclanguage.content.logic.compiler;
 import java.util.EnumSet;
 import java.util.Objects;
 
-public record CompilerOptions(OptimizationOptions optimization, DumpOptions dumping) {
+public record CompilerOptions(OptimizationOptions optimization, DumpOptions dumping, DebugOptions debug) {
 
-    public static final CompilerOptions DEFAULT = new CompilerOptions(OptimizationOptions.DEFAULT, DumpOptions.DEFAULT);
+    public static final CompilerOptions DEFAULT =
+        new CompilerOptions(OptimizationOptions.DEFAULT, DumpOptions.DEFAULT, DebugOptions.DEFAULT);
 
     public CompilerOptions {
         Objects.requireNonNull(optimization, "optimization cannot be null");
         Objects.requireNonNull(dumping, "dumping cannot be null");
+        Objects.requireNonNull(debug, "debug cannot be null");
     }
 
     public record OptimizationOptions(OptimizationLevel level) {
@@ -72,5 +74,20 @@ public record CompilerOptions(OptimizationOptions optimization, DumpOptions dump
         HL_ASM_RAW_SYMTAB,
         HL_ASM_PSEUDO,
         ASM
+    }
+
+    public final static class DebugOptions {
+        public static final DebugOptions DEFAULT = new DebugOptions(false);
+        public static final DebugOptions ENABLED = new DebugOptions(true);
+
+        private final boolean debug;
+
+        private DebugOptions(boolean debug) {
+            this.debug = debug;
+        }
+
+        public boolean isDebug() {
+            return debug;
+        }
     }
 }

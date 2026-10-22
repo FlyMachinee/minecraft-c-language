@@ -10,6 +10,8 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.algori
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.cfg.ControlFlowGraph;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.cfg.ControlFlowGraphDumper;
 
+import java.util.List;
+
 public final class TacOptimizer {
 
     public TacOptimizer() { }
@@ -45,17 +47,51 @@ public final class TacOptimizer {
         }
 
         FunctionContext ctx = new FunctionContext(cfg, symbolTable);
+        if (options.debug().isDebug()) {
+            cfgValidation(cfg, "initial");
+        }
 
         boolean changed;
         do {
             changed = new ConstantFolding().runOn(ctx);
+            if (options.debug().isDebug()) {
+                cfgValidation(cfg, "ConstantFolding");
+            }
+
             changed |= new UnreachableBlockElimination().runOn(ctx);
+            if (options.debug().isDebug()) {
+                cfgValidation(cfg, "UnreachableBlockElimination");
+            }
+
             changed |= new UselessJumpElimination().runOn(ctx);
+            if (options.debug().isDebug()) {
+                cfgValidation(cfg, "UselessJumpElimination");
+            }
+
             changed |= new UselessLabelElimination().runOn(ctx);
+            if (options.debug().isDebug()) {
+                cfgValidation(cfg, "UselessLabelElimination");
+            }
+
             changed |= new CopyPropagation().runOn(ctx);
+            if (options.debug().isDebug()) {
+                cfgValidation(cfg, "CopyPropagation");
+            }
+
             changed |= new DeadStoreElimination().runOn(ctx);
+            if (options.debug().isDebug()) {
+                cfgValidation(cfg, "DeadStoreElimination");
+            }
+
             changed |= new EmptyBlockElimination().runOn(ctx);
+            if (options.debug().isDebug()) {
+                cfgValidation(cfg, "EmptyBlockElimination");
+            }
+
             changed |= new BasicBlockMergence().runOn(ctx);
+            if (options.debug().isDebug()) {
+                cfgValidation(cfg, "BasicBlockMergence");
+            }
         } while (changed);
 
         if (options.dumping().contains(CompilerOptions.DumpKind.CFG_OPTIMIZED)) {
@@ -67,5 +103,16 @@ public final class TacOptimizer {
 
         cfg.flattenInto(function);
         return function;
+    }
+
+    private void cfgValidation(ControlFlowGraph cfg, String lastPassName) {
+        List<String> result = cfg.validate();
+        if (!result.isEmpty()) {
+            System.err.println("CFG validation error after pass: " + lastPassName);
+            for (String s : result) {
+                System.err.println(s);
+            }
+            throw new IllegalStateException("CFG validation failed after pass: " + lastPassName);
+        }
     }
 }
