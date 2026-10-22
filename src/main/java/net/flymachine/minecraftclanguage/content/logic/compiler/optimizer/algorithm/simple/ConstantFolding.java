@@ -152,7 +152,8 @@ public final class ConstantFolding implements SimpleTraversalPass, TacVisitor<Ta
         if (inst.src instanceof TacConstant srcConst) {
             Type srcType = getType(srcConst);
             Type dstType = getType(inst.dst);
-            if (!dstType.isCompatible(srcType)) {
+            if (!(dstType.isCompatible(srcType) ||
+                  ((srcType.isChar() || srcType.isSignedChar()) && (dstType.isChar() || dstType.isSignedChar())))) {
                 inst.src = new TacConstant(srcConst.value.castTo(dstType));
                 folded = true;
             }
