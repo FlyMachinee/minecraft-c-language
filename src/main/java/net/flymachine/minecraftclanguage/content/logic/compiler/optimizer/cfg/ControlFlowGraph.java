@@ -147,14 +147,27 @@ public final class ControlFlowGraph {
      * <p>
      * 需保证标签已不被语句使用
      */
-    public boolean removeLabel(String label) {
+    public void removeLabel(String label) {
         Integer id = labelToId.remove(label);
         if (id == null) {
-            return false;
+            throw new IllegalStateException("No block found for label: " + label);
         }
         BasicBlock block = (BasicBlock) requireNode(id);
         block.labels().remove(label);
-        return true;
+    }
+
+    /**
+     * 将标签添加到指定的基本块中
+     * <p>
+     * 需保证标签在图中唯一
+     */
+    public void addLabelToBlock(String label, int id) {
+        if (labelToId.containsKey(label)) {
+            throw new IllegalArgumentException("Label already exists: " + label);
+        }
+        labelToId.put(label, id);
+        BasicBlock block = (BasicBlock) requireNode(id);
+        block.labels().add(label);
     }
 
     public static ControlFlowGraph build(TacFunction function) {

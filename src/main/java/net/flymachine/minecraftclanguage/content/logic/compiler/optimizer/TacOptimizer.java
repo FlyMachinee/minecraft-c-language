@@ -50,9 +50,11 @@ public final class TacOptimizer {
         do {
             changed = new ConstantFolding().runOn(ctx);
             changed |= new UnreachableBlockElimination().runOn(ctx);
+            changed |= new UselessJumpElimination().runOn(ctx);
             changed |= new UselessLabelElimination().runOn(ctx);
             changed |= new CopyPropagation().runOn(ctx);
             changed |= new DeadStoreElimination().runOn(ctx);
+            changed |= new EmptyBlockElimination().runOn(ctx);
             changed |= new BasicBlockMergence().runOn(ctx);
         } while (changed);
 
