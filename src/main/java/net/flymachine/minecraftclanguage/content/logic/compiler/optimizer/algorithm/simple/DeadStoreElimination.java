@@ -1,11 +1,9 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.algorithm.simple;
 
-import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.SymbolTable;
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.inst.*;
-import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.algorithm.common.UseDefCollector;
+import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.algorithm.common.FunctionContext;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.algorithm.liveness.LivenessAnalysis;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.algorithm.liveness.LivenessResult;
-import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.cfg.ControlFlowGraph;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.cfg.node.BasicBlock;
 
 import java.util.BitSet;
@@ -13,15 +11,14 @@ import java.util.BitSet;
 public final class DeadStoreElimination implements SimpleTraversalPass {
 
     @Override
-    public boolean runOn(ControlFlowGraph cfg, SymbolTable symbolTable) {
-        LivenessResult live = LivenessAnalysis.analyze(cfg, symbolTable);
-        UseDefCollector collector = new UseDefCollector(live.interner());
-        BitSet staticVars = live.staticVars();
+    public boolean runOn(FunctionContext ctx) {
+        LivenessResult live = LivenessAnalysis.analyze(ctx);
         BitSet use = new BitSet();
         BitSet def = new BitSet();
+        BitSet tmpDef = new BitSet();
         boolean changed = false;
 
-        for (BasicBlock block : cfg.blocks()) {
+        for (BasicBlock block : ctx.cfg().blocks()) {
             // 块出口处的活跃变量集合
             BitSet state = (BitSet) live.out(block).clone();
 
@@ -31,15 +28,17 @@ public final class DeadStoreElimination implements SimpleTraversalPass {
                 // 该条指令的 def/use 集合
                 use.clear();
                 def.clear();
-                collector.collect(inst, use, def);
-                if (inst instanceof TacDirectCall || inst instanceof TacIndirectCall) {
-                    // 函数调用可能会读写静态变量
-                    use.or(staticVars);
-                    def.or(staticVars);
+                LivenessAnalysis.collectUseDef(ctx, inst, use, def);
+                tmpDef.clear();
+                tmpDef.or(def);
+                if (inst instanceof TacCopyToOffset copy) {
+                    tmpDef.set(ctx.interner().intern(copy.dst));
+                } else if (inst instanceof TacCopyByteArrayToOffset copy) {
+                    tmpDef.set(ctx.interner().intern(copy.dst));
                 }
 
                 // 如果该条指令无副作用，且其 def 的结果在后续不活跃，则可删除
-                if (isPure(inst) && !def.isEmpty() && !def.intersects(state)) {
+                if (isPure(inst) && !tmpDef.isEmpty() && !tmpDef.intersects(state)) {
                     block.instructions().remove(i);
                     changed = true;
                     // 删除后，def/use 不需要更新
@@ -67,6 +66,9 @@ public final class DeadStoreElimination implements SimpleTraversalPass {
                || inst instanceof TacIntToDouble
                || inst instanceof TacUnsignedIntToDouble
                || inst instanceof TacGetAddress
-               || inst instanceof TacAddPointer;
+               || inst instanceof TacAddPointer
+               || inst instanceof TacCopyToOffset
+               || inst instanceof TacCopyByteArrayToOffset
+               || inst instanceof TacCopyFromOffset;
     }
 }

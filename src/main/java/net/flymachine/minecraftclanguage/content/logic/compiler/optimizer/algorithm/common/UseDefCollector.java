@@ -166,7 +166,6 @@ public final class UseDefCollector implements TacVisitor<Void> {
 
     @Override
     public Void visit(TacGetAddress inst) {
-        use(inst.src);
         def(inst.dst);
         return null;
     }
@@ -218,6 +217,7 @@ public final class UseDefCollector implements TacVisitor<Void> {
 
     @Override
     public Void visit(TacCopyFromOffset inst) {
+        useSet.set(interner.intern(inst.src));
         def(inst.dst);
         return null;
     }

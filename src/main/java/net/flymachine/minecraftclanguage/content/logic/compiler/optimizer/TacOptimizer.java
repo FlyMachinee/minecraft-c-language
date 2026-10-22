@@ -5,6 +5,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.Sym
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.TacProgram;
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.topLevel.TacFunction;
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.topLevel.TacTopLevel;
+import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.algorithm.common.FunctionContext;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.algorithm.simple.*;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.cfg.ControlFlowGraph;
 
@@ -35,14 +36,15 @@ public final class TacOptimizer {
         if (function.insts.isEmpty()) { return function; }
 
         ControlFlowGraph cfg = ControlFlowGraph.build(function);
+        FunctionContext ctx = new FunctionContext(cfg, symbolTable);
 
         boolean changed;
         do {
-            changed = new ConstantFolding().runOn(cfg, symbolTable);
-            changed |= new UnreachableBlockElimination().runOn(cfg, symbolTable);
-            changed |= new UselessLabelElimination().runOn(cfg, symbolTable);
-            changed |= new DeadStoreElimination().runOn(cfg, symbolTable);
-            changed |= new BasicBlockMergence().runOn(cfg, symbolTable);
+            changed = new ConstantFolding().runOn(ctx);
+            changed |= new UnreachableBlockElimination().runOn(ctx);
+            changed |= new UselessLabelElimination().runOn(ctx);
+            changed |= new DeadStoreElimination().runOn(ctx);
+            changed |= new BasicBlockMergence().runOn(ctx);
         } while (changed);
 
         cfg.flattenInto(function);

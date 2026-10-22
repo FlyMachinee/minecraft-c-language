@@ -13,6 +13,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.ir.operand.TacAd
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.operand.TacConstant;
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.operand.TacValue;
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.operand.TacVariable;
+import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.algorithm.common.FunctionContext;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.cfg.ControlFlowGraph;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.cfg.node.BasicBlock;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.util.TacUtil;
@@ -23,8 +24,9 @@ public final class ConstantFolding implements SimpleTraversalPass, TacVisitor<Ta
     private SymbolTable symbolTable;
 
     @Override
-    public boolean runOn(ControlFlowGraph cfg, SymbolTable symbolTable) {
-        this.symbolTable = symbolTable;
+    public boolean runOn(FunctionContext ctx) {
+        ControlFlowGraph cfg = ctx.cfg();
+        this.symbolTable = ctx.symbolTable();
         this.folded = false;
 
         for (BasicBlock block : cfg.blocks()) {

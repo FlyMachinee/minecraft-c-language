@@ -2,7 +2,7 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.algor
 
 import it.unimi.dsi.fastutil.ints.IntArraySet;
 import it.unimi.dsi.fastutil.ints.IntSet;
-import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.SymbolTable;
+import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.algorithm.common.FunctionContext;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.cfg.ControlFlowGraph;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.cfg.node.BasicBlock;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.cfg.node.GraphNode;
@@ -14,7 +14,8 @@ import java.util.Queue;
 public final class UnreachableBlockElimination implements SimpleTraversalPass {
 
     @Override
-    public boolean runOn(ControlFlowGraph cfg, SymbolTable symbolTable) {
+    public boolean runOn(FunctionContext ctx) {
+        ControlFlowGraph cfg = ctx.cfg();
         IntSet allBlocks = new IntArraySet();
         for (BasicBlock block : cfg.blocks()) {
             allBlocks.add(block.id());
