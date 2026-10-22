@@ -133,7 +133,8 @@ public final class ConstantFolding implements SimpleTraversalPass, TacVisitor<Ta
                 // 指针加/减整数运算
                 // 这里我们不能直接用 apply 来计算，因为其作用时将会对整数进行缩放
                 res = lhsConst.value.toLong().apply(inst.op, rhsConst.value.toLong()).toPointer(pt.referencedType());
-            } else if (lhsType instanceof PointerType && rhsType instanceof PointerType) {
+            } else if (lhsType instanceof PointerType || rhsType instanceof PointerType) {
+                // 这里用逻辑或，是因为复制传播后，可能会改变指针类型变量/常量为 long / unsigned long 的变量/常量
                 // 指针减指针
                 // 同理不能直接 apply
                 res = lhsConst.value.toLong().apply(inst.op, rhsConst.value.toLong());
