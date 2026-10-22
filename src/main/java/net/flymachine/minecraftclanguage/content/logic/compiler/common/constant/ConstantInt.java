@@ -101,7 +101,7 @@ public record ConstantInt(int value) implements IntegerConstant {
             }
             case MODULO, BITWISE_AND, BITWISE_OR, BITWISE_XOR -> {
                 if (rhsType.isInteger()) {
-                    if (lhsType.isCompatible(rhsType)) {
+                    if (!lhsType.isCompatible(rhsType)) {
                         throw new UnsupportedOperationException("Cast to their common real type first");
                     }
                     yield apply(op, (ConstantInt) rhs);
