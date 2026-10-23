@@ -160,11 +160,10 @@ public final class AstToTacLowerer implements
                 if (initDecl.init != null) {
                     Type t = initDecl.finalType.getType();
                     String name = initDecl.id.name;
-                    if (t.isAggregate() || t.isUnion()) {
-                        initializeBlockScopeObject(name, t, initDecl.init, 0);
+                    if (initDecl.init instanceof SingleInitializerNode singleInit) {
+                        emitTacCopy(evalAndLvalueConvert(singleInit.exp), new TacVariable(name));
                     } else {
-                        emitTacCopy(
-                            evalAndLvalueConvert(((SingleInitializerNode) initDecl.init).exp), new TacVariable(name));
+                        initializeBlockScopeObject(name, t, initDecl.init, 0);
                     }
                 }
             }
