@@ -1,7 +1,10 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.algorithm.simple;
 
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.TacVisitor;
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.inst.*;
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.operand.TacAddressDescriptor;
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.operand.TacConstant;
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.operand.TacValue;
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.operand.TacVariable;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.algorithm.common.FunctionContext;
@@ -20,9 +23,11 @@ public final class CopyPropagation implements SimpleTraversalPass, TacVisitor<Bo
     private final BitSet scratchUse = new BitSet();
     private final BitSet scratchDef = new BitSet();
     private CopyInterner interner;
+    private FunctionContext ctx;
 
     @Override
     public boolean runOn(FunctionContext ctx) {
+        this.ctx = ctx;
         ReachingCopiesResult rc = ReachingCopiesAnalysis.analyze(ctx);
         interner = rc.interner();
         if (interner.size() == 0) {
@@ -77,10 +82,43 @@ public final class CopyPropagation implements SimpleTraversalPass, TacVisitor<Bo
                 CopyInterner.CopyKey copy = interner.copyOf(copyIdx);
                 // 递归替换，加快迭代速度
                 changed = true;
+                Type targetType = ctx.symbolTable().get(var.name).type;
                 operand = rewriteOperand(copy.src());
+                if (operand instanceof TacConstant constant) {
+                    // 避免常量折叠出现类型错误
+                    constant.value = constant.value.castTo(targetType);
+                }
             }
         }
         return operand;
+    }
+
+    private TacAddressDescriptor rewriteDescriptor(TacAddressDescriptor addr) {
+        TacValue base = rewriteOperand(addr.base());
+        TacValue index = addr.index() != null ? rewriteOperand(addr.index()) : null;
+        if (base != addr.base() || index != addr.index()) {
+            return new TacAddressDescriptor(base, index, addr.scale(), addr.offset()).fold();
+        }
+        return addr;
+    }
+
+
+    private String rewriteAggregate(String aggregate) {
+        BitSet reachingCopies = (BitSet) state.clone();
+        // 到达此处的，以 var 为 dst 的复制指令集合
+        reachingCopies.and(interner.defCopies(aggregate));
+        if (!reachingCopies.isEmpty()) {
+            if (reachingCopies.cardinality() > 1) {
+                throw new IllegalStateException(
+                    "multiple reaching copies for variable " + aggregate + ": " + reachingCopies);
+            }
+            int copyIdx = reachingCopies.nextSetBit(0);
+            CopyInterner.CopyKey copy = interner.copyOf(copyIdx);
+            // 递归替换，加快迭代速度
+            changed = true;
+            aggregate = rewriteAggregate(((TacVariable) copy.src()).name);
+        }
+        return aggregate;
     }
 
     @Override
@@ -170,66 +208,88 @@ public final class CopyPropagation implements SimpleTraversalPass, TacVisitor<Bo
 
     @Override
     public Boolean visit(TacSignExtend inst) {
+        inst.src = rewriteOperand(inst.src);
         return false;
     }
 
     @Override
     public Boolean visit(TacTruncate inst) {
+        inst.src = rewriteOperand(inst.src);
         return false;
     }
 
     @Override
     public Boolean visit(TacZeroExtend inst) {
+        inst.src = rewriteOperand(inst.src);
         return false;
     }
 
     @Override
     public Boolean visit(TacDoubleToInt inst) {
+        inst.src = rewriteOperand(inst.src);
         return false;
     }
 
     @Override
     public Boolean visit(TacDoubleToUnsignedInt inst) {
+        inst.src = rewriteOperand(inst.src);
         return false;
     }
 
     @Override
     public Boolean visit(TacIntToDouble inst) {
+        inst.src = rewriteOperand(inst.src);
         return false;
     }
 
     @Override
     public Boolean visit(TacUnsignedIntToDouble inst) {
+        inst.src = rewriteOperand(inst.src);
         return false;
     }
 
     @Override
     public Boolean visit(TacGetAddress inst) {
+        // 例外，不处理
         return false;
     }
 
     @Override
     public Boolean visit(TacLoad inst) {
+        inst.srcAddr = rewriteDescriptor(inst.srcAddr);
         return false;
     }
 
     @Override
     public Boolean visit(TacStore inst) {
+        inst.dstAddr = rewriteDescriptor(inst.dstAddr);
+        inst.src = rewriteOperand(inst.src);
         return false;
     }
 
     @Override
     public Boolean visit(TacAddPointer inst) {
+        inst.ptr = rewriteOperand(inst.ptr);
+        inst.index = rewriteOperand(inst.index);
         return false;
     }
 
     @Override
     public Boolean visit(TacCopyToOffset inst) {
+        inst.src = rewriteOperand(inst.src);
         return false;
     }
 
     @Override
     public Boolean visit(TacIndirectCall inst) {
+        for (int i = 0; i < inst.args.size(); i++) {
+            TacValue arg = inst.args.get(i);
+            TacValue newArg = rewriteOperand(arg);
+            if (newArg != arg) {
+                inst.args.set(i, newArg);
+            }
+        }
+        inst.funcPtr = rewriteOperand(inst.funcPtr);
         return false;
     }
 
@@ -240,6 +300,7 @@ public final class CopyPropagation implements SimpleTraversalPass, TacVisitor<Bo
 
     @Override
     public Boolean visit(TacCopyFromOffset inst) {
+        inst.src = rewriteAggregate(inst.src);
         return false;
     }
 }

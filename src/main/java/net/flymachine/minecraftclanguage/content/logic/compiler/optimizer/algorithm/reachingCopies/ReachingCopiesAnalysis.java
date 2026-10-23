@@ -1,13 +1,15 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.algorithm.reachingCopies;
 
-import net.flymachine.minecraftclanguage.content.logic.compiler.ir.inst.TacCopy;
-import net.flymachine.minecraftclanguage.content.logic.compiler.ir.inst.TacInstruction;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.BasicType;
+import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
+import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.SymbolTable;
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.inst.*;
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.operand.TacValue;
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.operand.TacVariable;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.algorithm.common.FunctionContext;
-import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.algorithm.liveness.LivenessAnalysis;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.cfg.ControlFlowGraph;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.cfg.node.BasicBlock;
+import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.util.TacUtil;
 
 import java.util.BitSet;
 
@@ -81,16 +83,28 @@ public final class ReachingCopiesAnalysis {
                 }
             }
         }
-
         return new ReachingCopiesResult(inB, outB, interner);
+    }
 
+    private static boolean isAllowedCopy(SymbolTable symbolTable, TacCopy copy) {
+        // 我们会使用 TacCopy 来进行相同长度的、类型不同的整数/指针之间的类型转换
+        // 若两个整数类型的符号不同，我们就认为这条 TacCopy 是一条类型转换指令，排除在到达复制分析之外
+        Type srcType = TacUtil.getType(symbolTable, copy.src);
+        Type dstType = TacUtil.getType(symbolTable, copy.dst);
+        if (srcType.isCompatible(dstType)) {
+            return true;
+        }
+        assert srcType.isScalar() && dstType.isScalar() : "Only allow scalar type conversion";
+        boolean lhsSignedness = !srcType.isPointer() && ((BasicType) srcType).isSigned();
+        boolean rhsSignedness = !dstType.isPointer() && ((BasicType) dstType).isSigned();
+        return lhsSignedness == rhsSignedness;
     }
 
     private static CopyInterner makeCopyInterner(FunctionContext ctx) {
         CopyInterner interner = new CopyInterner();
         for (BasicBlock block : ctx.cfg().blocks()) {
             for (TacInstruction inst : block.instructions()) {
-                if (inst instanceof TacCopy copy) {
+                if (inst instanceof TacCopy copy && isAllowedCopy(ctx.symbolTable(), copy)) {
                     TacVariable dst = (TacVariable) copy.dst;
                     if (isSelfCopy(dst.name, copy.src)) {
                         // 跳过 x = x
@@ -137,7 +151,7 @@ public final class ReachingCopiesAnalysis {
                 }
                 scratchUse.clear();
                 scratchDef.clear();
-                LivenessAnalysis.collectUseDef(ctx, inst, scratchUse, scratchDef);
+                collectUseDef(ctx, inst, scratchUse, scratchDef);
                 blockDef.or(scratchDef);
             }
 
@@ -155,7 +169,7 @@ public final class ReachingCopiesAnalysis {
     public static void transferOne(FunctionContext ctx, CopyInterner interner,
         TacInstruction inst, BitSet state, BitSet scratchUse, BitSet scratchDef) {
 
-        if (inst instanceof TacCopy copy) {
+        if (inst instanceof TacCopy copy && isAllowedCopy(ctx.symbolTable(), copy)) {
             TacVariable dst = (TacVariable) copy.dst;
             if (isSelfCopy(dst.name, copy.src)) {
                 return;
@@ -169,13 +183,30 @@ public final class ReachingCopiesAnalysis {
 
         scratchUse.clear();
         scratchDef.clear();
-        LivenessAnalysis.collectUseDef(ctx, inst, scratchUse, scratchDef);
+        collectUseDef(ctx, inst, scratchUse, scratchDef);
         // 使用其 def 计算 kill，kill 所有与 def 相关的复制指令
         for (int i = scratchDef.nextSetBit(0); i >= 0; i = scratchDef.nextSetBit(i + 1)) {
             state.andNot(interner.relatedCopies(ctx.interner().nameOf(i)));
             if (i == Integer.MAX_VALUE) {
                 break;
             }
+        }
+    }
+
+    public static void collectUseDef(FunctionContext ctx, TacInstruction inst, BitSet useSet, BitSet defSet) {
+        ctx.collector().collect(inst, useSet, defSet);
+        if (inst instanceof TacDirectCall || inst instanceof TacIndirectCall) {
+            // 函数调用可能会写静态变量、通过指针访问等
+            defSet.or(ctx.memoryEscapedVars());
+        } else if (inst instanceof TacStore) {
+            // 写入内存可能会写静态变量、通过指针访问等
+            defSet.or(ctx.memoryEscapedVars());
+        } else if (inst instanceof TacCopyToOffset aggregateCopy) {
+            // 写入聚合类型的一部分，即更新了整个聚合体
+            defSet.set(ctx.interner().intern(aggregateCopy.dst));
+        } else if (inst instanceof TacCopyByteArrayToOffset aggregateCopy) {
+            // 写入聚合类型的一部分，即更新了整个聚合体
+            defSet.set(ctx.interner().intern(aggregateCopy.dst));
         }
     }
 }
