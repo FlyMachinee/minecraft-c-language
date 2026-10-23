@@ -33,6 +33,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.ir.topLevel.TacF
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.topLevel.TacStaticConstant;
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.topLevel.TacStaticVariable;
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.topLevel.TacTopLevel;
+import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.util.TacUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -1082,18 +1083,7 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
     }
 
     private Type getType(TacValue tacValue) {
-        if (tacValue instanceof TacConstant tacConstant) {
-            return tacConstant.value.getType();
-        } else if (tacValue instanceof TacVariable tacVariable) {
-            SymbolTable.Entry entry = symbolTable.get(tacVariable.name);
-            if (entry.attr instanceof SymbolTable.Entry.AutoAttr autoAttr && autoAttr.passByReference) {
-                // 通过引用传递的大结构体/联合体
-                assert entry.type.isRecord() && entry.type.sizeof() > 16;
-                return new PointerType(entry.type);
-            }
-            return entry.type;
-        }
-        throw new UnsupportedOperationException("Unsupported value type: " + tacValue.getClass().getSimpleName());
+        return TacUtil.getType(symbolTable, tacValue);
     }
 
     private sealed interface AddrSpec {
