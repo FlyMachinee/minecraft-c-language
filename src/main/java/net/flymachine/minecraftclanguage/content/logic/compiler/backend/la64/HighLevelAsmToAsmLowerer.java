@@ -495,8 +495,8 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
         if (op == Comparison.LESS && rhs instanceof Immediate imm && BitMath.isSi12(imm.value())) {
             GeneralPurposeRegister srcReg = (GeneralPurposeRegister) loadOperand(asmType, lhs, T0, T0);
             GeneralPurposeRegister dstReg = (GeneralPurposeRegister) calcDestination(dst, T0);
-            // slti rd, rj, si12
-            emitInst("slti", dstReg, srcReg, new LA64AsmImmOperand((int) imm.value()));
+            // slti/sltui rd, rj, si12
+            emitInst(isUnsigned ? "sltui" : "slti", dstReg, srcReg, new LA64AsmImmOperand((int) imm.value()));
             storeToDest(AsmType.WORD, dstReg, dst, T1);
             return null;
         }
