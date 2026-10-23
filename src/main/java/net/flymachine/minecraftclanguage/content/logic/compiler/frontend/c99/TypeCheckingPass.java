@@ -289,6 +289,11 @@ public final class TypeCheckingPass implements AstVisitor<Void> {
                     reporter.error(node.op.wholeLoc, msg);
                     yield ErrorType.INSTANCE;
                 }
+                // 这里我们也对 ! 的操作数进行整数提升
+                Type operandType = node.exp.expType;
+                if (operandType.isCharacter()) {
+                    node.exp = convertTo(node.exp, BasicType.INT);
+                }
                 yield BasicType.INT;
             }
         };
