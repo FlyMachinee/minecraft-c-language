@@ -1,9 +1,6 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.algorithm.liveness;
 
-import net.flymachine.minecraftclanguage.content.logic.compiler.ir.inst.TacDirectCall;
-import net.flymachine.minecraftclanguage.content.logic.compiler.ir.inst.TacIndirectCall;
-import net.flymachine.minecraftclanguage.content.logic.compiler.ir.inst.TacInstruction;
-import net.flymachine.minecraftclanguage.content.logic.compiler.ir.inst.TacLoad;
+import net.flymachine.minecraftclanguage.content.logic.compiler.ir.inst.*;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.algorithm.common.FunctionContext;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.cfg.ControlFlowGraph;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.cfg.node.BasicBlock;
@@ -110,12 +107,14 @@ public final class LivenessAnalysis {
     public static void collectUseDef(FunctionContext ctx, TacInstruction inst, BitSet useSet, BitSet defSet) {
         ctx.collector().collect(inst, useSet, defSet);
         if (inst instanceof TacDirectCall || inst instanceof TacIndirectCall) {
-            // 函数调用可能会读写静态变量、通过指针访问等
+            // 函数调用可能会读静态变量、通过指针访问等
             useSet.or(ctx.memoryEscapedVars());
-            defSet.or(ctx.memoryEscapedVars());
         } else if (inst instanceof TacLoad) {
             // 读取内存可能会读静态变量、通过指针访问等
             useSet.or(ctx.memoryEscapedVars());
+        } else if (inst instanceof TacCopyFromOffset aggregateCopy) {
+            // 读取聚合类型的一部分，即使用了整个聚合体
+            useSet.set(ctx.interner().intern(aggregateCopy.src));
         }
     }
 

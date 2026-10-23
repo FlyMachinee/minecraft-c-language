@@ -106,6 +106,7 @@ public final class UseDefCollector implements TacVisitor<Void> {
 
     @Override
     public Void visit(TacDirectCall inst) {
+        // 在具体分析中考虑对静态变量和被取地址变量
         for (TacValue arg : inst.args) {
             use(arg);
         }
@@ -172,6 +173,7 @@ public final class UseDefCollector implements TacVisitor<Void> {
 
     @Override
     public Void visit(TacLoad inst) {
+        // 在具体分析中考虑对静态变量和被取地址变量
         use(inst.srcAddr);
         def(inst.dst);
         return null;
@@ -179,6 +181,7 @@ public final class UseDefCollector implements TacVisitor<Void> {
 
     @Override
     public Void visit(TacStore inst) {
+        // 在具体分析中考虑对静态变量和被取地址变量
         use(inst.src);
         use(inst.dstAddr);
         return null;
@@ -194,6 +197,7 @@ public final class UseDefCollector implements TacVisitor<Void> {
 
     @Override
     public Void visit(TacIndirectCall inst) {
+        // 在具体分析中考虑对静态变量和被取地址变量
         use(inst.funcPtr);
         for (TacValue arg : inst.args) {
             use(arg);
@@ -206,18 +210,20 @@ public final class UseDefCollector implements TacVisitor<Void> {
 
     @Override
     public Void visit(TacCopyToOffset inst) {
+        // 在具体分析中考虑 dst
         use(inst.src);
         return null;
     }
 
     @Override
     public Void visit(TacCopyByteArrayToOffset inst) {
+        // 在具体分析中考虑 dst
         return null;
     }
 
     @Override
     public Void visit(TacCopyFromOffset inst) {
-        useSet.set(interner.intern(inst.src));
+        // 在具体分析中考虑 src
         def(inst.dst);
         return null;
     }
