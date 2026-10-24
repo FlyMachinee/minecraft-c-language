@@ -6,6 +6,9 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.Sym
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.inst.*;
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.operand.TacValue;
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.operand.TacVariable;
+import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.algorithm.abstraction.DataFlowProblem;
+import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.algorithm.abstraction.DataFlowResult;
+import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.algorithm.abstraction.DataFlowSolver;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.algorithm.common.FunctionContext;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.cfg.ControlFlowGraph;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.cfg.node.BasicBlock;
@@ -21,6 +24,9 @@ import java.util.BitSet;
  */
 public final class ReachingCopiesAnalysis {
 
+    private BitSet[] genB;
+    private BitSet[] killB;
+
     private ReachingCopiesAnalysis() { }
 
     public static ReachingCopiesResult analyze(FunctionContext ctx) {
@@ -33,57 +39,47 @@ public final class ReachingCopiesAnalysis {
 
         ControlFlowGraph cfg = ctx.cfg();
         int slotCount = cfg.slotCount();
-        BitSet[] genB = new BitSet[slotCount];
-        BitSet[] killB = new BitSet[slotCount];
-        BitSet[] inB = new BitSet[slotCount];
-        BitSet[] outB = new BitSet[slotCount];
+        this.genB = new BitSet[slotCount];
+        this.killB = new BitSet[slotCount];
         for (int i = 0; i < slotCount; i++) {
             genB[i] = new BitSet(n);
             killB[i] = new BitSet(n);
-            inB[i] = new BitSet(n);
-            outB[i] = new BitSet(n);
         }
-
         computeBlockGenKill(ctx, interner, genB, killB);
 
-        for (BasicBlock block : ctx.cfg().blocks()) {
-            outB[block.id()].set(0, n);
+        DataFlowProblem problem = new ReachingCopiesProblem(cfg);
+        DataFlowResult result = DataFlowSolver.solve(problem, cfg, n);
+        return new ReachingCopiesResult(result.befores(), result.afters(), interner);
+    }
+
+    private final class ReachingCopiesProblem implements DataFlowProblem {
+        private final ControlFlowGraph cfg;
+
+        ReachingCopiesProblem(ControlFlowGraph cfg) {
+            this.cfg = cfg;
         }
 
-        int guardLimit = Math.max(1, cfg.blocks().size()) * (n + 1);
-        int guard = 0;
-        boolean changed = true;
-        while (changed) {
-            if (++guard > guardLimit) {
-                throw new IllegalStateException("reaching copies analysis did not converge");
-            }
-            changed = false;
+        @Override
+        public Direction direction() { return Direction.FORWARD; }
 
-            for (BasicBlock block : ctx.cfg().blocks()) {
-                int id = block.id();
+        @Override
+        public Meet meet() { return Meet.INTERSECTION; }
 
-                // in[B] = ∩ out[P]
-                BitSet in = inB[id];
-                in.clear();
-                in.set(0, n);
-                for (int predId : block.predecessors()) {
-                    in.and(outB[predId]);
-                }
+        @Override
+        public BitSet transfer(int blockId, BitSet before) {
+            // after = gen ∪ (before − kill)
+            BitSet tmp = (BitSet) before.clone();
+            tmp.andNot(killB[blockId]);
+            tmp.or(genB[blockId]);
+            return tmp;
+        }
 
-                // out[B] = gen ∪ (in[B] − kill)
-                BitSet out = outB[id];
-                BitSet next = (BitSet) in.clone();
-                next.andNot(killB[id]);
-                next.or(genB[id]);
-
-                if (!next.equals(out)) {
-                    out.clear();
-                    out.or(next);
-                    changed = true;
-                }
+        @Override
+        public void init(BitSet[] afters, int n) {
+            for (BasicBlock block : cfg.blocks()) {
+                afters[block.id()].set(0, n);
             }
         }
-        return new ReachingCopiesResult(inB, outB, interner);
     }
 
     private static boolean isAllowedCopy(SymbolTable symbolTable, TacCopy copy) {

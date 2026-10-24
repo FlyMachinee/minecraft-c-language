@@ -1,6 +1,9 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.algorithm.liveness;
 
 import net.flymachine.minecraftclanguage.content.logic.compiler.ir.inst.*;
+import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.algorithm.abstraction.DataFlowProblem;
+import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.algorithm.abstraction.DataFlowResult;
+import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.algorithm.abstraction.DataFlowSolver;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.algorithm.common.FunctionContext;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.cfg.ControlFlowGraph;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.cfg.node.BasicBlock;
@@ -19,6 +22,8 @@ public final class LivenessAnalysis {
 
     private final BitSet scratchUse = new BitSet();
     private final BitSet scratchDef = new BitSet();
+    private BitSet[] useB;
+    private BitSet[] defB;
 
     private LivenessAnalysis() { }
 
@@ -29,58 +34,49 @@ public final class LivenessAnalysis {
     private LivenessResult run(FunctionContext ctx) {
         ControlFlowGraph cfg = ctx.cfg();
         int slotCount = cfg.slotCount();
-        BitSet[] useB = new BitSet[slotCount];
-        BitSet[] defB = new BitSet[slotCount];
-        BitSet[] inB = new BitSet[slotCount];
-        BitSet[] outB = new BitSet[slotCount];
+        this.useB = new BitSet[slotCount];
+        this.defB = new BitSet[slotCount];
         for (int i = 0; i < slotCount; i++) {
             useB[i] = new BitSet();
             defB[i] = new BitSet();
-            inB[i] = new BitSet();
-            outB[i] = new BitSet();
         }
-
-        // 函数出口处静态变量仍然活跃：调用者之后可能读取它们
-        inB[cfg.exit().id()] = ctx.staticVars();
 
         computeBlockUseDef(ctx, useB, defB);
+        ctx.staticVars();
+        int n = ctx.interner().size();
 
-        int guardLimit = Math.max(1, cfg.blocks().size()) * 64;
-        int guard = 0;
-        boolean changed = true;
-        while (changed) {
-            if (++guard > guardLimit) {
-                throw new IllegalStateException("liveness analysis did not converge");
-            }
-            changed = false;
+        DataFlowProblem problem = new LivenessProblem(ctx);
+        DataFlowResult result = DataFlowSolver.solve(problem, cfg, n);
+        return new LivenessResult(result.afters(), result.befores());
+    }
 
-            for (int i = cfg.blocks().size() - 1; i >= 0; i--) {
-                BasicBlock block = cfg.blocks().get(i);
-                int id = block.id();
+    private final class LivenessProblem implements DataFlowProblem {
+        private final FunctionContext ctx;
 
-                // out[B] = ∪ in[S] (S ∈ successors(B))
-                BitSet out = outB[id];
-                out.clear();
-                for (int successorId : block.successors()) {
-                    out.or(inB[successorId]);
-                }
-
-                // in[B] = use[B] ∪ (out[B] − def[B])
-                BitSet in = inB[id];
-                BitSet killed = (BitSet) out.clone();
-                killed.andNot(defB[id]);
-                BitSet next = (BitSet) useB[id].clone();
-                next.or(killed);
-
-                if (!next.equals(in)) {
-                    in.clear();
-                    in.or(next);
-                    changed = true;
-                }
-            }
+        LivenessProblem(FunctionContext ctx) {
+            this.ctx = ctx;
         }
 
-        return new LivenessResult(inB, outB);
+        @Override
+        public Direction direction() { return Direction.BACKWARD; }
+
+        @Override
+        public Meet meet() { return Meet.UNION; }
+
+        @Override
+        public BitSet transfer(int blockId, BitSet before) {
+            // after = use ∪ (before − def)
+            BitSet tmp = (BitSet) before.clone();
+            tmp.andNot(defB[blockId]);
+            tmp.or(useB[blockId]);
+            return tmp;
+        }
+
+        @Override
+        public void init(BitSet[] afters, int n) {
+            // 函数出口处静态变量活跃
+            afters[ctx.cfg().exit().id()].or(ctx.staticVars());
+        }
     }
 
     private void computeBlockUseDef(FunctionContext ctx, BitSet[] useB, BitSet[] defB) {
