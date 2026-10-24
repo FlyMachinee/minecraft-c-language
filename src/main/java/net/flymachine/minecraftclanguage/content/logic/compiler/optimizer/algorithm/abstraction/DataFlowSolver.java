@@ -1,18 +1,15 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.algorithm.abstraction;
 
-import it.unimi.dsi.fastutil.ints.Int2IntArrayMap;
 import it.unimi.dsi.fastutil.ints.Int2IntMap;
-import it.unimi.dsi.fastutil.ints.IntArraySet;
+import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
+import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.cfg.ControlFlowGraph;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.cfg.node.BasicBlock;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.cfg.node.EntryNode;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.cfg.node.ExitNode;
 import net.flymachine.minecraftclanguage.content.logic.compiler.optimizer.cfg.node.GraphNode;
 
-import java.util.BitSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Stack;
+import java.util.*;
 
 public final class DataFlowSolver {
     private DataFlowSolver() { }
@@ -28,39 +25,55 @@ public final class DataFlowSolver {
 
         problem.init(afters, n);
 
-        List<BasicBlock> order = (switch (problem.direction()) {
+        Int2IntOpenHashMap rank = switch (problem.direction()) {
             case FORWARD -> reversedPostorderRank(cfg);
             case BACKWARD -> postorderRank(cfg);
-        }).int2IntEntrySet().stream()
-          .sorted(Map.Entry.comparingByValue())
-          .map(entry -> (BasicBlock) cfg.requireNode(entry.getIntKey()))
-          .toList();
+        };
+
+        PriorityQueue<BasicBlock> worklist = new PriorityQueue<>(Comparator.comparingInt(a -> rank.get(a.id())));
+        IntOpenHashSet inList = new IntOpenHashSet(slotCount);
+
+        for (Int2IntMap.Entry entry : rank.int2IntEntrySet()) {
+            BasicBlock block = (BasicBlock) cfg.requireNode(entry.getIntKey());
+            worklist.add(block);
+            inList.add(entry.getIntKey());
+        }
 
         int guard = 0;
-        int guardLimit = Math.max(1, order.size()) * Math.max(64, n + 1);
-        boolean changed = true;
+        int guardLimit = Math.max(1, slotCount) * Math.max(64, n + 1);
 
-        while (changed) {
+        while (!worklist.isEmpty()) {
             if (++guard > guardLimit) {
                 throw new IllegalStateException("data flow analysis did not converge");
             }
-            changed = false;
 
-            for (BasicBlock block : order) {
-                int id = block.id();
-                List<Integer> toMeet = switch (problem.direction()) {
-                    case FORWARD -> block.predecessors();
-                    case BACKWARD -> block.successors();
+            BasicBlock block = worklist.poll();
+            int id = block.id();
+            inList.remove(id);
+
+            List<Integer> toMeet = switch (problem.direction()) {
+                case FORWARD -> block.predecessors();
+                case BACKWARD -> block.successors();
+            };
+
+            BitSet before = befores[id];
+            meet(problem, afters, toMeet, n, before);
+
+            BitSet after = problem.transfer(id, before);
+            if (!after.equals(afters[id])) {
+                afters[id].clear();
+                afters[id].or(after);
+
+                List<Integer> toUpdate = switch (problem.direction()) {
+                    case FORWARD -> block.successors();
+                    case BACKWARD -> block.predecessors();
                 };
-
-                BitSet before = befores[id];
-                meet(problem, afters, toMeet, n, before);
-
-                BitSet after = problem.transfer(id, before);
-                if (!after.equals(afters[id])) {
-                    afters[id].clear();
-                    afters[id].or(after);
-                    changed = true;
+                for (int neighborId : toUpdate) {
+                    GraphNode node = cfg.requireNode(neighborId);
+                    if (node instanceof BasicBlock bb && rank.containsKey(neighborId) && !inList.contains(neighborId)) {
+                        worklist.add(bb);
+                        inList.add(neighborId);
+                    }
                 }
             }
         }
@@ -81,14 +94,14 @@ public final class DataFlowSolver {
         }
     }
 
-    private static Int2IntArrayMap postorderRank(ControlFlowGraph cfg) {
-        Int2IntArrayMap postOrderRank = new Int2IntArrayMap(cfg.slotCount());
-        IntArraySet visited = new IntArraySet(cfg.slotCount());
-        Stack<Integer> stack = new Stack<>();
+    private static Int2IntOpenHashMap postorderRank(ControlFlowGraph cfg) {
+        Int2IntOpenHashMap postOrderRank = new Int2IntOpenHashMap(cfg.slotCount());
+        IntOpenHashSet visited = new IntOpenHashSet(cfg.slotCount());
+        Deque<Integer> stack = new ArrayDeque<>();
         stack.push(cfg.entry().id());
         int rank = 0;
 
-        while (!stack.empty()) {
+        while (!stack.isEmpty()) {
             int x = stack.pop();
             if (x < 0) {
                 // 第二次遍历
@@ -128,11 +141,11 @@ public final class DataFlowSolver {
         return postOrderRank;
     }
 
-    private static Int2IntArrayMap reversedPostorderRank(ControlFlowGraph cfg) {
-        Int2IntArrayMap postOrderRank = postorderRank(cfg);
+    private static Int2IntOpenHashMap reversedPostorderRank(ControlFlowGraph cfg) {
+        Int2IntOpenHashMap postOrderRank = postorderRank(cfg);
         int size = postOrderRank.size();
-        for (Int2IntMap.Entry entry : postOrderRank.int2IntEntrySet()) {
-            postOrderRank.put(entry.getIntKey(), size - 1 - entry.getIntKey());
+        for (int key : postOrderRank.keySet()) {
+            postOrderRank.put(key, size - 1 - postOrderRank.get(key));
         }
         return postOrderRank;
     }
