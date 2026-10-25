@@ -178,18 +178,27 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
         long size = function.getStackFrameSize();
         // 申请栈空间
         lowerBinary(Binary.Operator.ADD, AsmType.DWORD, SP, new Immediate(-size), SP);
-        // 保存 ra 与 fp
-        lowerStore(AsmType.DWORD, RA, SP, new Immediate(size - 8));
-        lowerStore(AsmType.DWORD, FP, SP, new Immediate(size - 16));
+
+        long offset = function.returnBigStruct ? -8 : 0;
+        // 保存被调用者保存寄存器
+        for (LA64Register reg : function.savedRegisters) {
+            offset -= 8;
+            AsmType asmType = reg instanceof FloatingPointRegister ? AsmType.DOUBLE : AsmType.DWORD;
+            lowerStore(asmType, (HighLevelOperand) reg, SP, new Immediate(size + offset));
+        }
         // 设置新的 fp
         lowerBinary(Binary.Operator.ADD, AsmType.DWORD, SP, new Immediate(size), FP);
     }
 
     private void generateEpilogue(HighLevelFunction function) {
         long size = function.getStackFrameSize();
-        // 恢复 ra 与 fp
-        lowerLoad(AsmType.DWORD, SP, new Immediate(size - 8), RA);
-        lowerLoad(AsmType.DWORD, SP, new Immediate(size - 16), FP);
+        long offset = function.returnBigStruct ? -8 : 0;
+        // 恢复被调用者保存寄存器
+        for (LA64Register reg : function.savedRegisters) {
+            offset -= 8;
+            AsmType asmType = reg instanceof FloatingPointRegister ? AsmType.DOUBLE : AsmType.DWORD;
+            lowerLoad(asmType, SP, new Immediate(size + offset), (HighLevelOperand) reg);
+        }
         // 释放栈空间
         lowerBinary(Binary.Operator.ADD, AsmType.DWORD, SP, new Immediate(size), SP);
         // 返回

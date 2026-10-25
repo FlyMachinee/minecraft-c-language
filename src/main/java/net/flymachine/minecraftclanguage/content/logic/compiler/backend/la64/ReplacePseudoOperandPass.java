@@ -24,7 +24,6 @@ public final class ReplacePseudoOperandPass implements HighLevelVisitor<Void> {
     private long stackOffset;
 
     // 记录每个伪寄存器对应栈上内存偏移量
-    // TODO: 暂时将所有伪寄存器都放在栈上
     private final Map<String, Long> nameToOffset = new HashMap<>();
 
     public void runOnProgram(HighLevelProgram program) {
@@ -36,15 +35,12 @@ public final class ReplacePseudoOperandPass implements HighLevelVisitor<Void> {
     }
 
     private void runOnFunction(HighLevelFunction function) {
-        stackOffset = -function.savedRegisters * 8;
-        BackendSymbolTable.Entry entry = backendSymbolTable.get(function.name);
-        if (((BackendSymbolTable.FuncEntry) entry).returnOnStack()) {
-            stackOffset -= 8; // 保存返回结构体的地址处 fp-24
-        }
+        long usedSize = function.savedRegisters.size() * 8L + (function.returnBigStruct ? 8 : 0);
+        stackOffset = -usedSize;
         for (HighLevelInstruction inst : function.insts) {
             inst.accept(this);
         }
-        function.variableSize = -stackOffset - function.savedRegisters * 8;
+        function.variableSize = -stackOffset - usedSize;
     }
 
     @Override

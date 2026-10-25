@@ -135,11 +135,13 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
         FunctionType funcType = (FunctionType) entry.type;
         Signature signature = CallingConvention.allocate(funcType);
 
-        if (signature.ret() instanceof Placement.ByReference) {
+        boolean returnBigStruct = signature.ret() instanceof Placement.ByReference;
+        if (returnBigStruct) {
             // 大结构体/联合体返回，需要在调用者分配空间，并传递地址给被调用函数
             // 对地址进行保存
+            // 保存在栈帧的第一个位置
             assert funcType.returnType().isRecord() && funcType.returnType().sizeof() > 16;
-            target.add(new Move(AsmType.DWORD, A0, new Memory(FP, -24)));
+            target.add(new Move(AsmType.DWORD, A0, new Memory(FP, -8)));
         }
 
         // 将操作数拷贝至伪操作数
@@ -200,7 +202,8 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
             instruction.accept(this);
         }
         functionSignature = null;
-        HighLevelFunction function = new HighLevelFunction(tacFunction.name, tacFunction.global, target);
+        HighLevelFunction function =
+            new HighLevelFunction(tacFunction.name, tacFunction.global, returnBigStruct, target);
         function.maxCallStackArgSize = maxCallStackArgSize;
         return function;
     }
@@ -222,8 +225,8 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
         if (retPlacement instanceof Placement.ByReference) {
             // 返回大结构体/联合体，将结构体/联合体写回先前调用者传入的地址
             assert retType.isRecord() && retType.sizeof() > 16;
-            // 先前调用者传入的地址在 fp-24 处，按 ABI 要求通过 A0 传回
-            target.add(new Move(AsmType.DWORD, new Memory(FP, -24), A0));
+            // 先前调用者传入的地址在 fp-8 处，按 ABI 要求通过 A0 传回
+            target.add(new Move(AsmType.DWORD, new Memory(FP, -8), A0));
             // 进行写回
             PseudoMemory valMem = (PseudoMemory) val;
             copyBytesMemToMem((AsmType.ByteArray) retType.toAsmType(),

@@ -2,7 +2,10 @@ package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64;
 
 import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.LA64AsmStatement;
 import net.flymachine.minecraftclanguage.content.logic.compiler.CompilerOptions;
+import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.HighLevelFunction;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.HighLevelProgram;
+import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.HighLevelTopLevel;
+import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.registerAllocator.linear.SimpleLinearAllocator;
 import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.C99Frontend;
 
 import java.util.List;
@@ -26,6 +29,15 @@ public final class LA64Backend {
                 backendSymbolTable.dump(System.out);
                 System.out.println("=== Dumping Complete ===");
                 System.out.println();
+            }
+        }
+
+        if (options.optimization().level() != CompilerOptions.OptimizationLevel.O0) {
+            SimpleLinearAllocator allocator = new SimpleLinearAllocator();
+            for (HighLevelTopLevel topLevel : highLevelProgram.topLevels) {
+                if (topLevel instanceof HighLevelFunction func) {
+                    allocator.allocate(func);
+                }
             }
         }
 

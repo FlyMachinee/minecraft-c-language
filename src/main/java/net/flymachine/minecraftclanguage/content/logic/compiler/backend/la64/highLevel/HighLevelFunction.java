@@ -1,9 +1,12 @@
 package net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel;
 
+import net.flymachine.minecraftclanguage.content.logic.architecture.la64.register.GeneralPurposeRegister;
+import net.flymachine.minecraftclanguage.content.logic.architecture.la64.register.LA64Register;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.instruction.HighLevelInstruction;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.instruction.Label;
 
 import java.io.PrintStream;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -11,8 +14,10 @@ import java.util.List;
  * |      参数..      |
  * |      参数9       |   <- fp
  * |-----------------|
+ * |  返回大结构体地址  |   <- fp-8 ?
  * |     保存的ra     |   <- fp-8
  * |     保存的fp     |   <- fp-16
+ * | 被调用者保存寄存器  |   <- fp-24
  * |   局部、临时变量   |
  * |     padding     |
  * |     参数...      |   <- sp+..
@@ -38,9 +43,14 @@ public class HighLevelFunction implements HighLevelTopLevel {
     public final boolean useFp = true;
 
     /**
-     * 保存寄存器的数量，目前为 $ra 和 $fp
+     * 函数返回大结构体，其返回结构体的地址保存在 fp-8 处
      */
-    public final int savedRegisters = 2;
+    public final boolean returnBigStruct;
+
+    /**
+     * 保存的寄存器，默认为 $ra 和 $fp
+     */
+    public final List<LA64Register> savedRegisters = new ArrayList<>();
 
     /**
      * 栈帧中用于存放临时变量、局部变量、形参所使用的栈帧大小
@@ -49,19 +59,20 @@ public class HighLevelFunction implements HighLevelTopLevel {
 
     /**
      * 该函数的所有函数调用中，参数所占用的栈空间的最大大小值
-     * <p>
-     * 参数顺序 a0 -> a1 -> ... -> a7 -> [0(sp) -> 8(sp) -> ...]
      */
     public long maxCallStackArgSize = 0;
 
-    public HighLevelFunction(String name, boolean global, List<HighLevelInstruction> insts) {
+    public HighLevelFunction(String name, boolean global, boolean returnBigStruct, List<HighLevelInstruction> insts) {
         this.name = name;
         this.global = global;
+        this.returnBigStruct = returnBigStruct;
         this.insts = insts;
+        this.savedRegisters.add(GeneralPurposeRegister.RA);
+        this.savedRegisters.add(GeneralPurposeRegister.FP);
     }
 
     public long getStackFrameSize() {
-        long size = savedRegisters * 8 + variableSize + maxCallStackArgSize;
+        long size = savedRegisters.size() * 8L + (returnBigStruct ? 8L : 0L) + variableSize + maxCallStackArgSize;
         return (size + STACK_ALIGNMENT - 1) & -STACK_ALIGNMENT;
     }
 
