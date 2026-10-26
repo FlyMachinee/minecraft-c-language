@@ -244,7 +244,8 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
 
         // 其他情况：将源加载到临时寄存器，再存储到目标
         // 此时 src 为 Immediate/Stack/Data，dst 为 Stack/Data
-        LA64Register tmp = asmType.equals(AsmType.DOUBLE) ? FT0 : T0;
+        // 优化：由于我们的源是立即数或内存，目标也是内存，从而我们只需要使用通用寄存器即可
+        LA64Register tmp = T0;
         if (src instanceof Immediate srcImm) {
             loadImm(tmp, srcImm, T0);
         } else if (src instanceof Memory srcMem) {
