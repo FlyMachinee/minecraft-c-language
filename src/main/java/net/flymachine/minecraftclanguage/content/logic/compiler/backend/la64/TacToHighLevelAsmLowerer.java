@@ -1003,29 +1003,25 @@ public final class TacToHighLevelAsmLowerer implements TacVisitor<Void> {
     @Override
     public Void visit(TacCopyByteArrayToOffset inst) {
         // 按照 8 -> 4 -> 2 -> 1 的顺序拷贝，要求支持非对齐访问
-        for (int i = 0; i < inst.data.length; ) {
-            if (i + 8 <= inst.data.length) {
-                long value = 0;
-                for (int j = 0; j < 8; j++) {
-                    value |= ((long) (inst.data[i + j] & 0xFF)) << (j * 8);
+        int i = 0;
+        while (i < inst.data.length) {
+            for (int step = 8; step >= 1; step >>= 1) {
+                if (i + step <= inst.data.length) {
+                    long value = 0;
+                    for (int j = 0; j < step; j++) {
+                        value |= ((long) (inst.data[i + j] & 0xFF)) << (j * 8);
+                    }
+                    AsmType asmType = switch (step) {
+                        case 8 -> AsmType.DWORD;
+                        case 4 -> AsmType.WORD;
+                        case 2 -> AsmType.HALF;
+                        case 1 -> AsmType.BYTE;
+                        default -> throw new IllegalStateException("Unexpected step: " + step);
+                    };
+                    target.add(new Move(asmType, new Immediate(value), new PseudoMemory(inst.dst, inst.offset + i)));
+                    i += step;
+                    break;
                 }
-                target.add(new Move(AsmType.DWORD, new Immediate(value), new PseudoMemory(inst.dst, inst.offset + i)));
-                i += 8;
-            } else if (i + 4 <= inst.data.length) {
-                int value = 0;
-                for (int j = 0; j < 4; j++) {
-                    value |= ((inst.data[i + j] & 0xFF) << (j * 8));
-                }
-                target.add(new Move(AsmType.WORD, new Immediate(value), new PseudoMemory(inst.dst, inst.offset + i)));
-                i += 4;
-            } else if (i + 2 <= inst.data.length) {
-                short value = (short) ((inst.data[i] & 0xFF) | ((inst.data[i + 1] & 0xFF) << 8));
-                target.add(new Move(AsmType.HALF, new Immediate(value), new PseudoMemory(inst.dst, inst.offset + i)));
-                i += 2;
-            } else {
-                byte value = inst.data[i];
-                target.add(new Move(AsmType.BYTE, new Immediate(value), new PseudoMemory(inst.dst, inst.offset + i)));
-                ++i;
             }
         }
         return null;
