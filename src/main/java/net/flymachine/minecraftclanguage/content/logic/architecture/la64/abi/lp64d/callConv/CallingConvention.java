@@ -182,7 +182,7 @@ public final class CallingConvention {
         if (s.farUsed < MAX_FAR) {
             return one(new Slot.FAR(s.farUsed++, AsmType.DOUBLE));
         }
-        return allocateSingleGar(AsmType.DWORD, s);
+        return allocateSingleGar(AsmType.DOUBLE, s);
     }
 
     private static Placement allocateGarPair(State s, int w0, int w1) {
