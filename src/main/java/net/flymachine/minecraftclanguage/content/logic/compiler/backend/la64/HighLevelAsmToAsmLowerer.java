@@ -247,7 +247,11 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
         // 优化：由于我们的源是立即数或内存，目标也是内存，从而我们只需要使用通用寄存器即可
         LA64Register tmp = T0;
         if (src instanceof Immediate srcImm) {
-            loadImm(tmp, srcImm, T0);
+            if (srcImm.value() == 0) {
+                tmp = ZERO;
+            } else {
+                loadImm(tmp, srcImm, T0);
+            }
         } else if (src instanceof Memory srcMem) {
             lowerLoad(asmType, srcMem.gpr(), new Immediate(srcMem.offset()), (HighLevelOperand) tmp);
         } else if (src instanceof Data srcData) {
@@ -1044,6 +1048,9 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
         }
         if (toLoad instanceof Immediate immediate) {
             // 立即数，加载到 fallback 寄存器
+            if (immediate.value() == 0) {
+                return ZERO;
+            }
             loadImm(fallback, immediate, tmp);
             return fallback;
         }
@@ -1105,8 +1112,12 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
         if (dst instanceof GeneralPurposeRegister dstGpr) {
             emitInst("li.d", dstGpr, new LA64AsmImmOperand(imm));
         } else if (dst instanceof FloatingPointRegister dstFpr) {
-            emitInst("li.d", tmp, new LA64AsmImmOperand(imm));
-            lowerRegMove(tmp, dstFpr);
+            if (imm.value() == 0) {
+                lowerRegMove(ZERO, dstFpr);
+            } else {
+                emitInst("li.d", tmp, new LA64AsmImmOperand(imm));
+                lowerRegMove(tmp, dstFpr);
+            }
         } else {
             throw new UnsupportedOperationException("Invalid register: " + dst);
         }
