@@ -10,6 +10,8 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Poin
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.DiagnosticReporter;
 
+import java.io.OutputStream;
+
 public record ConstantSymbolPointer(String symbol, long offset, Type referencedType) implements PointerConstant {
 
     public ConstantSymbolPointer(String symbol, Type referencedType) {
@@ -137,5 +139,10 @@ public record ConstantSymbolPointer(String symbol, long offset, Type referencedT
     @Override
     public boolean isNullPointer() {
         return false;
+    }
+
+    @Override
+    public void writeToStream(OutputStream stream) {
+        throw new UnsupportedOperationException("Cannot determine value in compile time");
     }
 }

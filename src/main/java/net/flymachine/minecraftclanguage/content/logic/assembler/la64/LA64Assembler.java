@@ -17,6 +17,7 @@ import net.flymachine.minecraftclanguage.content.logic.assembler.la64.assembly.o
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.util.EscapeUnescapeHelper;
 import net.flymachine.minecraftclanguage.content.logic.object.*;
 import net.flymachine.minecraftclanguage.content.logic.object.la64.LA64Object;
+import net.flymachine.minecraftclanguage.content.logic.util.LittleEndianHelper;
 
 import java.io.ByteArrayOutputStream;
 import java.util.*;
@@ -986,20 +987,10 @@ public final class LA64Assembler {
     }
 
     private static void writeIntLittleEndian(ByteArrayOutputStream out, int value) {
-        out.write(value & 0xFF);
-        out.write((value >> 8) & 0xFF);
-        out.write((value >> 16) & 0xFF);
-        out.write((value >> 24) & 0xFF);
+        LittleEndianHelper.writeInt(out, value);
     }
 
     private static void writeLongLittleEndian(ByteArrayOutputStream out, long value) {
-        out.write((int) (value & 0xFF));
-        out.write((int) ((value >> 8) & 0xFF));
-        out.write((int) ((value >> 16) & 0xFF));
-        out.write((int) ((value >> 24) & 0xFF));
-        out.write((int) ((value >> 32) & 0xFF));
-        out.write((int) ((value >> 40) & 0xFF));
-        out.write((int) ((value >> 48) & 0xFF));
-        out.write((int) ((value >> 56) & 0xFF));
+        LittleEndianHelper.writeLong(out, value);
     }
 }

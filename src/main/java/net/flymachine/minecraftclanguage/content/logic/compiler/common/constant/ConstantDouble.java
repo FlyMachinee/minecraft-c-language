@@ -9,7 +9,10 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticIni
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.BasicType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.DiagnosticReporter;
+import net.flymachine.minecraftclanguage.content.logic.util.LittleEndianHelper;
 import org.jetbrains.annotations.NotNull;
+
+import java.io.OutputStream;
 
 public record ConstantDouble(double value) implements Constant {
 
@@ -178,6 +181,11 @@ public record ConstantDouble(double value) implements Constant {
     @Override
     public boolean isNullPointer() {
         return false;
+    }
+
+    @Override
+    public void writeToStream(OutputStream stream) {
+        LittleEndianHelper.writeLong(stream, Double.doubleToRawLongBits(value));
     }
 
 }

@@ -15,6 +15,8 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.frontend.c99.ast
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.DiagnosticReporter;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.SourceLocation;
 
+import java.io.OutputStream;
+
 public sealed interface Constant permits ConstantDouble, IntegerConstant, PointerConstant {
 
     ConstantInt toInt();
@@ -97,4 +99,6 @@ public sealed interface Constant permits ConstantDouble, IntegerConstant, Pointe
         node.expType = getType();
         return node;
     }
+
+    void writeToStream(OutputStream stream);
 }

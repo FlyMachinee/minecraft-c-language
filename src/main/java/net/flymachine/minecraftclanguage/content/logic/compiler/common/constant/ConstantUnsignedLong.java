@@ -10,8 +10,10 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Basi
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.util.UndefinedBehaviourUtil;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.DiagnosticReporter;
+import net.flymachine.minecraftclanguage.content.logic.util.LittleEndianHelper;
 import org.jetbrains.annotations.NotNull;
 
+import java.io.OutputStream;
 import java.util.Optional;
 
 public record ConstantUnsignedLong(long value) implements IntegerConstant {
@@ -247,6 +249,11 @@ public record ConstantUnsignedLong(long value) implements IntegerConstant {
     @Override
     public boolean isNullPointer() {
         return value == 0;
+    }
+
+    @Override
+    public void writeToStream(OutputStream stream) {
+        LittleEndianHelper.writeLong(stream, value);
     }
 
     @Override

@@ -39,6 +39,7 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.ir.topLevel.TacT
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.DiagnosticReporter;
 import org.jetbrains.annotations.Nullable;
 
+import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -164,19 +165,60 @@ public final class AstToTacLowerer implements
                         !(singleInit.exp instanceof StringLiteralNode)) {
                         emitTacCopy(evalAndLvalueConvert(singleInit.exp), new TacVariable(name));
                     } else {
-                        initializeBlockScopeObject(name, t, initDecl.init, 0);
+                        ConstantInitInfo initInfo = new ConstantInitInfo();
+                        initializeBlockScopeObject(name, t, initDecl.init, 0, initInfo);
+                        initInfo.flush(name);
                     }
                 }
             }
         }
     }
 
-    private void initializeBlockScopeObject(String target, Type t, InitializerNode init, long offset) {
+    private class ConstantInitInfo {
+        long offset = Long.MIN_VALUE;
+        ByteArrayOutputStream stream = new ByteArrayOutputStream();
+
+        void appendSingle(TacValue value, String target, long offset) {
+            if (!(value instanceof TacConstant constVal)) {
+                flush(target);
+                emitTac(new TacCopyToOffset(value, target, offset));
+                return;
+            }
+            if (this.offset + stream.size() != offset) {
+                flush(target);
+                this.offset = offset;
+            }
+            constVal.value.writeToStream(stream);
+        }
+
+        void appendByteArray(byte[] data, String target, long offset) {
+            if (this.offset + stream.size() != offset) {
+                flush(target);
+                this.offset = offset;
+            }
+            try {
+                stream.write(data);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        void flush(String target) {
+            if (stream.size() > 0) {
+                emitTac(new TacCopyByteArrayToOffset(stream.toByteArray(), target, offset));
+                offset = Long.MIN_VALUE;
+                stream.reset();
+            }
+        }
+    }
+
+    private void initializeBlockScopeObject(
+        String target, Type t, InitializerNode init, long offset, ConstantInitInfo initInfo) {
         // 初始化块作用域变量
         if (!t.isAggregate() && !t.isUnion()) {
             SingleInitializerNode singleInit = (SingleInitializerNode) init;
             TacValue val = evalAndLvalueConvert(singleInit.exp);
-            emitTac(new TacCopyToOffset(val, target, offset));
+            initInfo.appendSingle(val, target, offset);
             return;
         }
 
@@ -187,12 +229,12 @@ public final class AstToTacLowerer implements
                 StringLiteralNode str = (StringLiteralNode) sin.exp;
                 byte[] data = new byte[(int) at.size().value()];
                 System.arraycopy(str.literal, 0, data, 0, Math.min(data.length, str.literal.length));
-                emitTac(new TacCopyByteArrayToOffset(data, target, offset));
+                initInfo.appendByteArray(data, target, offset);
                 return;
             } else if (t instanceof RecordType<?>) {
                 // 单结构体/联合体变量对结构体/联合体进行整体初始化
                 TacValue val = evalAndLvalueConvert(sin.exp);
-                emitTac(new TacCopyToOffset(val, target, offset));
+                initInfo.appendSingle(val, target, offset);
                 return;
             } else {
                 throw new IllegalStateException("Control should never reach here");
@@ -203,7 +245,7 @@ public final class AstToTacLowerer implements
         if (t instanceof ArrayType at) {
             long size = at.elementType().sizeof();
             for (DesignationInitializerNode designatedInit : compoundInit.inits) {
-                initializeBlockScopeObject(target, at.elementType(), designatedInit.initializer, offset);
+                initializeBlockScopeObject(target, at.elementType(), designatedInit.initializer, offset, initInfo);
                 offset += size;
             }
             return;
@@ -212,7 +254,7 @@ public final class AstToTacLowerer implements
             int index = 0;
             for (DesignationInitializerNode designatedInit : compoundInit.inits) {
                 Field f = st.fields().get(index);
-                initializeBlockScopeObject(target, f.type, designatedInit.initializer, offset + f.offset);
+                initializeBlockScopeObject(target, f.type, designatedInit.initializer, offset + f.offset, initInfo);
                 ++index;
             }
             return;
@@ -227,7 +269,7 @@ public final class AstToTacLowerer implements
             } else {
                 active = ut.info().fields().get(0);
             }
-            initializeBlockScopeObject(target, active.type, slot.initializer, offset + active.offset);
+            initializeBlockScopeObject(target, active.type, slot.initializer, offset + active.offset, initInfo);
             return;
         }
 

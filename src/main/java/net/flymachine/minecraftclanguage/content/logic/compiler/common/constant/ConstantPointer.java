@@ -10,7 +10,10 @@ import net.flymachine.minecraftclanguage.content.logic.compiler.common.staticIni
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.PointerType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.common.type.Type;
 import net.flymachine.minecraftclanguage.content.logic.errorHandle.DiagnosticReporter;
+import net.flymachine.minecraftclanguage.content.logic.util.LittleEndianHelper;
 import org.jetbrains.annotations.NotNull;
+
+import java.io.OutputStream;
 
 public record ConstantPointer(long value, Type referencedType) implements PointerConstant {
 
@@ -180,5 +183,10 @@ public record ConstantPointer(long value, Type referencedType) implements Pointe
     @Override
     public boolean isNullPointer() {
         return value == 0;
+    }
+
+    @Override
+    public void writeToStream(OutputStream stream) {
+        LittleEndianHelper.writeLong(stream, value);
     }
 }
