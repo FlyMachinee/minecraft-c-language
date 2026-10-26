@@ -72,6 +72,7 @@ public record CompilerOptions(OptimizationOptions optimization, DumpOptions dump
         CFG_OPTIMIZED,
         HL_ASM_RAW,
         HL_ASM_RAW_SYMTAB,
+        HL_ASM_REG_ALLOC,
         HL_ASM_PSEUDO,
         ASM
     }

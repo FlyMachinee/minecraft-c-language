@@ -39,6 +39,13 @@ public final class LA64Backend {
                     allocator.allocate(func);
                 }
             }
+
+            if (options.dumping().contains(CompilerOptions.DumpKind.HL_ASM_REG_ALLOC)) {
+                System.out.println("=== Dumping High-Level Assembly after register allocation ===");
+                highLevelProgram.dumpPretty(System.out);
+                System.out.println("=== Dumping Complete ===");
+                System.out.println();
+            }
         }
 
         ReplacePseudoOperandPass replacePseudoOperandPass = new ReplacePseudoOperandPass(backendSymbolTable);
