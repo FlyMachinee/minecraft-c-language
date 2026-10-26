@@ -952,15 +952,14 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
             throw new UnsupportedOperationException(
                 "CopyByteArray only supports stack or frame pointer as destination");
         }
-        // 认为 sp 和 fp 都是 16 字节对齐的，进行可能的合并访存
-        long i = dst.offset(), j = 0, bound = i + inst.data.length;
-        while (i < bound) {
+        // 以 8 -> 4 -> 2 -> 1 的顺序进行拷贝
+        long i = 0;
+        while (i < inst.data.length) {
             for (int align = 8; align >= 1; align /= 2) {
-                if (i % align == 0 && bound - i >= align) {
-                    // 对齐访存
+                if (i + align <= inst.data.length) {
                     long val = 0;
                     for (int k = 0; k < align; k++) {
-                        val |= ((long) inst.data[(int) j + k] & 0xFF) << (k * 8);
+                        val |= ((long) inst.data[(int) i + k] & 0xFF) << (k * 8);
                     }
                     AsmType asmType = switch (align) {
                         case 1 -> AsmType.BYTE;
@@ -971,7 +970,6 @@ public final class HighLevelAsmToAsmLowerer implements HighLevelVisitor<Void> {
                     };
                     lowerStore(asmType, new Immediate(val), dst.gpr(), new Immediate(i));
                     i += align;
-                    j += align;
                     break;
                 }
             }
