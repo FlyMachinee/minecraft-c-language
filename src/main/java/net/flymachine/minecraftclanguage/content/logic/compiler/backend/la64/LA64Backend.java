@@ -33,7 +33,7 @@ public final class LA64Backend {
         }
 
         if (options.optimization().level() != CompilerOptions.OptimizationLevel.O0) {
-            SimpleLinearAllocator allocator = new SimpleLinearAllocator();
+            SimpleLinearAllocator allocator = new SimpleLinearAllocator(backendSymbolTable);
             for (HighLevelTopLevel topLevel : highLevelProgram.topLevels) {
                 if (topLevel instanceof HighLevelFunction func) {
                     allocator.allocate(func);

@@ -5,6 +5,7 @@ import it.unimi.dsi.fastutil.ints.IntHeapPriorityQueue;
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.register.FloatingPointRegister;
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.register.GeneralPurposeRegister;
 import net.flymachine.minecraftclanguage.content.logic.architecture.la64.register.LA64Register;
+import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.BackendSymbolTable;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.AsmType;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.HighLevelFunction;
 import net.flymachine.minecraftclanguage.content.logic.compiler.backend.la64.highLevel.instruction.*;
@@ -21,7 +22,11 @@ public final class SimpleLinearAllocator {
     private final static GeneralPurposeRegister[] GPR_ALLOWS = {S0, S1, S2, S3, S4, S5, S6, S7, S8};
     private final static FloatingPointRegister[] FPR_ALLOWS = {FS0, FS1, FS2, FS3, FS4, FS5, FS6, FS7};
 
-    public SimpleLinearAllocator() { }
+    private final BackendSymbolTable symbolTable;
+
+    public SimpleLinearAllocator(BackendSymbolTable symbolTable) {
+        this.symbolTable = symbolTable;
+    }
 
     public void allocate(HighLevelFunction func) {
         Map<Pseudo, Integer> integerAlloc = allocate(func, true, GPR_ALLOWS.length);
@@ -41,7 +46,7 @@ public final class SimpleLinearAllocator {
     @SuppressWarnings({"UnstableApiUsage"})
     private Map<Pseudo, Integer> allocate(HighLevelFunction func, boolean allocateGpr, int regCount) {
         // 已按 start 升序
-        List<LiveRange> liveRanges = LiveRangeCollector.collect(func, allocateGpr);
+        List<LiveRange> liveRanges = LiveRangeCollector.collect(func, symbolTable, allocateGpr);
 
         IntHeapPriorityQueue freeRegisters = new IntHeapPriorityQueue();
         for (int i = 0; i < regCount; ++i) {
@@ -100,15 +105,19 @@ public final class SimpleLinearAllocator {
         Map<Pseudo, LiveRange> pseudos;
         Set<Pseudo> escaped;
         boolean allocateGpr;
+        BackendSymbolTable symbolTable;
 
-        private LiveRangeCollector(boolean allocateGpr) {
+        private LiveRangeCollector(BackendSymbolTable symbolTable, boolean allocateGpr) {
             this.pseudos = new HashMap<>();
             this.escaped = new HashSet<>();
             this.allocateGpr = allocateGpr;
+            this.symbolTable = symbolTable;
         }
 
-        public static List<LiveRange> collect(HighLevelFunction func, boolean allocateGpr) {
-            LiveRangeCollector collector = new LiveRangeCollector(allocateGpr);
+        public static List<LiveRange> collect(
+            HighLevelFunction func, BackendSymbolTable symbolTable, boolean allocateGpr) {
+
+            LiveRangeCollector collector = new LiveRangeCollector(symbolTable, allocateGpr);
             collector.collectInner(func);
             return collector.pseudos
                 .values().stream()
@@ -148,6 +157,19 @@ public final class SimpleLinearAllocator {
                 return;
             }
             if (!pseudos.containsKey(pseudo)) {
+                BackendSymbolTable.Entry entry = symbolTable.get(pseudo.name());
+                if (entry == null) {
+                    throw new IllegalStateException("Undefined symbol: " + pseudo.name());
+                }
+                if (entry instanceof BackendSymbolTable.FuncEntry) {
+                    escaped.add(pseudo);
+                    return;
+                }
+                BackendSymbolTable.ObjectEntry objectEntry = (BackendSymbolTable.ObjectEntry) entry;
+                if (objectEntry.isStatic()) {
+                    escaped.add(pseudo);
+                    return;
+                }
                 pseudos.put(pseudo, new LiveRange(position, position, pseudo));
             } else {
                 LiveRange range = pseudos.get(pseudo);
@@ -393,14 +415,8 @@ public final class SimpleLinearAllocator {
         }
     }
 
-    private static class PseudoReplacer implements HighLevelVisitor<Void> {
-        private final Map<Pseudo, Integer> allocation;
-        private final LA64Register[] allows;
-
-        private PseudoReplacer(Map<Pseudo, Integer> allocation, LA64Register[] allows) {
-            this.allocation = allocation;
-            this.allows = allows;
-        }
+    private record PseudoReplacer(Map<Pseudo, Integer> allocation, LA64Register[] allows)
+        implements HighLevelVisitor<Void> {
 
         public static void replace(HighLevelFunction func, Map<Pseudo, Integer> allocation, LA64Register[] allows) {
             PseudoReplacer replacer = new PseudoReplacer(allocation, allows);
